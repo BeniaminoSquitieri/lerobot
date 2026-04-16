@@ -57,11 +57,11 @@ def make_robot_from_config(config: RobotConfig) -> Robot:
 
         return BiSOFollower(config)
     elif config.type == "ergocub":
-        from .ergocub import ErgoCub
+        from .ergocub.ergocub import ErgoCub
 
         return ErgoCub(config)
     elif config.type == "r1":
-        from .ergocub import R1
+        from .ergocub.ergocub import R1
 
         return R1(config)
     elif config.type == "reachy2":

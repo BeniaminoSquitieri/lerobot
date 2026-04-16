@@ -48,6 +48,7 @@ class CubRobotConfig(RobotConfig):
     # If False, actions are interpreted as deltas relative to the current/last target.
     absolute: bool = True
     finger_scale: float = 1.0
+    xela_force_visualization_scale: List[float] = field(default_factory=lambda: [5e-5, 5e-5, 5e-5])
     position_tolerance: float = 0.1  # Tolerance for safety checks, in radians or meters depending on the joint
 
 

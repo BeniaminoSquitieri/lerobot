@@ -128,19 +128,24 @@ class CubRobot(Robot):
         if not self.is_connected:
             raise DeviceNotConnectedError(f"{self} is not connected.")
 
+        current_state = self.bus.read_state()
+        if not self.config.control_boards:
+            return current_state
+
         if not self.absolute:
             action = self.to_absolute(action)
 
-        hands_to_check = [
-            side
-            for side, enabled in (("left", self.config.left_hand), ("right", self.config.right_hand))
-            if enabled
-        ]
-        current_state = self.bus.read_state()
+        hands_to_check = []
+        if "bimanual" in self.config.control_boards:
+            hands_to_check = [
+                side
+                for side, enabled in (("left", self.config.left_hand), ("right", self.config.right_hand))
+                if enabled
+            ]
 
-        if not self.safety_checker.is_valid_action(action, hands_to_check):
+        if hands_to_check and not self.safety_checker.is_valid_action(action, hands_to_check):
             return current_state
-        if not self.safety_checker.check_hand_position_safety(action, current_state, hands_to_check):
+        if hands_to_check and not self.safety_checker.check_hand_position_safety(action, current_state, hands_to_check):
             return current_state
 
         self.bus.send_commands(action)
@@ -179,8 +184,12 @@ class CubRobot(Robot):
         return None
 
     @property
-    def _motors_ft(self) -> dict[str, type]:
-        return self.bus.motor_features
+    def _state_motors_ft(self) -> dict[str, type]:
+        return self.bus.state_features
+
+    @property
+    def _action_motors_ft(self) -> dict[str, type]:
+        return self.bus.action_features
 
     @property
     def _cameras_ft(self) -> dict[str, tuple]:
@@ -193,11 +202,11 @@ class CubRobot(Robot):
 
     @cached_property
     def observation_features(self) -> dict[str, type | tuple]:
-        return {**self._motors_ft, **self._cameras_ft}
+        return {**self._state_motors_ft, **self._cameras_ft}
 
     @cached_property
     def action_features(self) -> dict[str, type]:
-        return self._motors_ft
+        return self._action_motors_ft
 
 
 class ErgoCub(CubRobot):

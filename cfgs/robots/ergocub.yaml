@@ -9,6 +9,7 @@ robot:
       width: 640
       height: 480
       fps: 30
-  control_boards: [bimanual, head]
-  state_boards: [bimanual, head]
+  control_boards: []
+  state_boards: [bimanual, head, fingers, xela_right]
+  xela_force_visualization_scale: [0.001, 0.001, 0.001]
   position_tolerance: 0.12

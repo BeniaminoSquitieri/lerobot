@@ -24,6 +24,7 @@ from lerobot.utils.errors import DeviceAlreadyConnectedError, DeviceNotConnected
 from .head_controller import ErgoCubHeadController
 from .finger_controller import ErgoCubFingerController
 from .bimanual_controller import ErgoCubBimanualController
+from .xela_controller import ErgoCubXelaController
 
 logger = logging.getLogger(__name__)
 
@@ -57,16 +58,17 @@ class ErgoCubMotorsBus:
         self.remote_prefix = remote_prefix
         self.local_prefix = local_prefix
         self.profile = profile
-        self.state_boards = state_boards
-        self.control_boards = control_boards
+        self.state_boards = self._normalize_boards(state_boards)
+        self.control_boards = self._normalize_boards(control_boards)
         
         # Initialize controllers
-        parts_needed = set(control_boards) | set(state_boards)
+        parts_needed = set(self.control_boards) | set(self.state_boards)
         self.controllers = {}
         
-        self.controllers["bimanual"] = ErgoCubBimanualController(
-            remote_prefix, local_prefix, urdf_path, profile, left_hand, right_hand
-        )
+        if "bimanual" in parts_needed:
+            self.controllers["bimanual"] = ErgoCubBimanualController(
+                remote_prefix, local_prefix, urdf_path, profile, left_hand, right_hand
+            )
             
         if 'head' in parts_needed:
             self.controllers["head"] = ErgoCubHeadController(remote_prefix, local_prefix, urdf_path, profile)
@@ -74,6 +76,27 @@ class ErgoCubMotorsBus:
         # Optionally add finger controller
         if 'fingers' in parts_needed:
             self.controllers["fingers"] = ErgoCubFingerController(remote_prefix, local_prefix, finger_scale=finger_scale)
+
+        if "left_xela" in parts_needed:
+            self.controllers["left_xela"] = ErgoCubXelaController(local_prefix, side="left")
+        if "right_xela" in parts_needed:
+            self.controllers["right_xela"] = ErgoCubXelaController(local_prefix, side="right")
+
+    @staticmethod
+    def _normalize_boards(boards: list[str]) -> list[str]:
+        normalized: list[str] = []
+        for board in boards:
+            if board == "xela":
+                normalized_board = "left_xela"
+            elif board == "xela_left":
+                normalized_board = "left_xela"
+            elif board == "xela_right":
+                normalized_board = "right_xela"
+            else:
+                normalized_board = board
+            if normalized_board not in normalized:
+                normalized.append(normalized_board)
+        return normalized
 
     @property
     def is_connected(self) -> bool:
@@ -160,8 +183,10 @@ class ErgoCubMotorsBus:
     # Reset handling
     # ---------------------------------------------------------------------
     def reset(self) -> None:
-        self.controllers['bimanual'].reset()
-        self.controllers['head'].reset()
+        if "bimanual" in self.controllers:
+            self.controllers["bimanual"].reset()
+        if "head" in self.controllers:
+            self.controllers["head"].reset()
         if "fingers" in self.controllers:
-            self.controllers['fingers'].reset()
+            self.controllers["fingers"].reset()
         time.sleep(5)  # Allow some time for reset to take effect
