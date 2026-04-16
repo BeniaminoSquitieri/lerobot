@@ -237,6 +237,9 @@ class RecordConfig:
     display_port: int | None = None
     # Whether to  display compressed images in Rerun
     display_compressed_images: bool = False
+    # Maximum refresh rate for Rerun visualization. If set, intermediate frames are dropped
+    # so the viewer follows the latest data instead of building up lag.
+    display_fps: float | None = None
     # Use vocal synthesis to read events.
     play_sounds: bool = True
     # Resume recording on an existing dataset.
@@ -318,12 +321,13 @@ def record_loop(
     display_data: bool = False,
     interpolator: ActionInterpolator | None = None,
     display_compressed_images: bool = False,
+    display_fps: float | None = None,
 ):
     if dataset is not None and dataset.fps != fps:
         raise ValueError(f"The dataset fps should be equal to requested fps ({dataset.fps} != {fps}).")
 
     teleop_arm = teleop_keyboard = None
-    rerun_logger = log_rerun_data_ergocub if robot.name == "ergocub" else log_rerun_data
+    rerun_logger = log_rerun_data_ergocub if robot.name in ["ergocub", "r1"] else log_rerun_data
     if isinstance(teleop, list):
         teleop_keyboard = next((t for t in teleop if isinstance(t, KeyboardTeleop)), None)
         teleop_arm = next(
@@ -367,6 +371,8 @@ def record_loop(
     no_action_count = 0
     timestamp = 0
     start_episode_t = time.perf_counter()
+    last_display_t = float("-inf")
+    display_interval_s = 0.0 if not display_fps or display_fps <= 0 else 1.0 / display_fps
     while timestamp < control_time_s:
         start_loop_t = time.perf_counter()
 
@@ -477,13 +483,18 @@ def record_loop(
             frame = {**observation_frame, **action_frame, "task": single_task}
             dataset.add_frame(frame)
 
-        if display_data:
+        now_t = time.perf_counter()
+        should_display = display_data and (
+            display_interval_s <= 0.0 or (now_t - last_display_t) >= display_interval_s
+        )
+        if should_display:
             rerun_logger(
                 observation=obs_processed,
                 action=action_values,
                 compress_images=display_compressed_images,
                 robot=robot,
             )
+            last_display_t = now_t
 
         dt_s = time.perf_counter() - start_loop_t
 
@@ -621,6 +632,7 @@ def record(cfg: RecordConfig) -> LeRobotDataset:
                     display_data=cfg.display_data,
                     interpolator=interpolator,
                     display_compressed_images=display_compressed_images,
+                    display_fps=cfg.display_fps,
                 )
 
                 # Execute a few seconds without recording to give time to manually reset the environment
@@ -629,7 +641,7 @@ def record(cfg: RecordConfig) -> LeRobotDataset:
                     (recorded_episodes < cfg.dataset.num_episodes - 1) or events["rerecord_episode"]
                 ):
                     log_say("Reset the environment", cfg.play_sounds)
-                    if robot.name in ["unitree_g1", "ergocub"]:
+                    if robot.name in ["unitree_g1", "ergocub", "r1"]:
                         robot.reset()
 
                     record_loop(
@@ -643,6 +655,7 @@ def record(cfg: RecordConfig) -> LeRobotDataset:
                         control_time_s=cfg.dataset.reset_time_s,
                         single_task=cfg.dataset.single_task,
                         display_data=cfg.display_data,
+                        display_fps=cfg.display_fps,
                     )
 
                 if events["rerecord_episode"]:

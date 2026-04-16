@@ -17,13 +17,14 @@
 import logging
 import time
 
-import numpy as np
 import yarp
+from lerobot.robots.ergocub.profiles import CubRobotProfile
 from lerobot.utils.errors import DeviceAlreadyConnectedError, DeviceNotConnectedError
 
 from .head_controller import ErgoCubHeadController
 from .finger_controller import ErgoCubFingerController
 from .bimanual_controller import ErgoCubBimanualController
+from .xela_controller import ErgoCubXelaController
 
 logger = logging.getLogger(__name__)
 
@@ -37,6 +38,8 @@ class ErgoCubMotorsBus:
         self,
         remote_prefix: str,
         local_prefix: str,
+        urdf_path: str,
+        profile: CubRobotProfile,
         control_boards: list[str],
         state_boards: list[str],
         left_hand: bool = True,
@@ -54,23 +57,46 @@ class ErgoCubMotorsBus:
         """
         self.remote_prefix = remote_prefix
         self.local_prefix = local_prefix
-        self.state_boards = state_boards
-        self.control_boards = control_boards
+        self.profile = profile
+        self.state_boards = self._normalize_boards(state_boards)
+        self.control_boards = self._normalize_boards(control_boards)
         
         # Initialize controllers
-        parts_needed = set(control_boards) | set(state_boards)
+        parts_needed = set(self.control_boards) | set(self.state_boards)
         self.controllers = {}
         
-        self.controllers["bimanual"] = ErgoCubBimanualController(
-            remote_prefix, local_prefix, left_hand, right_hand
-        )
+        if "bimanual" in parts_needed:
+            self.controllers["bimanual"] = ErgoCubBimanualController(
+                remote_prefix, local_prefix, urdf_path, profile, left_hand, right_hand
+            )
             
         if 'head' in parts_needed:
-            self.controllers["head"] = ErgoCubHeadController(remote_prefix, local_prefix)
+            self.controllers["head"] = ErgoCubHeadController(remote_prefix, local_prefix, urdf_path, profile)
         
         # Optionally add finger controller
         if 'fingers' in parts_needed:
             self.controllers["fingers"] = ErgoCubFingerController(remote_prefix, local_prefix, finger_scale=finger_scale)
+
+        if "left_xela" in parts_needed:
+            self.controllers["left_xela"] = ErgoCubXelaController(local_prefix, side="left")
+        if "right_xela" in parts_needed:
+            self.controllers["right_xela"] = ErgoCubXelaController(local_prefix, side="right")
+
+    @staticmethod
+    def _normalize_boards(boards: list[str]) -> list[str]:
+        normalized: list[str] = []
+        for board in boards:
+            if board == "xela":
+                normalized_board = "left_xela"
+            elif board == "xela_left":
+                normalized_board = "left_xela"
+            elif board == "xela_right":
+                normalized_board = "right_xela"
+            else:
+                normalized_board = board
+            if normalized_board not in normalized:
+                normalized.append(normalized_board)
+        return normalized
 
     @property
     def is_connected(self) -> bool:
@@ -120,6 +146,14 @@ class ErgoCubMotorsBus:
         for board in self.control_boards:
             self.controllers[board].send_commands(commands)
 
+    def get_latest_joint_states(self) -> dict[str, float]:
+        """Return the latest joint values exposed by subcontrollers."""
+        joints: dict[str, float] = {}
+        for controller in self.controllers.values():
+            if hasattr(controller, "get_latest_joint_states"):
+                joints.update(controller.get_latest_joint_states())
+        return joints
+
 
     @property
     def state_features(self) -> dict[str, type]:
@@ -140,12 +174,19 @@ class ErgoCubMotorsBus:
                 continue 
             features.update(controller.motor_features)
         return features
+
+    @property
+    def motor_features(self) -> dict[str, type]:
+        """Expose a unified feature map for robots whose action/state schema matches."""
+        return self.state_features
     # ---------------------------------------------------------------------
     # Reset handling
     # ---------------------------------------------------------------------
     def reset(self) -> None:
-        self.controllers['bimanual'].reset()
-        self.controllers['head'].reset()
+        if "bimanual" in self.controllers:
+            self.controllers["bimanual"].reset()
+        if "head" in self.controllers:
+            self.controllers["head"].reset()
         if "fingers" in self.controllers:
-            self.controllers['fingers'].reset()
+            self.controllers["fingers"].reset()
         time.sleep(5)  # Allow some time for reset to take effect

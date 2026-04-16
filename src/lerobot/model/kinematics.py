@@ -14,6 +14,8 @@
 
 import numpy as np
 
+from .urdf_utils import prepare_urdf_for_placo
+
 
 class RobotKinematics:
     """Robot kinematics using placo library for forward and inverse kinematics."""
@@ -40,7 +42,8 @@ class RobotKinematics:
                 "Please install the optional dependencies of `kinematics` in the package."
             ) from e
 
-        self.robot = placo.RobotWrapper(urdf_path)
+        prepared_urdf_path = prepare_urdf_for_placo(urdf_path)
+        self.robot = placo.RobotWrapper(prepared_urdf_path)
         self.solver = placo.KinematicsSolver(self.robot)
         self.solver.mask_fbase(True)  # Fix the base
 

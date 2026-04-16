@@ -54,7 +54,7 @@ class HandSafetyChecker:
         self.is_arm_controlled = {"left": False, "right": False}
         logger.info("Arm control reset: hands must be repositioned within tolerance before movement")
     
-    def is_valid_action(self, action: Dict[str, Any]) -> bool:
+    def is_valid_action(self, action: Dict[str, Any], arms_to_check: list[str] | None = None) -> bool:
         """
         Check if the action contains valid values (not all zeros, no NaN values).
         Based on the isValidPose function from metaControllClient.
@@ -66,6 +66,9 @@ class HandSafetyChecker:
         Returns:
             True if action is valid, False otherwise
         """
+        if arms_to_check is None:
+            arms_to_check = ["left", "right"]
+
         # Check for NaN values
         for key, value in action.items():
             if np.any(np.isnan(value)):
@@ -73,7 +76,7 @@ class HandSafetyChecker:
                 return False
         
         # Check if position values are all zeros for each configured arm
-        for side in ["left", "right"]:
+        for side in arms_to_check:
             # Check arm position values
             arm_position_keys = [f"{side}_hand.position.x", f"{side}_hand.position.y", f"{side}_hand.position.z"]
             arm_position_values = [action[key] for key in arm_position_keys]
@@ -92,7 +95,9 @@ class HandSafetyChecker:
         
         return True
     
-    def check_hand_position_safety(self, action: Dict[str, Any], current_state: Dict[str, Any]) -> bool:
+    def check_hand_position_safety(
+        self, action: Dict[str, Any], current_state: Dict[str, Any], arms_to_check: list[str] | None = None
+    ) -> bool:
         """
         Check if the target hand positions are close enough to current positions to safely move.
         Based on the safety logic from metaControllClient.
@@ -105,7 +110,10 @@ class HandSafetyChecker:
         Returns:
             True if it's safe to move (all hands within tolerance or controlled)
         """
-        for side in ["left", "right"]:
+        if arms_to_check is None:
+            arms_to_check = ["left", "right"]
+
+        for side in arms_to_check:
             # Check if target position is valid (not all zeros, like metaControllClient)
             target_pos = np.array([
                 action[f"{side}_hand.position.x"],
@@ -143,5 +151,8 @@ class HandSafetyChecker:
                     print(f"{side.capitalize()} arm disabled: position error {max_error:.3f}m > {self.position_tolerance:.3f}m")
 
         # Only move if all configured arms are controlled
-        controlled_arms = [side for side in ["left", "right"] if self.is_arm_controlled[side]]
-        return len(controlled_arms) == len(["left", "right"])
+        if not arms_to_check:
+            return True
+
+        controlled_arms = [side for side in arms_to_check if self.is_arm_controlled[side]]
+        return len(controlled_arms) == len(arms_to_check)

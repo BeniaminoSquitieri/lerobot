@@ -21,7 +21,7 @@ import math
 
 import yarp
 from lerobot.utils.errors import DeviceAlreadyConnectedError, DeviceNotConnectedError
-from lerobot.robots.ergocub.manipulator import Manipulator
+from lerobot.robots.ergocub.manipulator import Manipulator, get_ergocub_hand_urdf_path
 
 logger = logging.getLogger(__name__)
 
@@ -53,10 +53,11 @@ class ErgoCubFingerController:
         self.joint_names = ["thumb_add", "thumb_oc", "index_add", "index_oc", "middle_oc", "ring_pinky_oc"]
         # Per-hand kinematics solvers for fingertip-to-joint IK
         self.finger_kinematics = {
-            "left": Manipulator("src/lerobot/robots/ergocub/ergocub_hand_left/model.urdf"),
-            "right": Manipulator("src/lerobot/robots/ergocub/ergocub_hand_right/model.urdf"),
+            "left": Manipulator(get_ergocub_hand_urdf_path("left")),
+            "right": Manipulator(get_ergocub_hand_urdf_path("right")),
         }
         self.finger_scale = finger_scale  # Scale for fingertip positions
+        self._latest_finger_encoders: dict[str, list[float]] = {"left": [], "right": []}
     
     @property
     def is_connected(self) -> bool:
@@ -133,10 +134,32 @@ class ErgoCubFingerController:
             all_encoders = [hand_bottle.get(i).asFloat64() for i in range(hand_bottle.size())]
 
             finger_encoders = all_encoders[7:13] if len(all_encoders) >= 13 else [0.0] * 6
+            self._latest_finger_encoders[side] = finger_encoders
             for i, joint in enumerate(finger_joint_names):
                 state[f"{side}_fingers.{joint}"] = finger_encoders[i] if i < len(finger_encoders) else 0.0
             
         return state
+
+    def get_latest_joint_states(self) -> dict[str, float]:
+        """Map the 6-D finger controller state onto the URDF hand joints for rerun visualization."""
+
+        joints: dict[str, float] = {}
+        joint_map = {
+            "thumb_add": ("thumb_add",),
+            "thumb_oc": ("thumb_prox", "thumb_dist"),
+            "index_add": ("index_add",),
+            "index_oc": ("index_prox", "index_dist"),
+            "middle_oc": ("middle_prox", "middle_dist"),
+            "ring_pinky_oc": ("ring_prox", "ring_dist", "pinkie_prox", "pinkie_dist"),
+        }
+
+        for side, values in self._latest_finger_encoders.items():
+            prefix = "l" if side == "left" else "r"
+            for feature_name, value in zip(self.joint_names, values, strict=False):
+                for urdf_joint_name in joint_map.get(feature_name, ()):
+                    joints[f"{prefix}_{urdf_joint_name}"] = float(value)
+
+        return joints
     
     def reset(self) -> None:
         """Reset finger controller (no-op)."""
