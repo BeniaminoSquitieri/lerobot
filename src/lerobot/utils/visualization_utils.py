@@ -14,10 +14,12 @@
 
 import numbers
 import os
+from pathlib import Path
 from typing import Any
 
 import numpy as np
 
+from lerobot.model.urdf_utils import prepare_urdf_for_placo
 from lerobot.types import RobotAction, RobotObservation
 
 from .constants import ACTION, ACTION_PREFIX, OBS_PREFIX, OBS_STR
@@ -62,6 +64,18 @@ def _is_scalar(x):
     return isinstance(x, (float | numbers.Real | np.integer | np.floating)) or (
         isinstance(x, np.ndarray) and x.ndim == 0
     )
+
+
+def _convert_joint_value_for_rerun(joint: Any, value: float) -> float:
+    """Convert live joint values to the units expected by rerun's URDF joint transforms."""
+
+    if getattr(joint, "joint_type", None) in {"revolute", "continuous"}:
+        return float(np.deg2rad(value))
+    return float(value)
+
+
+_ERGOCUB_RERUN_TREES: dict[str, Any] = {}
+_ERGOCUB_RERUN_STEPS: dict[str, int] = {}
 
 
 def log_rerun_data(
@@ -142,9 +156,43 @@ def log_rerun_data_ergocub(
 ) -> None:
     """ErgoCub-specific visualization hook.
 
-    Currently it delegates to the generic logger while accepting the extra
-    `robot` argument used by the recording flow.
+    Logs the robot URDF once and updates joint transforms when available,
+    in addition to the generic scalar/image streams.
     """
 
-    del robot
+    require_package("rerun-sdk", extra="viz", import_name="rerun")
+    import rerun as rr
+    from rerun.urdf import UrdfTree
+
+    if robot is not None and getattr(robot, "urdf_path", None):
+        raw_urdf_path = str(Path(robot.urdf_path).expanduser().resolve())
+        urdf_path = prepare_urdf_for_placo(raw_urdf_path)
+        if urdf_path not in _ERGOCUB_RERUN_TREES:
+            entity_path_prefix = robot.name
+            frame_prefix = f"tf#/{robot.name}/"
+            urdf_tree = UrdfTree.from_file_path(
+                urdf_path,
+                entity_path_prefix=entity_path_prefix,
+                frame_prefix=frame_prefix,
+            )
+            urdf_tree.log_urdf_to_recording()
+            _ERGOCUB_RERUN_TREES[urdf_path] = urdf_tree
+            _ERGOCUB_RERUN_STEPS[urdf_path] = 0
+
+        urdf_tree = _ERGOCUB_RERUN_TREES[urdf_path]
+        _ERGOCUB_RERUN_STEPS[urdf_path] += 1
+        rr.set_time("step", sequence=_ERGOCUB_RERUN_STEPS[urdf_path])
+
+        joint_states: dict[str, float] = {}
+        if hasattr(robot, "bus") and hasattr(robot.bus, "get_latest_joint_states"):
+            joint_states = robot.bus.get_latest_joint_states()
+
+        for i, joint in enumerate(urdf_tree.joints()):
+            if joint.name not in joint_states:
+                continue
+
+            value = _convert_joint_value_for_rerun(joint, joint_states[joint.name])
+            rr.log(f"{robot.name}/transforms", joint.compute_transform(value))
+            rr.log(f"/{robot.name}/joints/{i}", rr.Scalars([value]))
+
     log_rerun_data(observation=observation, action=action, compress_images=compress_images)

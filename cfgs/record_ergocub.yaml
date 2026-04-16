@@ -9,9 +9,9 @@ dataset:
   root: outputs/ergocubsim_teleop
   single_task: Teleoperate ErgoCubSim in Gazebo.
   fps: 10
-  episode_time_s: 120
+  episode_time_s: 10
   reset_time_s: 0
-  num_episodes: 10
+  num_episodes: 1
   video: true
   push_to_hub: false
   private: false
@@ -20,6 +20,6 @@ dataset:
   video_encoding_batch_size: 1
   rename_map: {}
 
-display_data: false
+display_data: true
 play_sounds: true
 resume: false

@@ -123,6 +123,14 @@ class ErgoCubMotorsBus:
         for board in self.control_boards:
             self.controllers[board].send_commands(commands)
 
+    def get_latest_joint_states(self) -> dict[str, float]:
+        """Return the latest joint values exposed by subcontrollers."""
+        joints: dict[str, float] = {}
+        for controller in self.controllers.values():
+            if hasattr(controller, "get_latest_joint_states"):
+                joints.update(controller.get_latest_joint_states())
+        return joints
+
 
     @property
     def state_features(self) -> dict[str, type]:
