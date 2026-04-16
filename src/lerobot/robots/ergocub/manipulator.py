@@ -1,7 +1,32 @@
 import numpy as np
-from os import path
+from pathlib import Path
+
 from klampt.model import ik
 from klampt import WorldModel
+
+
+_ERGOCUB_DIR = Path(__file__).resolve().parent
+_REPO_ROOT = _ERGOCUB_DIR.parents[3]
+
+
+def get_ergocub_hand_urdf_path(side: str) -> str:
+    hand_urdf_path = _ERGOCUB_DIR / f"ergocub_hand_{side}" / "model.urdf"
+    if not hand_urdf_path.exists():
+        raise FileNotFoundError(f"Missing ergoCub hand URDF for side '{side}': {hand_urdf_path}")
+    return str(hand_urdf_path)
+
+
+def _resolve_urdf_path(urdf_path: str) -> str:
+    candidate = Path(urdf_path).expanduser()
+    if candidate.exists():
+        return str(candidate.resolve())
+
+    if not candidate.is_absolute():
+        repo_candidate = _REPO_ROOT / candidate
+        if repo_candidate.exists():
+            return str(repo_candidate.resolve())
+
+    raise FileNotFoundError(f"Manipulator URDF not found: {urdf_path}")
 
 
 class Manipulator:
@@ -18,9 +43,12 @@ class Manipulator:
         self.world = WorldModel()
 
         # load robot
-        f_urdf = path.join(urdf_path)
-        self.world.loadRobot(f_urdf)
-        self.robot = self.world.robot(0)
+        f_urdf = _resolve_urdf_path(urdf_path)
+        load_result = self.world.loadRobot(f_urdf)
+        if self.world.numRobots() == 0:
+            raise RuntimeError(f"Klampt failed to load manipulator URDF '{f_urdf}' (loadRobot returned {load_result!r})")
+
+        self.robot = self.world.robot(self.world.numRobots() - 1)
         self.dof = self.robot.numDrivers()
         self.ik_dof = [self.robot.driver(i).getName() for i in range(self.dof)]
 

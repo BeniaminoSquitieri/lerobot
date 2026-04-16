@@ -21,7 +21,7 @@ import math
 
 import yarp
 from lerobot.utils.errors import DeviceAlreadyConnectedError, DeviceNotConnectedError
-from lerobot.robots.ergocub.manipulator import Manipulator
+from lerobot.robots.ergocub.manipulator import Manipulator, get_ergocub_hand_urdf_path
 
 logger = logging.getLogger(__name__)
 
@@ -53,8 +53,8 @@ class ErgoCubFingerController:
         self.joint_names = ["thumb_add", "thumb_oc", "index_add", "index_oc", "middle_oc", "ring_pinky_oc"]
         # Per-hand kinematics solvers for fingertip-to-joint IK
         self.finger_kinematics = {
-            "left": Manipulator("src/lerobot/robots/ergocub/ergocub_hand_left/model.urdf"),
-            "right": Manipulator("src/lerobot/robots/ergocub/ergocub_hand_right/model.urdf"),
+            "left": Manipulator(get_ergocub_hand_urdf_path("left")),
+            "right": Manipulator(get_ergocub_hand_urdf_path("right")),
         }
         self.finger_scale = finger_scale  # Scale for fingertip positions
     

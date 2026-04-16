@@ -1,14 +1,23 @@
-from lerobot.robots.custom_manipulator.grippers.panda_gripper import PandaGripperConfig
 from .arms.dummy import DummyArm, DummyArmConfig
-from .arms.panda import Panda, PandaConfig
 from .grippers.config_xhand import XHandConfig
 from .grippers.robotiq import Robotiq, RobotiqConfig
 from .grippers.dummy_gripper import DummyGripper, DummyGripperConfig
 
 import numpy as np
 
+try:
+    from .arms.panda import Panda, PandaConfig
+except ModuleNotFoundError:
+    Panda = None
+    PandaConfig = None
+
+try:
+    from lerobot.robots.custom_manipulator.grippers.panda_gripper import PandaGripperConfig
+except ModuleNotFoundError:
+    PandaGripperConfig = None
+
 def make_arm_from_config(config):
-    if isinstance(config, PandaConfig):
+    if PandaConfig is not None and isinstance(config, PandaConfig):
         return Panda(config)
     elif isinstance(config, DummyArmConfig) or config is None:
         return DummyArm(config)
@@ -20,7 +29,7 @@ def make_gripper_from_config(config):
         return Robotiq(config)
     elif isinstance(config, DummyGripperConfig) or config is None:
         return DummyGripper(config)
-    elif isinstance(config, PandaGripperConfig):
+    elif PandaGripperConfig is not None and isinstance(config, PandaGripperConfig):
         from .grippers.panda_gripper import PandaGripper
         return PandaGripper(config)
     elif isinstance(config, XHandConfig):

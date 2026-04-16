@@ -131,7 +131,11 @@ class CubRobot(Robot):
         if not self.absolute:
             action = self.to_absolute(action)
 
-        hands_to_check = [side for side in ["left", "right"] if f"{side}_hand" in self.config.control_boards]
+        hands_to_check = [
+            side
+            for side, enabled in (("left", self.config.left_hand), ("right", self.config.right_hand))
+            if enabled
+        ]
         current_state = self.bus.read_state()
 
         if not self.safety_checker.is_valid_action(action, hands_to_check):

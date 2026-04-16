@@ -25,7 +25,7 @@ from lerobot.teleoperators.teleoperator import Teleoperator
 
 from .configuration_metaquest import MetaQuestConfig
 from scipy.spatial.transform import Rotation as R
-from lerobot.robots.ergocub.manipulator import Manipulator
+from lerobot.robots.ergocub.manipulator import Manipulator, get_ergocub_hand_urdf_path
 from lerobot.utils.rotation import matrix_to_rotation_6d
 import torch
 
@@ -94,8 +94,8 @@ class MetaQuest(Teleoperator):
         self.joint_names = ["thumb_add", "thumb_oc", "index_add", "index_oc", "middle_oc", "ring_pinky_oc"]
         # Per-hand kinematics solvers for fingertip-to-joint IK
         self.finger_kinematics = {
-            "left": Manipulator("src/lerobot/robots/ergocub/ergocub_hand_left/model.urdf"),
-            "right": Manipulator("src/lerobot/robots/ergocub/ergocub_hand_right/model.urdf"),
+            "left": Manipulator(get_ergocub_hand_urdf_path("left")),
+            "right": Manipulator(get_ergocub_hand_urdf_path("right")),
         }
 
     def _do_inverse_fingers_kinematics(self, side: str, finger_positions: list[np.ndarray]) -> list[float]:
