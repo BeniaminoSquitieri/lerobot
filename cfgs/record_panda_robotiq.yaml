@@ -2,7 +2,8 @@ robot:
   type: custom_manipulator
   arm:
     type: panda
-    use_delta_actions: true
+    # use_delta_actions: true
+    visualize: true
   gripper:
     type: robotiq
   cameras:
@@ -25,12 +26,12 @@ teleop:
   type: metaquest_rail
 
 dataset:
-  repo_id: steb6/roboarena
-  single_task: Pick the bread and place it in the plate.
+  repo_id: steb6/hello_world
+  single_task: Pick.
   fps: 10
   episode_time_s: 2000
   reset_time_s: 0
-  num_episodes: 50
+  num_episodes: 5
   video: true
   push_to_hub: true
   private: false
@@ -40,7 +41,7 @@ dataset:
   rename_map: {}
 
 teleop_action_processor:
-  steps: [clutch_processor, arm_absolute_to_delta]
+  steps: [clutch_processor]  #, arm_absolute_to_delta]
 
 robot_action_processor:
   steps: []
