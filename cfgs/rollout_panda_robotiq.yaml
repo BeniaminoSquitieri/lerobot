@@ -2,7 +2,7 @@ robot:
   type: custom_manipulator
   arm:
     type: panda
-    use_delta_actions: true
+    # use_delta_actions: true
     visualize: true
   gripper:
     type: robotiq
@@ -28,19 +28,19 @@ teleop:
 teleop_action_processor:
   steps:
     - clutch_processor
-    - arm_absolute_to_delta
+    # - arm_absolute_to_delta
 
 policy:
   type: groot
-  pretrained_path: steb6/groot_pick_test
+  pretrained_path: steb6/groot_hello_world
   device: cuda
 
 dataset:
   repo_id: steb6/eval_groot_pick_bread_dagger
   root: outputs/eval_groot_pick_bread_dagger
-  single_task: Pick the bread and place it in the plate.
+  single_task: Pick.
   fps: 10
-  episode_time_s: 120
+  episode_time_s: 12000
   reset_time_s: 0
   num_episodes: 1
   video: true
@@ -57,6 +57,6 @@ robot_action_processor:
 robot_observation_processor:
   steps: []
 
-display_data: true
+# display_data: true
 play_sounds: true
 resume: false
