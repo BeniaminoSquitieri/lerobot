@@ -6,14 +6,26 @@ from klampt import WorldModel
 
 
 _ERGOCUB_DIR = Path(__file__).resolve().parent
-_REPO_ROOT = _ERGOCUB_DIR.parents[3]
+_REPO_ROOT = next(parent for parent in _ERGOCUB_DIR.parents if (parent / "pyproject.toml").exists())
+_MOTORS_ERGOCUB_DIR = _REPO_ROOT / "src" / "lerobot" / "motors" / "ergocub"
+_HAND_URDF_DIR_CANDIDATES = (
+    _MOTORS_ERGOCUB_DIR / "urdfs",
+    _MOTORS_ERGOCUB_DIR / "urdf",
+    _ERGOCUB_DIR / "urdfs",
+    _ERGOCUB_DIR,
+)
 
 
 def get_ergocub_hand_urdf_path(side: str) -> str:
-    hand_urdf_path = _ERGOCUB_DIR / f"ergocub_hand_{side}" / "model.urdf"
-    if not hand_urdf_path.exists():
-        raise FileNotFoundError(f"Missing ergoCub hand URDF for side '{side}': {hand_urdf_path}")
-    return str(hand_urdf_path)
+    for base_dir in _HAND_URDF_DIR_CANDIDATES:
+        hand_urdf_path = base_dir / f"ergocub_hand_{side}" / "model.urdf"
+        if hand_urdf_path.exists():
+            return str(hand_urdf_path)
+
+    searched_paths = [str(base_dir / f"ergocub_hand_{side}" / "model.urdf") for base_dir in _HAND_URDF_DIR_CANDIDATES]
+    raise FileNotFoundError(
+        f"Missing ergoCub hand URDF for side '{side}'. Searched: {searched_paths}"
+    )
 
 
 def _resolve_urdf_path(urdf_path: str) -> str:

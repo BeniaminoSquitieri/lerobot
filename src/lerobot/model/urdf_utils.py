@@ -37,6 +37,11 @@ _PACKAGE_SEARCH_ENV_VARS = (
     "GAZEBO_RESOURCE_PATH",
 )
 _PLACO_URDF_DIR = TemporaryDirectory(prefix="lerobot-placo-urdf-")
+_REPO_ROOT = Path(__file__).resolve().parents[3]
+_LOCAL_PACKAGE_SEARCH_ROOTS = (
+    _REPO_ROOT / "src" / "lerobot" / "motors" / "ergocub" / "urdfs",
+    _REPO_ROOT / "src" / "lerobot" / "motors" / "ergocub" / "urdf",
+)
 
 
 def prepare_urdf_for_placo(urdf_path: str) -> str:
@@ -53,7 +58,7 @@ def _prepare_urdf_for_placo_cached(resolved_urdf_path_str: str, mtime_ns: int) -
     resolved_urdf_path = Path(resolved_urdf_path_str)
     tree = ET.parse(resolved_urdf_path)
     root = tree.getroot()
-    modified = False
+    modified = _strip_visual_and_collision_geometry(root)
 
     for element in root.iter():
         for attr_name in _RESOURCE_ATTRS:
@@ -76,6 +81,16 @@ def _prepare_urdf_for_placo_cached(resolved_urdf_path_str: str, mtime_ns: int) -
     tree.write(prepared_urdf_path, encoding="utf-8", xml_declaration=True)
     logger.info("Prepared temporary URDF for placo: %s", prepared_urdf_path)
     return str(prepared_urdf_path)
+
+
+def _strip_visual_and_collision_geometry(root: ET.Element) -> bool:
+    modified = False
+    for link in root.findall(".//link"):
+        for child in list(link):
+            if child.tag in {"visual", "collision"}:
+                link.remove(child)
+                modified = True
+    return modified
 
 
 def _resolve_resource_reference(resource_path: str, urdf_path: Path) -> str | None:
@@ -138,6 +153,11 @@ def _find_package_root(package_name: str, urdf_path: Path) -> Path | None:
             for candidate in _candidate_package_paths(search_root, package_name):
                 if candidate.is_dir():
                     return candidate
+
+    for search_root in _LOCAL_PACKAGE_SEARCH_ROOTS:
+        for candidate in _candidate_package_paths(search_root, package_name):
+            if candidate.is_dir():
+                return candidate
 
     return None
 
