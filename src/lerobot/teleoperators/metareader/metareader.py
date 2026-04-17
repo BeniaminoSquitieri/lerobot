@@ -28,7 +28,7 @@ def _tip_features(prefix: str = "") -> dict[str, type[float]]:
     return {f"{prefix}{tip}.position.{axis}": float for tip in TIPS for axis in "xyz"}
 
 
-class _SpacebarClutch:
+class _CtrlClutch:
     def __init__(self):
         self.pressed = False
         self._listener = None
@@ -36,9 +36,11 @@ class _SpacebarClutch:
     def start(self) -> None:
         from pynput import keyboard
 
+        clutch_keys = {keyboard.Key.ctrl, keyboard.Key.ctrl_l, keyboard.Key.ctrl_r}
+
         self._listener = keyboard.Listener(
-            on_press=lambda key: setattr(self, "pressed", self.pressed or key == keyboard.Key.space),
-            on_release=lambda key: setattr(self, "pressed", False if key == keyboard.Key.space else self.pressed),
+            on_press=lambda key: setattr(self, "pressed", self.pressed or key in clutch_keys),
+            on_release=lambda key: setattr(self, "pressed", False if key in clutch_keys else self.pressed),
         )
         self._listener.start()
 
@@ -55,7 +57,7 @@ class MetaReaderTeleoperator(Teleoperator):
 
     def __init__(self, config: MetaReaderConfig):
         self.config = config
-        self._clutch = _SpacebarClutch()
+        self._clutch = _CtrlClutch()
         self._reader = None
         self._is_connected = False
         self._last_action = self._neutral_action(0.0)
