@@ -173,7 +173,7 @@ outputs/
 # Dev folders
 .cache/*
 *.stl
-*.urdf
+# *.urdf
 *.xml
 *.part
 src/lerobot/robots/ergocub/ergocub_hand_left/

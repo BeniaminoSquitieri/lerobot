@@ -52,8 +52,10 @@ class RobotKinematics:
         # Set joint names
         self.joint_names = list(self.robot.joint_names()) if joint_names is None else joint_names
 
-        # Initialize frame task for IK
-        self.tip_frame = self.solver.add_frame_task(self.target_frame_name, np.eye(4))
+        # Lazily initialize the frame task only when IK is requested.
+        # Some call sites only need forward kinematics, and certain URDF/link names can be
+        # readable through placo transforms while still not being accepted as an IK frame task.
+        self.tip_frame = None
 
     def forward_kinematics(self, joint_pos_deg: np.ndarray) -> np.ndarray:
         """
@@ -105,6 +107,9 @@ class RobotKinematics:
         # Set current joint positions as initial guess
         for i, joint_name in enumerate(self.joint_names):
             self.robot.set_joint(joint_name, current_joint_rad[i])
+
+        if self.tip_frame is None:
+            self.tip_frame = self.solver.add_frame_task(self.target_frame_name, np.eye(4))
 
         # Update the target pose for the frame task
         self.tip_frame.T_world_frame = desired_ee_pose

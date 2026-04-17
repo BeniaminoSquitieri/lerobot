@@ -76,8 +76,12 @@ class CubRobot(Robot):
     def _resolve_urdf_path(self) -> str:
         if self.config.urdf_path:
             return str(Path(self.config.urdf_path).expanduser().resolve())
+
+        # Prefer a robot-specific env var and repo-local fallback over the generic ROBOT_URDF_PATH.
+        # This avoids loading an unrelated cub model when users have a global URDF override set in
+        # their shell environment.
         return resolve_robot_urdf(
-            env_vars=(self.profile.urdf_env_var, "ROBOT_URDF_PATH"),
+            env_vars=(self.profile.urdf_env_var,),
             fallback_filename=self.profile.urdf_fallback_filename,
         )
 

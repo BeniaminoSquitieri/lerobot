@@ -16,12 +16,22 @@ repo_root = Path(__file__).resolve().parents[4]
 if str(repo_root) not in sys.path:
     sys.path.insert(0, str(repo_root))
 
-import metareader
-
 
 TIPS = ("thumb", "index", "middle", "ring", "little")
 METAREADER_TRANSFORM = np.array([[0, 0, -1], [-1, 0, 0], [0, 1, 0]], dtype=float)
 HOME_ROT = R.from_rotvec([np.pi, 0.0, 0.0])
+
+
+def _get_metareader_module():
+    try:
+        import metareader
+    except ImportError as exc:
+        raise ImportError(
+            "Missing optional dependency `metareader`. "
+            "It is only required when using the `metareader` teleoperator."
+        ) from exc
+
+    return metareader
 
 
 def _tip_features(prefix: str = "") -> dict[str, type[float]]:
@@ -95,7 +105,7 @@ class MetaReaderTeleoperator(Teleoperator):
         if self._is_connected:
             return
         print("[metareader] Creating MetaReader client...", flush=True)
-        self._reader = metareader.MetaReader(
+        self._reader = _get_metareader_module().MetaReader(
             port=self.config.port,
             tcp_port=self.config.tcp_port,
             no_advertise=self.config.no_advertise,
