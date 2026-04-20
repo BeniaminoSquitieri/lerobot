@@ -122,8 +122,11 @@ class ErgoCubMotorsBus:
         for name, controller in self.controllers.items():
             logger.info(f"Disconnecting {name} controller...")
             controller.disconnect()
-        
-        yarp.Network.fini()
+
+        # YARP is initialized by multiple wrappers in this process (robot, cameras,
+        # teleoperator). Calling fini() here can tear down global state while other
+        # YARP-backed objects are still being destroyed, which has caused shutdown
+        # segfaults after a successful recording.
         logger.info("ErgoCubMotorsBus disconnected")
     
     def read_state(self) -> dict[str, float]:

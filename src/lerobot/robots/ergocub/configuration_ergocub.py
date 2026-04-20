@@ -48,6 +48,10 @@ class CubRobotConfig(RobotConfig):
     # If False, actions are interpreted as deltas relative to the current/last target.
     absolute: bool = True
     finger_scale: float = 1.0
+    # Optional dataset-only action appended for emotion-annotated HRI3 recordings.
+    # The robot ignores it at execution time, but exposing it in action_features
+    # allows resume-compatible recording against HRI3_emo.
+    default_emotions: float | None = None
     xela_force_visualization_scale: List[float] = field(default_factory=lambda: [5e-5, 5e-5, 5e-5])
     position_tolerance: float = 0.1  # Tolerance for safety checks, in radians or meters depending on the joint
 

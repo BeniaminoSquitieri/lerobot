@@ -191,6 +191,27 @@ class LeRobotDatasetMetadata:
         if self.episodes is None:
             self._load_metadata()
 
+    def _get_latest_metadata_file_indices(self) -> tuple[int, int] | None:
+        episodes_root = self.root / "meta" / "episodes"
+        if not episodes_root.exists():
+            return None
+
+        latest_indices: tuple[int, int] | None = None
+        for parquet_path in episodes_root.glob("chunk-*/*.parquet"):
+            chunk_name = parquet_path.parent.name
+            file_name = parquet_path.stem
+            try:
+                chunk_idx = int(chunk_name.removeprefix("chunk-"))
+                file_idx = int(file_name.removeprefix("file-"))
+            except ValueError:
+                continue
+
+            candidate = (chunk_idx, file_idx)
+            if latest_indices is None or candidate > latest_indices:
+                latest_indices = candidate
+
+        return latest_indices
+
     def _pull_from_repo(
         self,
         allow_patterns: list[str] | str | None = None,
@@ -420,9 +441,13 @@ class LeRobotDatasetMetadata:
             chunk_idx, file_idx = 0, 0
             if self.episodes is not None and len(self.episodes) > 0:
                 # It means we are resuming recording, so we need to load the latest episode
-                # Update the indices to avoid overwriting the latest episode
-                chunk_idx = self.episodes[-1]["meta/episodes/chunk_index"]
-                file_idx = self.episodes[-1]["meta/episodes/file_index"]
+                # Update the indices to avoid overwriting the latest episode. We derive
+                # the next metadata file from the files that actually exist on disk rather
+                # than trusting the stored `meta/episodes/file_index`, because legacy or
+                # repaired datasets may contain stale pointers there.
+                latest_metadata_indices = self._get_latest_metadata_file_indices()
+                if latest_metadata_indices is not None:
+                    chunk_idx, file_idx = latest_metadata_indices
                 latest_num_frames = self.episodes[-1]["dataset_to_index"]
                 episode_dict["dataset_from_index"] = [latest_num_frames]
                 episode_dict["dataset_to_index"] = [latest_num_frames + num_frames]

@@ -169,7 +169,10 @@ class MetaQuest(Teleoperator):
             self.tf_driver.close()
             
         self.tf_driver = None
-        yarp.Network.fini()
+        # Avoid calling yarp.Network.fini() here: the robot and camera wrappers
+        # may still hold YARP objects, and tearing down the global network from
+        # inside one device's disconnect path can crash the interpreter during
+        # shutdown.
         self._is_connected = False
 
     def _get_transform(self, target_frame: str, reference_frame: str = "openxr_origin") -> np.ndarray:

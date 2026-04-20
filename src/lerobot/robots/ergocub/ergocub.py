@@ -132,12 +132,16 @@ class CubRobot(Robot):
         if not self.is_connected:
             raise DeviceNotConnectedError(f"{self} is not connected.")
 
+        extra_action = self._extra_action_values(action)
+        bus_action = {key: value for key, value in action.items() if key in self._action_motors_ft}
         current_state = self.bus.read_state()
         if not self.config.control_boards:
-            return current_state
+            return self._action_from_state(current_state, extra_action)
 
         if not self.absolute:
-            action = self.to_absolute(action)
+            bus_action = self.to_absolute(bus_action)
+
+        sent_action = {**bus_action, **extra_action}
 
         hands_to_check = []
         if "bimanual" in self.config.control_boards:
@@ -147,13 +151,15 @@ class CubRobot(Robot):
                 if enabled
             ]
 
-        if hands_to_check and not self.safety_checker.is_valid_action(action, hands_to_check):
-            return current_state
-        if hands_to_check and not self.safety_checker.check_hand_position_safety(action, current_state, hands_to_check):
-            return current_state
+        if hands_to_check and not self.safety_checker.is_valid_action(bus_action, hands_to_check):
+            return self._action_from_state(current_state, extra_action)
+        if hands_to_check and not self.safety_checker.check_hand_position_safety(
+            bus_action, current_state, hands_to_check
+        ):
+            return self._action_from_state(current_state, extra_action)
 
-        self.bus.send_commands(action)
-        return action
+        self.bus.send_commands(bus_action)
+        return sent_action
 
     def reset(self) -> None:
         if not self.is_connected:
@@ -195,6 +201,24 @@ class CubRobot(Robot):
     def _action_motors_ft(self) -> dict[str, type]:
         return self.bus.action_features
 
+    def _extra_action_values(self, action: dict[str, Any] | None = None) -> dict[str, float]:
+        if self.config.default_emotions is None:
+            return {}
+
+        default_emotions = float(self.config.default_emotions)
+        if action is None:
+            return {"emotions": default_emotions}
+        return {"emotions": float(action.get("emotions", default_emotions))}
+
+    def _action_from_state(
+        self, current_state: dict[str, Any], extra_action: dict[str, float] | None = None
+    ) -> dict[str, Any]:
+        current_action = {
+            name: current_state[name] for name in self._action_motors_ft if name in current_state
+        }
+        current_action.update(extra_action or self._extra_action_values())
+        return current_action
+
     @property
     def _cameras_ft(self) -> dict[str, tuple]:
         cam_features = {}
@@ -210,7 +234,7 @@ class CubRobot(Robot):
 
     @cached_property
     def action_features(self) -> dict[str, type]:
-        return self._action_motors_ft
+        return {**self._action_motors_ft, **{name: float for name in self._extra_action_values()}}
 
 
 class ErgoCub(CubRobot):
