@@ -87,7 +87,6 @@ def test_record_and_resume(tmp_path):
     assert dataset.meta.total_frames == dataset.num_frames == 6
     assert dataset.meta.total_tasks == 1
 
-
 def test_record_and_replay(tmp_path):
     robot_cfg = MockRobotConfig()
     teleop_cfg = MockTeleopConfig()

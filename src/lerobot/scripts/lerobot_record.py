@@ -70,6 +70,9 @@ lerobot-record \
 """
 
 import logging
+import os
+import platform
+import sys
 import time
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
@@ -479,7 +482,7 @@ def record_loop(
 
         # Write to dataset (only on real policy frames, not interpolated-only iterations)
         if dataset is not None and is_record_frame:
-            action_frame = build_dataset_frame(dataset.features, action_values, prefix=ACTION)
+            action_frame = build_dataset_frame(dataset.features, _sent_action, prefix=ACTION)
             frame = {**observation_frame, **action_frame, "task": single_task}
             dataset.add_frame(frame)
 
@@ -613,6 +616,24 @@ def record(cfg: RecordConfig) -> LeRobotDataset:
 
         with VideoEncodingManager(dataset):
             recorded_episodes = 0
+            if robot.name in ["unitree_g1", "ergocub", "r1"] and not events["stop_recording"]:
+                log_say("Reset the environment", cfg.play_sounds)
+                robot.reset()
+                if cfg.dataset.reset_time_s > 0:
+                    record_loop(
+                        robot=robot,
+                        events=events,
+                        fps=cfg.dataset.fps,
+                        teleop_action_processor=teleop_action_processor,
+                        robot_action_processor=robot_action_processor,
+                        robot_observation_processor=robot_observation_processor,
+                        teleop=teleop,
+                        control_time_s=cfg.dataset.reset_time_s,
+                        single_task=cfg.dataset.single_task,
+                        display_data=cfg.display_data,
+                        display_fps=cfg.display_fps,
+                    )
+
             while recorded_episodes < cfg.dataset.num_episodes and not events["stop_recording"]:
                 log_say(f"Recording episode {dataset.num_episodes}", cfg.play_sounds)
                 record_loop(
@@ -691,6 +712,14 @@ def record(cfg: RecordConfig) -> LeRobotDataset:
 def main():
     register_third_party_plugins()
     record()
+    # Work around destructor-time crashes seen with some native YARP stacks on
+    # Linux after a successful record() cleanup. The CLI has already finalized
+    # the dataset and disconnected devices, so a hard process exit here avoids
+    # interpreter shutdown touching the problematic native destructors.
+    if platform.system() == "Linux" and os.environ.get("LEROBOT_DISABLE_HARD_EXIT") != "1":
+        sys.stdout.flush()
+        sys.stderr.flush()
+        os._exit(0)
 
 
 if __name__ == "__main__":
