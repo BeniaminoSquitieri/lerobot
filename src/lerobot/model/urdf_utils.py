@@ -37,6 +37,7 @@ _PACKAGE_SEARCH_ENV_VARS = (
     "GAZEBO_RESOURCE_PATH",
 )
 _PLACO_URDF_DIR = TemporaryDirectory(prefix="lerobot-placo-urdf-")
+_RERUN_URDF_DIR = TemporaryDirectory(prefix="lerobot-rerun-urdf-")
 _REPO_ROOT = Path(__file__).resolve().parents[3]
 _LOCAL_PACKAGE_SEARCH_ROOTS = (
     _REPO_ROOT / "src" / "lerobot" / "motors" / "ergocub" / "urdfs",
@@ -48,17 +49,50 @@ def prepare_urdf_for_placo(urdf_path: str) -> str:
     """Rewrite URDF resource references to absolute paths when placo cannot resolve them."""
 
     resolved_urdf_path = Path(urdf_path).expanduser().resolve()
-    return _prepare_urdf_for_placo_cached(str(resolved_urdf_path), resolved_urdf_path.stat().st_mtime_ns)
+    return _prepare_urdf_cached(
+        str(resolved_urdf_path),
+        resolved_urdf_path.stat().st_mtime_ns,
+        strip_visual=True,
+        strip_collision=True,
+        output_dir=_PLACO_URDF_DIR.name,
+        consumer_name="placo",
+    )
+
+
+def prepare_urdf_for_rerun(urdf_path: str) -> str:
+    """Rewrite URDF resources for Rerun while keeping visual meshes.
+
+    We strip collision geometry to reduce scene complexity, but preserve visuals
+    so the robot remains visible in the viewer.
+    """
+
+    resolved_urdf_path = Path(urdf_path).expanduser().resolve()
+    return _prepare_urdf_cached(
+        str(resolved_urdf_path),
+        resolved_urdf_path.stat().st_mtime_ns,
+        strip_visual=False,
+        strip_collision=True,
+        output_dir=_RERUN_URDF_DIR.name,
+        consumer_name="rerun",
+    )
 
 
 @lru_cache(maxsize=None)
-def _prepare_urdf_for_placo_cached(resolved_urdf_path_str: str, mtime_ns: int) -> str:
+def _prepare_urdf_cached(
+    resolved_urdf_path_str: str,
+    mtime_ns: int,
+    *,
+    strip_visual: bool,
+    strip_collision: bool,
+    output_dir: str,
+    consumer_name: str,
+) -> str:
     del mtime_ns
 
     resolved_urdf_path = Path(resolved_urdf_path_str)
     tree = ET.parse(resolved_urdf_path)
     root = tree.getroot()
-    modified = _strip_visual_and_collision_geometry(root)
+    modified = _strip_geometry(root, strip_visual=strip_visual, strip_collision=strip_collision)
 
     for element in root.iter():
         for attr_name in _RESOURCE_ATTRS:
@@ -76,18 +110,21 @@ def _prepare_urdf_for_placo_cached(resolved_urdf_path_str: str, mtime_ns: int) -
     if not modified:
         return resolved_urdf_path_str
 
-    fingerprint = hashlib.sha1(resolved_urdf_path_str.encode("utf-8")).hexdigest()[:12]
-    prepared_urdf_path = Path(_PLACO_URDF_DIR.name) / f"{resolved_urdf_path.stem}-{fingerprint}.urdf"
+    fingerprint_source = (
+        f"{resolved_urdf_path_str}:{consumer_name}:{int(strip_visual)}:{int(strip_collision)}"
+    )
+    fingerprint = hashlib.sha1(fingerprint_source.encode("utf-8")).hexdigest()[:12]
+    prepared_urdf_path = Path(output_dir) / f"{resolved_urdf_path.stem}-{consumer_name}-{fingerprint}.urdf"
     tree.write(prepared_urdf_path, encoding="utf-8", xml_declaration=True)
-    logger.info("Prepared temporary URDF for placo: %s", prepared_urdf_path)
+    logger.info("Prepared temporary URDF for %s: %s", consumer_name, prepared_urdf_path)
     return str(prepared_urdf_path)
 
 
-def _strip_visual_and_collision_geometry(root: ET.Element) -> bool:
+def _strip_geometry(root: ET.Element, *, strip_visual: bool, strip_collision: bool) -> bool:
     modified = False
     for link in root.findall(".//link"):
         for child in list(link):
-            if child.tag in {"visual", "collision"}:
+            if (strip_visual and child.tag == "visual") or (strip_collision and child.tag == "collision"):
                 link.remove(child)
                 modified = True
     return modified
