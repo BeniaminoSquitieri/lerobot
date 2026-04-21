@@ -19,7 +19,7 @@ from typing import Any
 
 import numpy as np
 
-from lerobot.model.urdf_utils import prepare_urdf_for_placo
+from lerobot.model.urdf_utils import prepare_urdf_for_placo, prepare_urdf_for_rerun
 from lerobot.types import RobotAction, RobotObservation
 
 from .constants import ACTION, ACTION_PREFIX, OBS_PREFIX, OBS_STR
@@ -260,7 +260,7 @@ def log_rerun_data_ergocub(
 
     if robot is not None and getattr(robot, "urdf_path", None):
         raw_urdf_path = str(Path(robot.urdf_path).expanduser().resolve())
-        urdf_path = prepare_urdf_for_placo(raw_urdf_path)
+        urdf_path = prepare_urdf_for_rerun(raw_urdf_path)
         if urdf_path not in _ERGOCUB_RERUN_TREES:
             entity_path_prefix = robot.name
             frame_prefix = f"tf#/{robot.name}/"
