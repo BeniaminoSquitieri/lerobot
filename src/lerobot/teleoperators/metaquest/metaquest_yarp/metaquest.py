@@ -25,8 +25,8 @@ from lerobot.teleoperators.teleoperator import Teleoperator
 
 from .configuration_metaquest import MetaQuestConfig
 from scipy.spatial.transform import Rotation as R
-from lerobot.robots.ergocub.manipulator import Manipulator
-from pytorch3d.transforms import matrix_to_rotation_6d
+from lerobot.robots.ergocub.manipulator import Manipulator, get_ergocub_hand_urdf_path
+from lerobot.utils.rotation import matrix_to_rotation_6d
 import torch
 
 HEAD_TO_ROOT = np.array([
@@ -66,18 +66,21 @@ class MetaQuest(Teleoperator):
         self.cfg = cfg
         self.session_id = uuid.uuid4()
         self._is_connected = False
-        
+
+        # Optionally set finger rescale from config, default 1.0
+        self.finger_scale = getattr(cfg, 'finger_scale', 1.0)
+
         # Call parent constructor after setting cfg
         super().__init__(cfg)
 
         # Initialize YARP network
         yarp.Network.init()
-        
+
         # FrameTransform client will be created in connect() method
         self.tf_driver = None
         self.tf_reader = None
         self.matrix_buffer = yarp.Matrix(4, 4)
-        
+
         # Finger frame mappings for MetaQuest
         self.finger_index_pairs = [
             ("thumb_tip", 5),
@@ -91,8 +94,8 @@ class MetaQuest(Teleoperator):
         self.joint_names = ["thumb_add", "thumb_oc", "index_add", "index_oc", "middle_oc", "ring_pinky_oc"]
         # Per-hand kinematics solvers for fingertip-to-joint IK
         self.finger_kinematics = {
-            "left": Manipulator("src/lerobot/robots/ergocub/ergocub_hand_left/model.urdf"),
-            "right": Manipulator("src/lerobot/robots/ergocub/ergocub_hand_right/model.urdf"),
+            "left": Manipulator(get_ergocub_hand_urdf_path("left")),
+            "right": Manipulator(get_ergocub_hand_urdf_path("right")),
         }
 
     def _do_inverse_fingers_kinematics(self, side: str, finger_positions: list[np.ndarray]) -> list[float]:
@@ -166,7 +169,10 @@ class MetaQuest(Teleoperator):
             self.tf_driver.close()
             
         self.tf_driver = None
-        yarp.Network.fini()
+        # Avoid calling yarp.Network.fini() here: the robot and camera wrappers
+        # may still hold YARP objects, and tearing down the global network from
+        # inside one device's disconnect path can crash the interpreter during
+        # shutdown.
         self._is_connected = False
 
     def _get_transform(self, target_frame: str, reference_frame: str = "openxr_origin") -> np.ndarray:
@@ -174,24 +180,17 @@ class MetaQuest(Teleoperator):
         if not self.tf_reader:
             raise DeviceNotConnectedError("FrameTransform reader not available")
         
-        # Use a try-except block to handle potential YARP errors gracefully
-        try:
-            success = self.tf_reader.getTransform(target_frame, reference_frame, self.matrix_buffer)
-            if not success:
-                print(f"Warning: Failed to get transform from {target_frame} to {reference_frame}")
-                return np.eye(4)  # Return identity matrix as fallback
-                
-            # Convert YARP matrix to numpy array
-            transform = np.zeros((4, 4))
-            for i in range(4):
-                for j in range(4):
-                    transform[i, j] = self.matrix_buffer.get(i, j)
+        while not self.tf_reader.getTransform(target_frame, reference_frame, self.matrix_buffer):
+            time.sleep(0.01)  # Wait a bit before retrying
             
-            return transform
+        # Convert YARP matrix to numpy array
+        transform = np.zeros((4, 4))
+        for i in range(4):
+            for j in range(4):
+                transform[i, j] = self.matrix_buffer.get(i, j)
+        
+        return transform
             
-        except Exception as e:
-            print(f"Error getting transform from {target_frame} to {reference_frame}: {e}")
-            return np.eye(4)  # Return identity matrix as fallback
 
     def _get_head_pose(self) -> dict:
         """Get raw head pose from MetaQuest."""
@@ -199,8 +198,13 @@ class MetaQuest(Teleoperator):
         transform = (QUEST_TO_ECUB @ transform @ HEAD_ADAPTER)
 
         position = transform[:3, 3]
-        quat = R.from_matrix(transform[:3, :3]).as_quat(canonical=True, scalar_first=True)  # [w, x, y, z]
-        return np.r_[position, quat]
+        # quat = R.from_matrix(transform[:3, :3]).as_quat(canonical=True, scalar_first=True)  # [w, x, y, z]
+        try:
+            pose_6d = matrix_to_rotation_6d(torch.tensor(R.from_matrix(transform[:3, :3]).as_matrix())).numpy()
+        except ValueError as e:
+            print(f"Exception determinant metaquest head: {e}")
+            pose_6d = np.array([1, 0, 0, 0, 1, 0])
+        return np.r_[position, pose_6d]
 
 
     def _get_hand_pose(self, side: str) -> dict:
@@ -218,15 +222,17 @@ class MetaQuest(Teleoperator):
         """Get raw finger poses from MetaQuest relative to hand frame."""
         hand_frame = f"openxr_{side}_hand_joint_palm"  # Reference frame (hand)
         positions = []
-        
+
         for finger_name, _ in self.finger_index_pairs:
             finger_frame = f"openxr_{side}_hand_joint_{finger_name}"
             transform = self._get_transform(finger_frame, hand_frame)
-            
+
             # Extract position from transformation matrix
             position = transform[:3, 3]
+            # do here the finger rescaling!!!
+            position = position * self.finger_scale
             positions.append(position)
-            
+
         return positions
 
     def get_action(self) -> dict[str, Any]:
@@ -270,10 +276,12 @@ class MetaQuest(Teleoperator):
             "head.position.x": float,
             "head.position.y": float, 
             "head.position.z": float,
-            "head.orientation.qw": float,
-            "head.orientation.qx": float,
-            "head.orientation.qy": float,
-            "head.orientation.qz": float,
+            "head.orientation.d1": float,
+            "head.orientation.d2": float,
+            "head.orientation.d3": float,
+            "head.orientation.d4": float,
+            "head.orientation.d5": float,
+            "head.orientation.d6": float,
             
             # Left hand pose
             "left_hand.position.x": float,

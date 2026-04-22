@@ -16,19 +16,29 @@ repo_root = Path(__file__).resolve().parents[4]
 if str(repo_root) not in sys.path:
     sys.path.insert(0, str(repo_root))
 
-import metareader
-
 
 TIPS = ("thumb", "index", "middle", "ring", "little")
 METAREADER_TRANSFORM = np.array([[0, 0, -1], [-1, 0, 0], [0, 1, 0]], dtype=float)
 HOME_ROT = R.from_rotvec([np.pi, 0.0, 0.0])
 
 
+def _get_metareader_module():
+    try:
+        import metareader
+    except ImportError as exc:
+        raise ImportError(
+            "Missing optional dependency `metareader`. "
+            "It is only required when using the `metareader` teleoperator."
+        ) from exc
+
+    return metareader
+
+
 def _tip_features(prefix: str = "") -> dict[str, type[float]]:
     return {f"{prefix}{tip}.position.{axis}": float for tip in TIPS for axis in "xyz"}
 
 
-class _SpacebarClutch:
+class _CtrlClutch:
     def __init__(self):
         self.pressed = False
         self._listener = None
@@ -36,9 +46,11 @@ class _SpacebarClutch:
     def start(self) -> None:
         from pynput import keyboard
 
+        clutch_keys = {keyboard.Key.ctrl, keyboard.Key.ctrl_l, keyboard.Key.ctrl_r}
+
         self._listener = keyboard.Listener(
-            on_press=lambda key: setattr(self, "pressed", self.pressed or key == keyboard.Key.space),
-            on_release=lambda key: setattr(self, "pressed", False if key == keyboard.Key.space else self.pressed),
+            on_press=lambda key: setattr(self, "pressed", self.pressed or key in clutch_keys),
+            on_release=lambda key: setattr(self, "pressed", False if key in clutch_keys else self.pressed),
         )
         self._listener.start()
 
@@ -55,7 +67,7 @@ class MetaReaderTeleoperator(Teleoperator):
 
     def __init__(self, config: MetaReaderConfig):
         self.config = config
-        self._clutch = _SpacebarClutch()
+        self._clutch = _CtrlClutch()
         self._reader = None
         self._is_connected = False
         self._last_action = self._neutral_action(0.0)
@@ -92,21 +104,26 @@ class MetaReaderTeleoperator(Teleoperator):
         del calibrate
         if self._is_connected:
             return
-        self._reader = metareader.MetaReader(
+        print("[metareader] Creating MetaReader client...", flush=True)
+        self._reader = _get_metareader_module().MetaReader(
             port=self.config.port,
             tcp_port=self.config.tcp_port,
             no_advertise=self.config.no_advertise,
             auto_adb_reverse=self.config.auto_adb_reverse,
         )
         if hasattr(self._reader, "__enter__"):
+            print("[metareader] Entering MetaReader context...", flush=True)
             self._reader.__enter__()
+        print("[metareader] Starting clutch listener...", flush=True)
         self._clutch.start()
+        print("[metareader] Waiting for first frame...", flush=True)
         deadline = time.monotonic() + self.config.connection_timeout_s
         while time.monotonic() < deadline:
             frame = self._reader.read_latest(timeout=self.config.read_timeout_s)
             if frame is not None:
                 self._last_action = self._frame_to_action(frame)
                 self._is_connected = True
+                print("[metareader] First frame received.", flush=True)
                 return
         self.disconnect()
         raise TimeoutError("MetaReader did not produce any frame before timeout.")

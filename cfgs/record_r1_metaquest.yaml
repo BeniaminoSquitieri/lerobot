@@ -1,0 +1,27 @@
+<<: !include robots/r1Sim.yaml
+
+teleop:
+  type: metaquest
+  finger_scale: 1.0
+
+dataset:
+  repo_id: steb6/test
+  root: outputs/test
+  single_task: Teleoperate R1 in Gazebo.
+  fps: 10
+  episode_time_s: 1000
+  reset_time_s: 0
+  num_episodes: 1
+  video: true
+  push_to_hub: false
+  private: false
+  num_image_writer_processes: 0
+  num_image_writer_threads_per_camera: 4
+  video_encoding_batch_size: 1
+  rename_map: {}
+
+display_data: false
+display_compressed_images: true
+display_fps: 5
+play_sounds: true
+resume: false

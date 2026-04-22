@@ -21,7 +21,7 @@ import math
 
 import yarp
 from lerobot.utils.errors import DeviceAlreadyConnectedError, DeviceNotConnectedError
-from lerobot.robots.ergocub.manipulator import Manipulator
+from lerobot.robots.ergocub.manipulator import Manipulator, get_ergocub_hand_urdf_path
 
 logger = logging.getLogger(__name__)
 
@@ -32,17 +32,20 @@ class ErgoCubFingerController:
     Sends 12 floats (6 for left hand, 6 for right hand) to /ergocub_finger_controller/finger_commands:i
     """
     
-    def __init__(self, local_prefix: str):
+    def __init__(self, remote_prefix: str, local_prefix: str, finger_scale: float = 1.0):
         """
         Initialize finger controller.
         
         Args:
             local_prefix: Local YARP prefix (e.g., "/lerobot/session_id")
         """
+        self.remote_prefix = remote_prefix
         self.local_prefix = local_prefix
         
         # YARP port for finger commands
         self.finger_cmd_port = yarp.Port()
+        self.left_encoders_port = yarp.BufferedPortBottle()
+        self.right_encoders_port = yarp.BufferedPortBottle()
         
         self._is_connected = False
         
@@ -50,9 +53,11 @@ class ErgoCubFingerController:
         self.joint_names = ["thumb_add", "thumb_oc", "index_add", "index_oc", "middle_oc", "ring_pinky_oc"]
         # Per-hand kinematics solvers for fingertip-to-joint IK
         self.finger_kinematics = {
-            "left": Manipulator("src/lerobot/robots/ergocub/ergocub_hand_left/model.urdf"),
-            "right": Manipulator("src/lerobot/robots/ergocub/ergocub_hand_right/model.urdf"),
+            "left": Manipulator(get_ergocub_hand_urdf_path("left")),
+            "right": Manipulator(get_ergocub_hand_urdf_path("right")),
         }
+        self.finger_scale = finger_scale  # Scale for fingertip positions
+        self._latest_finger_encoders: dict[str, list[float]] = {"left": [], "right": []}
     
     @property
     def is_connected(self) -> bool:
@@ -73,6 +78,25 @@ class ErgoCubFingerController:
         while not yarp.Network.connect(finger_cmd_local, finger_cmd_remote):
             logger.warning(f"Failed to connect {finger_cmd_local} -> {finger_cmd_remote}, retrying...")
             time.sleep(1)
+
+        # Open encoders ports for both hands
+        left_encoders_local = f"{self.local_prefix}/finger/left_encoders:i"
+        if not self.left_encoders_port.open(left_encoders_local):
+            raise ConnectionError(f"Failed to open left encoders port {left_encoders_local}")
+        
+        left_encoders_remote = f"{self.remote_prefix}/left_arm/state:o"
+        while not yarp.Network.connect(left_encoders_remote, left_encoders_local):
+            logger.warning(f"Failed to connect {left_encoders_remote} -> {left_encoders_local}, retrying...")
+            time.sleep(1)
+
+        right_encoders_local = f"{self.local_prefix}/finger/right_encoders:i"
+        if not self.right_encoders_port.open(right_encoders_local):
+            raise ConnectionError(f"Failed to open right encoders port {right_encoders_local}")
+        
+        right_encoders_remote = f"{self.remote_prefix}/right_arm/state:o"
+        while not yarp.Network.connect(right_encoders_remote, right_encoders_local):
+            logger.warning(f"Failed to connect {right_encoders_remote} -> {right_encoders_local}, retrying...")
+            time.sleep(1)
         
         self._is_connected = True
         logger.info("ErgoCubFingerController connected")
@@ -92,7 +116,50 @@ class ErgoCubFingerController:
         if not self.is_connected:
             raise DeviceNotConnectedError("ErgoCubFingerController not connected")
         
-        return {}
+        state = {}
+        # Add actual finger values from encoders
+        finger_joint_names = ["thumb_add", "thumb_oc", "index_add", "index_oc", "middle_oc", "ring_pinky_oc"]
+        for side in ["left", "right"]:
+
+            # Read hand encoders with busy wait
+            encoders_port = self.left_encoders_port if side == "left" else self.right_encoders_port
+            read_attempts = 0
+            while (hand_bottle := encoders_port.read(False)) is None:
+                read_attempts += 1
+                if read_attempts % 1000 == 0:  # Warning every 1000 attempts
+                    logger.warning(f"Still waiting for {side} hand encoder data (attempt {read_attempts})")
+                time.sleep(0.001)  # 1 millisecond sleep
+            
+            # Read all available encoders (hand + fingers)
+            all_encoders = [hand_bottle.get(i).asFloat64() for i in range(hand_bottle.size())]
+
+            finger_encoders = all_encoders[7:13] if len(all_encoders) >= 13 else [0.0] * 6
+            self._latest_finger_encoders[side] = finger_encoders
+            for i, joint in enumerate(finger_joint_names):
+                state[f"{side}_fingers.{joint}"] = finger_encoders[i] if i < len(finger_encoders) else 0.0
+            
+        return state
+
+    def get_latest_joint_states(self) -> dict[str, float]:
+        """Map the 6-D finger controller state onto the URDF hand joints for rerun visualization."""
+
+        joints: dict[str, float] = {}
+        joint_map = {
+            "thumb_add": ("thumb_add",),
+            "thumb_oc": ("thumb_prox", "thumb_dist"),
+            "index_add": ("index_add",),
+            "index_oc": ("index_prox", "index_dist"),
+            "middle_oc": ("middle_prox", "middle_dist"),
+            "ring_pinky_oc": ("ring_prox", "ring_dist", "pinkie_prox", "pinkie_dist"),
+        }
+
+        for side, values in self._latest_finger_encoders.items():
+            prefix = "l" if side == "left" else "r"
+            for feature_name, value in zip(self.joint_names, values, strict=False):
+                for urdf_joint_name in joint_map.get(feature_name, ()):
+                    joints[f"{prefix}_{urdf_joint_name}"] = float(value)
+
+        return joints
     
     def reset(self) -> None:
         """Reset finger controller (no-op)."""
@@ -171,7 +238,7 @@ class ErgoCubFingerController:
             for finger in ["thumb", "index", "middle", "ring", "pinky"]:
                 keys = [f"{side}_fingers.{finger}.{coord}" for coord in ["x", "y", "z"]]
                 if all(k in action for k in keys):
-                    finger_positions.append([action[k] for k in keys])
+                    finger_positions.append([action[k] * self.finger_scale for k in keys])
                     finger_tip_keys.extend(keys)
 
             if len(finger_positions) == 0:

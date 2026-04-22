@@ -21,8 +21,12 @@ from lerobot.cameras.realsense import RealSenseCameraConfig
 from .configs import ArmConfig, GripperConfig
 from .arms.dummy import DummyArmConfig
 from .grippers import DummyGripperConfig
-from .arms.panda import PandaConfig
 from ..config import RobotConfig
+
+try:
+    from .arms.panda import PandaConfig  # noqa: F401
+except ModuleNotFoundError:
+    PandaConfig = None
 
 
 @RobotConfig.register_subclass("custom_manipulator")

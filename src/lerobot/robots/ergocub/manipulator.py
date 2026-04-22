@@ -1,7 +1,44 @@
 import numpy as np
-from os import path
+from pathlib import Path
+
 from klampt.model import ik
 from klampt import WorldModel
+
+
+_ERGOCUB_DIR = Path(__file__).resolve().parent
+_REPO_ROOT = next(parent for parent in _ERGOCUB_DIR.parents if (parent / "pyproject.toml").exists())
+_MOTORS_ERGOCUB_DIR = _REPO_ROOT / "src" / "lerobot" / "motors" / "ergocub"
+_HAND_URDF_DIR_CANDIDATES = (
+    _MOTORS_ERGOCUB_DIR / "urdfs",
+    _MOTORS_ERGOCUB_DIR / "urdf",
+    _ERGOCUB_DIR / "urdfs",
+    _ERGOCUB_DIR,
+)
+
+
+def get_ergocub_hand_urdf_path(side: str) -> str:
+    for base_dir in _HAND_URDF_DIR_CANDIDATES:
+        hand_urdf_path = base_dir / f"ergocub_hand_{side}" / "model.urdf"
+        if hand_urdf_path.exists():
+            return str(hand_urdf_path)
+
+    searched_paths = [str(base_dir / f"ergocub_hand_{side}" / "model.urdf") for base_dir in _HAND_URDF_DIR_CANDIDATES]
+    raise FileNotFoundError(
+        f"Missing ergoCub hand URDF for side '{side}'. Searched: {searched_paths}"
+    )
+
+
+def _resolve_urdf_path(urdf_path: str) -> str:
+    candidate = Path(urdf_path).expanduser()
+    if candidate.exists():
+        return str(candidate.resolve())
+
+    if not candidate.is_absolute():
+        repo_candidate = _REPO_ROOT / candidate
+        if repo_candidate.exists():
+            return str(repo_candidate.resolve())
+
+    raise FileNotFoundError(f"Manipulator URDF not found: {urdf_path}")
 
 
 class Manipulator:
@@ -18,9 +55,12 @@ class Manipulator:
         self.world = WorldModel()
 
         # load robot
-        f_urdf = path.join(urdf_path)
-        self.world.loadRobot(f_urdf)
-        self.robot = self.world.robot(0)
+        f_urdf = _resolve_urdf_path(urdf_path)
+        load_result = self.world.loadRobot(f_urdf)
+        if self.world.numRobots() == 0:
+            raise RuntimeError(f"Klampt failed to load manipulator URDF '{f_urdf}' (loadRobot returned {load_result!r})")
+
+        self.robot = self.world.robot(self.world.numRobots() - 1)
         self.dof = self.robot.numDrivers()
         self.ik_dof = [self.robot.driver(i).getName() for i in range(self.dof)]
 

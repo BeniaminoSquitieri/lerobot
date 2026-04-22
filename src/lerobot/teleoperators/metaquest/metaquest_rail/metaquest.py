@@ -27,10 +27,19 @@ from .configuration_metaquest import MetaQuestRailConfig
 
 HOME_ROT = R.from_rotvec([np.pi, 0.0, 0.0])
 
-try:
-    from oculus_reader import OculusReader
-except ImportError:
-    raise ImportError("(Missing oculus_reader. HINT: Install and perform the setup instructions from https://github.com/rail-berkeley/oculus_reader)")
+
+def _get_oculus_reader_cls():
+    try:
+        from oculus_reader import OculusReader
+    except ImportError as exc:
+        raise ImportError(
+            "Missing optional dependency `oculus_reader`. "
+            "It is only required when using the `metaquest_rail` teleoperator. "
+            "Install it and complete the setup instructions from "
+            "https://github.com/rail-berkeley/oculus_reader"
+        ) from exc
+
+    return OculusReader
 
 # VR ==> MJ mapping when teleOp user is behind the robot
 def vrbehind2mj(pose):
@@ -65,7 +74,7 @@ class MetaQuestRail(Teleoperator):
     def connect(self):
         """Connect to OculusReader."""
         print('Waiting for Oculus', end='')
-        self.oculus_reader = OculusReader()
+        self.oculus_reader = _get_oculus_reader_cls()()
         
         oculus_reader_ready = False
         while not oculus_reader_ready:

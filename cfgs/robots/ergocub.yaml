@@ -1,0 +1,16 @@
+robot:
+  type: ergocub
+  remote_prefix: /ergocub
+  local_prefix: /lerobot
+  cameras:
+    egocentric:
+      type: yarp
+      yarp_name: depthCamera/rgbImage:o
+      width: 640
+      height: 480
+      fps: 30
+  control_boards: [bimanual, head]
+  state_boards: [bimanual, head]
+  default_emotions: 0.0
+  xela_force_visualization_scale: [0.001, 0.001, 0.001]
+  position_tolerance: 0.15

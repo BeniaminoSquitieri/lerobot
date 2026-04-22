@@ -21,22 +21,57 @@ from lerobot.cameras import CameraConfig
 from lerobot.robots.config import RobotConfig
 
 
-@RobotConfig.register_subclass("ergocub")
 @dataclass
-class ErgoCubConfig(RobotConfig):
+class CubRobotConfig(RobotConfig):
     name: str = "ergocub"
+    robot_model: str = "ergocub"
     # YARP remote prefix for observation ports
     remote_prefix: str = "/ergocubSim"
     # YARP local prefix for observation ports. A session ID will be appended.
     local_prefix: str = "/ergocub_dashboard"
+    # Optional explicit YARP robot name exposed to ResourceFinder.
+    yarp_robot_name: str | None = None
+    # Optional explicit URDF path. If unset, it is resolved from env/YARP.
+    urdf_path: str | None = None
     # Configuration for cameras (using standard LeRobot camera interface)
     cameras: dict[str, CameraConfig] = field(default_factory=dict)
     # Enable/disable specific body parts
     control_boards: List[str] = field(
-        default_factory=lambda: ["head", "left_arm", "right_arm", "neck", "fingers"]
+        default_factory=lambda: ["head", "bimanual", "fingers"]
     )
-    # Whether to use bimanual controller instead of separate arm controllers
-    use_bimanual_controller: bool = True
+    state_boards: List[str] = field(
+        default_factory=lambda: ["head", "bimanual", "fingers"]
+    )
+    left_hand: bool = True
+    right_hand: bool = True
     # Control mode: if True, actions are absolute targets (default, preserves behavior).
     # If False, actions are interpreted as deltas relative to the current/last target.
     absolute: bool = True
+    finger_scale: float = 1.0
+    # Optional dataset-only action appended for emotion-annotated HRI3 recordings.
+    # The robot ignores it at execution time, but exposing it in action_features
+    # allows resume-compatible recording against HRI3_emo.
+    default_emotions: float | None = None
+    xela_force_visualization_scale: List[float] = field(default_factory=lambda: [5e-5, 5e-5, 5e-5])
+    position_tolerance: float = 0.1  # Tolerance for safety checks, in radians or meters depending on the joint
+
+
+@RobotConfig.register_subclass("ergocub")
+@dataclass
+class ErgoCubConfig(CubRobotConfig):
+    name: str = "ergocub"
+    robot_model: str = "ergocub"
+    remote_prefix: str = "/ergocubSim"
+    local_prefix: str = "/ergocub_dashboard"
+
+
+@RobotConfig.register_subclass("r1")
+@dataclass
+class R1Config(CubRobotConfig):
+    name: str = "r1"
+    robot_model: str = "r1"
+    remote_prefix: str = "/cer"
+    local_prefix: str = "/lerobot"
+    control_boards: List[str] = field(default_factory=lambda: ["head", "bimanual"])
+    state_boards: List[str] = field(default_factory=lambda: ["head", "bimanual"])
+    position_tolerance: float = 0.22

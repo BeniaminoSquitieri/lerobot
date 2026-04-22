@@ -14,9 +14,11 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+import importlib
 import logging
 import time
 from dataclasses import asdict
+from pathlib import Path
 from pprint import pformat
 
 from pyparsing import Optional
@@ -26,9 +28,9 @@ from scipy.spatial.transform import Rotation as R
 from lerobot.configs import parser
 from lerobot.datasets.lerobot_dataset import LeRobotDataset
 from lerobot.datasets.pipeline_features import aggregate_pipeline_dataset_features, create_initial_features
-from lerobot.datasets.utils import combine_feature_dicts, build_dataset_frame
+from lerobot.utils.feature_utils import combine_feature_dicts, build_dataset_frame
 from lerobot.datasets.video_utils import VideoEncodingManager
-from lerobot.processor import RobotAction, RobotObservation, RobotProcessorPipeline
+from lerobot.processor import ProcessorStepRegistry, RobotAction, RobotObservation, RobotProcessorPipeline
 from lerobot.processor.converters import (
     observation_to_transition,
     robot_action_observation_to_transition,
@@ -42,16 +44,17 @@ from lerobot.robots.custom_manipulator.record_config import (
     get_missing_policy_source_message,
     get_policy_loading_source,
 )
-from lerobot.utils.control_utils import (
+from lerobot.common.control_utils import (
     init_keyboard_listener,
     is_headless,
     sanity_check_dataset_name,
     sanity_check_dataset_robot_compatibility,
 )
-from lerobot.utils.utils import log_say, init_logging, get_safe_torch_device
+from lerobot.utils.utils import log_say, init_logging
+from lerobot.utils.device_utils import get_safe_torch_device
 from lerobot.utils.visualization_utils import init_rerun, log_rerun_data
-from lerobot.utils.constants import ACTION, OBS_STR
-from lerobot.utils.robot_utils import busy_wait
+from lerobot.utils.constants import ACTION, HF_LEROBOT_HOME, OBS_STR
+from lerobot.utils.robot_utils import precise_sleep
 from lerobot.policies.utils import make_robot_action
 from lerobot.policies.factory import make_policy, make_pre_post_processors
 from lerobot.processor.rename_processor import rename_stats
@@ -59,7 +62,7 @@ from lerobot.datasets.image_writer import safe_stop_image_writer
 from lerobot.teleoperators import Teleoperator, make_teleoperator_from_config
 from lerobot.policies.pretrained import PreTrainedPolicy
 from lerobot.processor import PolicyAction, PolicyProcessorPipeline
-from lerobot.utils.control_utils import predict_action
+from lerobot.common.control_utils import predict_action
 from typing import Any, List
 
 import rerun as rr
@@ -270,9 +273,57 @@ def record_loop(
 
         teleop_was_engaged = teleop_engaged
         
-        busy_wait(target_dt_s - dt_s)
+        precise_sleep(target_dt_s - dt_s)
 
         timestamp = time.perf_counter() - start_episode_t
+
+
+def _instantiate_processor_step(step_spec: Any):
+    if isinstance(step_spec, str):
+        step_class = ProcessorStepRegistry.get(step_spec)
+        return step_class()
+
+    if isinstance(step_spec, dict):
+        if "registry_name" in step_spec:
+            step_class = ProcessorStepRegistry.get(step_spec["registry_name"])
+        elif "class" in step_spec:
+            module_path, class_name = step_spec["class"].rsplit(".", 1)
+            module = importlib.import_module(module_path)
+            step_class = getattr(module, class_name)
+        else:
+            raise ValueError(
+                f"Invalid processor step config {step_spec!r}. Expected a string, or a dict with "
+                f"'registry_name' or 'class'."
+            )
+        return step_class(**step_spec.get("config", {}))
+
+    raise TypeError(f"Unsupported processor step spec: {step_spec!r}")
+
+
+def _build_robot_processor_pipeline(
+    processor_cfg: dict[str, Any],
+    *,
+    to_transition,
+    to_output,
+) -> RobotProcessorPipeline:
+    steps = [_instantiate_processor_step(step_spec) for step_spec in processor_cfg.get("steps", [])]
+    return RobotProcessorPipeline(
+        steps=steps,
+        to_transition=to_transition,
+        to_output=to_output,
+    )
+
+
+def _resolve_resume_root(cfg: RecordConfig) -> Path:
+    if cfg.dataset.root is not None:
+        return Path(cfg.dataset.root)
+
+    root = HF_LEROBOT_HOME / cfg.dataset.repo_id
+    logging.info(
+        "Resuming recording without `dataset.root`; using the default local dataset path: %s",
+        root,
+    )
+    return root
 
 @parser.wrap(config_path='cfgs/record.yaml')
 def record(cfg: RecordConfig):
@@ -286,17 +337,17 @@ def record(cfg: RecordConfig):
     robot = CustomManipulator(cfg.robot)
     teleop = make_teleoperator_from_config(cfg.teleop) if cfg.teleop is not None else None
 
-    teleop_action_processor = RobotProcessorPipeline.from_config(
+    teleop_action_processor = _build_robot_processor_pipeline(
         cfg.teleop_action_processor,
         to_transition=robot_action_observation_to_transition,
         to_output=transition_to_robot_action,
     )
-    robot_action_processor = RobotProcessorPipeline.from_config(
+    robot_action_processor = _build_robot_processor_pipeline(
         cfg.robot_action_processor,
         to_transition=robot_action_observation_to_transition,
         to_output=transition_to_robot_action,
     )
-    robot_observation_processor = RobotProcessorPipeline.from_config(
+    robot_observation_processor = _build_robot_processor_pipeline(
         cfg.robot_observation_processor,
         to_transition=observation_to_transition,
         to_output=transition_to_observation,
@@ -318,18 +369,19 @@ def record(cfg: RecordConfig):
     )
 
     if cfg.resume:
-        dataset = LeRobotDataset(
+        num_cameras = len(robot.cameras) if hasattr(robot, "cameras") else 0
+        dataset = LeRobotDataset.resume(
             cfg.dataset.repo_id,
-            root=cfg.dataset.root,
+            root=_resolve_resume_root(cfg),
             batch_encoding_size=cfg.dataset.video_encoding_batch_size,
+            image_writer_processes=cfg.dataset.num_image_writer_processes if num_cameras > 0 else 0,
+            image_writer_threads=cfg.dataset.num_image_writer_threads_per_camera * num_cameras
+            if num_cameras > 0
+            else 0,
         )
-        if hasattr(robot, "cameras") and len(robot.cameras) > 0:
-            dataset.start_image_writer(
-                num_processes=cfg.dataset.num_image_writer_processes,
-                num_threads=cfg.dataset.num_image_writer_threads_per_camera * len(robot.cameras),
-            )
         sanity_check_dataset_robot_compatibility(dataset, robot, cfg.dataset.fps, dataset_features)
     else:
+        sanity_check_dataset_name(cfg.dataset.repo_id, cfg.policy)
         dataset = LeRobotDataset.create(
             cfg.dataset.repo_id,
             cfg.dataset.fps,

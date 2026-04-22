@@ -25,7 +25,6 @@ node_modules/
 
 # Lock files
 poetry.lock
-uv.lock
 Pipfile.lock
 
 ### Build & Distribution ###
@@ -173,13 +172,9 @@ outputs/
 
 # Dev folders
 .cache/*
-
 *.stl
-*.urdf
+# *.urdf
 *.xml
 *.part
-
-# Ours
-steb6
-ar0s
-checkpoints
+src/lerobot/robots/ergocub/ergocub_hand_left/
+src/lerobot/robots/ergocub/ergocub_hand_right/
