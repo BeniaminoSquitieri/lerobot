@@ -1,0 +1,115 @@
+# Python execution layer configuration.
+#
+# Flow role:
+# 1. The C++ BT sends a named command.
+# 2. The Python server resolves the name using this file.
+# 3. The corresponding learned skill or recovery is executed on the robot.
+
+service_name: "/sandwich_bt/run_command"
+
+# Real robot configuration used by the Python server.
+robot:
+  arm:
+    type: panda
+    use_delta_actions: true
+    visualize: true
+  gripper:
+    type: robotiq
+  cameras:
+    wrist:
+      type: intelrealsense
+      serial_number_or_name: "909522060544"
+      use_depth: false
+      width: 640
+      height: 480
+      fps: 30
+    left:
+      type: intelrealsense
+      serial_number_or_name: "123622270882"
+      use_depth: false
+      width: 640
+      height: 480
+      fps: 30
+
+fps: 10
+display_data: true
+play_sounds: true
+reset_robot_on_startup: true
+rename_map: {}
+
+# Robot-side processors used before sending actions / after reading observations.
+robot_action_processor:
+  steps: []
+robot_observation_processor:
+  steps: []
+
+# Learned primitives.
+# Each entry points to its own dataset metadata and its own trained ACT checkpoint.
+skills:
+  - name: place_first_toast
+    dataset_repo_id: "<hf_user>/toast_skill_1_dataset"
+    task: "Pick the first toast and place it on the plate."
+    policy:
+      type: act
+      device: cuda
+      pretrained_path: "outputs/train/place_first_toast/checkpoints/last/pretrained_model"
+    transition:
+      mode: timeout
+      max_duration_s: 10.0
+    settle_time_s: 0.5
+
+  - name: pour
+    dataset_repo_id: "<hf_user>/pour_skill_dataset"
+    task: "Pour the ingredient on top of the first toast."
+    policy:
+      type: act
+      device: cuda
+      pretrained_path: "outputs/train/pour/checkpoints/last/pretrained_model"
+    transition:
+      mode: timeout
+      max_duration_s: 8.0
+    settle_time_s: 0.5
+
+  - name: place_second_toast
+    dataset_repo_id: "<hf_user>/toast_skill_2_dataset"
+    task: "Pick the second toast and place it on top of the prepared sandwich."
+    policy:
+      type: act
+      device: cuda
+      pretrained_path: "outputs/train/place_second_toast/checkpoints/last/pretrained_model"
+    transition:
+      mode: timeout
+      max_duration_s: 10.0
+    settle_time_s: 0.5
+
+# Scripted recoveries used by the BT between failed attempts.
+recoveries:
+  - name: recover_place_first_toast
+    steps:
+      - kind: set_gripper
+        gripper_value: 1.0
+        duration_s: 0.3
+      - kind: cartesian_delta
+        dz: 0.05
+        duration_s: 0.5
+      - kind: pause
+        duration_s: 0.2
+
+  - name: recover_pour
+    steps:
+      - kind: cartesian_delta
+        dz: 0.03
+        duration_s: 0.4
+      - kind: pause
+        duration_s: 0.2
+
+  - name: recover_place_second_toast
+    steps:
+      - kind: set_gripper
+        gripper_value: 1.0
+        duration_s: 0.3
+      - kind: cartesian_delta
+        dz: 0.05
+        duration_s: 0.5
+      - kind: pause
+        duration_s: 0.2
