@@ -1,0 +1,26 @@
+<root main_tree_to_execute="MainTree">
+  <BehaviorTree ID="MainTree">
+    <Sequence name="sandwich_task">
+      <RetryUntilSuccessful num_attempts="3">
+        <Sequence name="place_first_toast_with_recovery">
+          <RunNamedCommand kind="recovery" name="recover_place_first_toast"/>
+          <RunNamedCommand kind="skill" name="place_first_toast"/>
+        </Sequence>
+      </RetryUntilSuccessful>
+
+      <RetryUntilSuccessful num_attempts="2">
+        <Sequence name="pour_with_recovery">
+          <RunNamedCommand kind="recovery" name="recover_pour"/>
+          <RunNamedCommand kind="skill" name="pour"/>
+        </Sequence>
+      </RetryUntilSuccessful>
+
+      <RetryUntilSuccessful num_attempts="3">
+        <Sequence name="place_second_toast_with_recovery">
+          <RunNamedCommand kind="recovery" name="recover_place_second_toast"/>
+          <RunNamedCommand kind="skill" name="place_second_toast"/>
+        </Sequence>
+      </RetryUntilSuccessful>
+    </Sequence>
+  </BehaviorTree>
+</root>
