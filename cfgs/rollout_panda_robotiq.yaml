@@ -22,23 +22,25 @@ robot:
       height: 480
       fps: 30
 
-teleop:
-  type: metaquest_rail
-
-teleop_action_processor:
-  steps:
-    - clutch_processor
-    # - arm_absolute_to_delta
+# teleop:
+#   type: metaquest_rail
+# _processor:
+#   steps:
+#     - clutch_p
+# teleop_actionrocessor
+#     # - arm_absolute_to_delta
 
 policy:
-  type: groot
-  pretrained_path: steb6/groot_hello_world
+  type: act
+  pretrained_path: HSP-IIT/act_toast_pick_and_place
   device: cuda
+  n_action_steps: 4
+  chunk_size: 16
 
 dataset:
-  repo_id: steb6/eval_groot_pick_bread_dagger
-  root: outputs/eval_groot_pick_bread_dagger
-  single_task: Pick.
+  repo_id: HSP-IIT/eval_toast_pick_and_place
+  # root: outputs/eval_groot_pick_bread_dagger
+  single_task: Pick the toast upon the table.
   fps: 10
   episode_time_s: 12000
   reset_time_s: 0
@@ -57,6 +59,6 @@ robot_action_processor:
 robot_observation_processor:
   steps: []
 
-# display_data: true
+display_data: true
 play_sounds: true
 resume: false
