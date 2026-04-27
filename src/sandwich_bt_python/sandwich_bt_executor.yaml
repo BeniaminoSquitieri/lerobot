@@ -11,7 +11,6 @@ service_name: "/sandwich_bt/run_command"
 robot:
   arm:
     type: panda
-    use_delta_actions: true
     visualize: true
   gripper:
     type: robotiq
@@ -47,12 +46,14 @@ robot_observation_processor:
 # Each entry points to its own dataset metadata and its own trained ACT checkpoint.
 skills:
   - name: place_first_toast
-    dataset_repo_id: "<hf_user>/toast_skill_1_dataset"
-    task: "Pick the first toast and place it on the plate."
+    dataset_repo_id: "HSP-IIT/eval_toast_pick_and_place"
+    task: "Pick the toast upon the table."
     policy:
       type: act
       device: cuda
-      pretrained_path: "outputs/train/place_first_toast/checkpoints/last/pretrained_model"
+      pretrained_path: "HSP-IIT/act_toast_pick_and_place"
+      n_action_steps: 4
+      chunk_size: 16
     transition:
       mode: timeout
       max_duration_s: 10.0

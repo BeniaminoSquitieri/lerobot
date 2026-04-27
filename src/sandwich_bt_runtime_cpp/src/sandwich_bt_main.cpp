@@ -11,8 +11,15 @@
 // 4. Optionally publish the tree state to Groot.
 
 #include <ament_index_cpp/get_package_share_directory.hpp>
-#include <behaviortree_cpp/bt_factory.h>
 #include <rclcpp/rclcpp.hpp>
+
+#if __has_include(<behaviortree_cpp/bt_factory.h>)
+#include <behaviortree_cpp/bt_factory.h>
+#elif __has_include(<behaviortree_cpp_v3/bt_factory.h>)
+#include <behaviortree_cpp_v3/bt_factory.h>
+#else
+#error "BehaviorTree.CPP headers were not found."
+#endif
 
 #if __has_include(<behaviortree_cpp/loggers/groot2_publisher.h>)
 #include <behaviortree_cpp/loggers/groot2_publisher.h>
@@ -20,6 +27,10 @@ using GrootPublisherT = BT::Groot2Publisher;
 #define SANDWICH_BT_HAS_GROOT 1
 #elif __has_include(<behaviortree_cpp/loggers/bt_zmq_publisher.h>)
 #include <behaviortree_cpp/loggers/bt_zmq_publisher.h>
+using GrootPublisherT = BT::PublisherZMQ;
+#define SANDWICH_BT_HAS_GROOT 1
+#elif __has_include(<behaviortree_cpp_v3/loggers/bt_zmq_publisher.h>)
+#include <behaviortree_cpp_v3/loggers/bt_zmq_publisher.h>
 using GrootPublisherT = BT::PublisherZMQ;
 #define SANDWICH_BT_HAS_GROOT 1
 #else
@@ -85,7 +96,7 @@ int main(int argc, char** argv)
 #endif
 
   BT::NodeStatus status = BT::NodeStatus::RUNNING;
-  rclcpp::WallRate rate(std::chrono::milliseconds(tick_ms));
+  rclcpp::WallRate rate{std::chrono::milliseconds(tick_ms)};
 
   // Main BT loop: each tick may trigger one service-backed leaf execution.
   while (rclcpp::ok() && status == BT::NodeStatus::RUNNING) {

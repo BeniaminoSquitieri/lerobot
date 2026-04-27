@@ -10,10 +10,20 @@ find_package(ament_index_cpp REQUIRED)
 find_package(sandwich_bt_interfaces REQUIRED)
 
 find_package(behaviortree_cpp QUIET)
-set(BTCPP_DEPENDENCY behaviortree_cpp)
-if(NOT behaviortree_cpp_FOUND)
-  find_package(behaviortree_cpp_v3 REQUIRED)
-  set(BTCPP_DEPENDENCY behaviortree_cpp_v3)
+if(behaviortree_cpp_FOUND)
+  set(BTCPP_DEPENDENCY behaviortree_cpp)
+else()
+  find_package(behaviortree_cpp_v3 QUIET)
+  if(behaviortree_cpp_v3_FOUND)
+    set(BTCPP_DEPENDENCY behaviortree_cpp_v3)
+  else()
+    message(FATAL_ERROR
+      "BehaviorTree.CPP was not found. Install the ROS package for your distro, for example "
+      "'ros-${ROS_DISTRO}-behaviortree-cpp' or 'ros-${ROS_DISTRO}-behaviortree-cpp-v3', "
+      "then source the ROS workspace again. If apt has no package for your ROS/Ubuntu combination, "
+      "clone and build BehaviorTree.CPP from source in this workspace. You can check available packages with: "
+      "apt-cache search ros-${ROS_DISTRO}-behaviortree")
+  endif()
 endif()
 
 add_executable(sandwich_bt_runner

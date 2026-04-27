@@ -14,4 +14,8 @@
 
   <!-- If your distro only ships behaviortree_cpp_v3, change this dependency to match. -->
   <depend>behaviortree_cpp</depend>
+
+  <export>
+    <build_type>ament_cmake</build_type>
+  </export>
 </package>

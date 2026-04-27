@@ -13,7 +13,7 @@ import numpy as np
 from scipy.spatial.transform import Rotation as R
 
 from lerobot.robots.custom_manipulator.custom_manipulator import CustomManipulator
-from lerobot.utils.robot_utils import busy_wait
+from lerobot.utils.robot_utils import precise_sleep
 
 from .config import RecoveryConfig, RecoveryStepConfig
 
@@ -70,7 +70,7 @@ def _run_cartesian_delta(
                     "gripper": target_gripper,
                 }
             )
-            busy_wait(target_dt_s - (time.perf_counter() - loop_t))
+            precise_sleep(target_dt_s - (time.perf_counter() - loop_t))
         return
 
     start_rotation = R.from_rotvec(start_rotvec)
@@ -90,7 +90,7 @@ def _run_cartesian_delta(
                 "gripper": target_gripper,
             }
         )
-        busy_wait(target_dt_s - (time.perf_counter() - loop_t))
+        precise_sleep(target_dt_s - (time.perf_counter() - loop_t))
 
 
 def execute_recovery(

@@ -26,7 +26,21 @@ if not hasattr(np, "int"):
 from scipy.spatial.transform import Rotation as R
 
 from ..configs import ArmConfig
-from .panda_utils import PandaDebugTools
+try:
+    from .panda_utils import PandaDebugTools
+except ModuleNotFoundError as exc:
+    _PANDA_DEBUG_IMPORT_ERROR = str(exc)
+
+    class PandaDebugTools:
+        def __init__(self, urdf_path: str, enable_rerun_visualization: bool = False):
+            if enable_rerun_visualization:
+                print(f"[panda] Rerun URDF visualization unavailable: {_PANDA_DEBUG_IMPORT_ERROR}", flush=True)
+
+        def log_state(self, **kwargs):
+            pass
+
+        def close(self):
+            pass
 
 HOME_ROT = R.from_rotvec([np.pi, 0.0, 0.0])
 

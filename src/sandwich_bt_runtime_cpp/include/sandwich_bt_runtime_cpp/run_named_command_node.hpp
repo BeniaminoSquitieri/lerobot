@@ -12,8 +12,15 @@
 #include <memory>
 #include <string>
 
-#include <behaviortree_cpp/action_node.h>
 #include <rclcpp/rclcpp.hpp>
+
+#if __has_include(<behaviortree_cpp/action_node.h>)
+#include <behaviortree_cpp/action_node.h>
+#elif __has_include(<behaviortree_cpp_v3/action_node.h>)
+#include <behaviortree_cpp_v3/action_node.h>
+#else
+#error "BehaviorTree.CPP action_node.h header was not found."
+#endif
 
 #include <sandwich_bt_interfaces/srv/run_named_command.hpp>
 

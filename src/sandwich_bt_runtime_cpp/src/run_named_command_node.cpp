@@ -28,7 +28,7 @@ BT::PortsList RunNamedCommandNode::providedPorts()
 {
   return {
     BT::InputPort<std::string>("kind"),
-    BT::InputPort<std::string>("name"),
+    BT::InputPort<std::string>("command_name"),
     BT::InputPort<double>("timeout_s", 0.0, "Optional timeout override in seconds")
   };
 }
@@ -44,8 +44,8 @@ BT::NodeStatus RunNamedCommandNode::onStart()
   if (!getInput("kind", kind)) {
     throw BT::RuntimeError("RunNamedCommand missing required input port 'kind'");
   }
-  if (!getInput("name", name)) {
-    throw BT::RuntimeError("RunNamedCommand missing required input port 'name'");
+  if (!getInput("command_name", name)) {
+    throw BT::RuntimeError("RunNamedCommand missing required input port 'command_name'");
   }
   getInput("timeout_s", timeout_s);
 

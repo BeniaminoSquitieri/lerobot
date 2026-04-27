@@ -2,7 +2,7 @@
 
 Flow role:
 1. The Python ROS2 server receives a named command from the BT.
-2. This backend resolves the name to a preloaded skill or recovery.
+2. This backend resolves the name to a configured skill or recovery.
 3. If it is a skill, it runs the ACT inference loop on the real robot.
 4. If it is a recovery, it executes a deterministic scripted sequence.
 5. It returns SUCCESS/FAILURE/ERROR back to the server.
@@ -14,17 +14,17 @@ import time
 from dataclasses import dataclass
 
 from lerobot.datasets.lerobot_dataset import LeRobotDatasetMetadata
-from lerobot.datasets.utils import build_dataset_frame
 from lerobot.policies.factory import make_policy, make_pre_post_processors
 from lerobot.policies.pretrained import PreTrainedPolicy
 from lerobot.policies.utils import make_robot_action
 from lerobot.processor import PolicyAction, PolicyProcessorPipeline, RobotProcessorPipeline
 from lerobot.processor.rename_processor import rename_stats
 from lerobot.robots.custom_manipulator.custom_manipulator import CustomManipulator
+from lerobot.common.control_utils import predict_action
+from lerobot.utils.device_utils import get_safe_torch_device
+from lerobot.utils.feature_utils import build_dataset_frame
 from lerobot.utils.constants import OBS_STR
-from lerobot.utils.control_utils import predict_action
-from lerobot.utils.robot_utils import busy_wait
-from lerobot.utils.utils import get_safe_torch_device
+from lerobot.utils.robot_utils import precise_sleep
 from lerobot.utils.visualization_utils import log_rerun_data
 
 from .conditions import evaluate_all, evaluate_any
@@ -91,11 +91,17 @@ class SkillCommandExecutor:
     def __init__(self, cfg: SkillCommandServerConfig, robot: CustomManipulator) -> None:
         self.cfg = cfg
         self.robot = robot
-        # Names are the bridge between the BT XML and the actual loaded policies.
-        self.skills = {skill_cfg.name: _build_skill_runtime(skill_cfg, cfg.rename_map) for skill_cfg in cfg.skills}
+        # Names are the bridge between the BT XML and the policy configs.
+        self.skill_configs = {skill_cfg.name: skill_cfg for skill_cfg in cfg.skills}
+        self.skills: dict[str, SkillRuntime] = {}
         self.recoveries = {recovery.name: recovery for recovery in cfg.recoveries}
         # Only one command at a time should touch the real robot.
         self._command_lock = threading.Lock()
+
+    def _get_skill_runtime(self, skill_name: str) -> SkillRuntime:
+        if skill_name not in self.skills:
+            self.skills[skill_name] = _build_skill_runtime(self.skill_configs[skill_name], self.cfg.rename_map)
+        return self.skills[skill_name]
 
     def execute_skill(
         self,
@@ -105,20 +111,20 @@ class SkillCommandExecutor:
         timeout_override_s: float = 0.0,
     ) -> CommandResult:
         # Called when the BT asks to run one learned primitive.
-        if skill_name not in self.skills:
+        if skill_name not in self.skill_configs:
             return CommandResult(False, "ERROR", 0.0, f"Unknown skill '{skill_name}'.")
 
         with self._command_lock:
-            skill = self.skills[skill_name]
-            skill.reset()
-            if skill.cfg.settle_time_s > 0:
-                time.sleep(skill.cfg.settle_time_s)
-
-            target_dt_s = 1 / self.cfg.fps
-            timeout_s = timeout_override_s if timeout_override_s > 0 else skill.cfg.transition.max_duration_s
             start_t = time.perf_counter()
-
             try:
+                skill = self._get_skill_runtime(skill_name)
+                skill.reset()
+                if skill.cfg.settle_time_s > 0:
+                    time.sleep(skill.cfg.settle_time_s)
+
+                target_dt_s = 1 / self.cfg.fps
+                timeout_s = timeout_override_s if timeout_override_s > 0 else skill.cfg.transition.max_duration_s
+
                 while True:
                     loop_t = time.perf_counter()
                     # Live rollout: read observation -> evaluate status -> maybe predict action.
@@ -151,7 +157,7 @@ class SkillCommandExecutor:
                             dt_s * 1000,
                             target_dt_s * 1000,
                         )
-                    busy_wait(target_dt_s - dt_s)
+                    precise_sleep(target_dt_s - dt_s)
             except Exception as exc:  # noqa: BLE001
                 elapsed_s = time.perf_counter() - start_t
                 message = f"Skill '{skill_name}' crashed with error: {exc}"

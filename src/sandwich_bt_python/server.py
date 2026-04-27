@@ -27,7 +27,7 @@ from lerobot.processor.converters import (
     transition_to_robot_action,
 )
 from lerobot.robots.custom_manipulator.custom_manipulator import CustomManipulator
-from lerobot.utils.control_utils import is_headless
+from lerobot.common.control_utils import is_headless
 from lerobot.utils.utils import init_logging, log_say
 from lerobot.utils.visualization_utils import init_rerun as init_rerun_viz
 
@@ -109,7 +109,7 @@ class SkillCommandServer(Node):
 @parser.wrap(config_path=DEFAULT_CONFIG_PATH)
 def run(cfg: SkillCommandServerConfig) -> None:
     # Server startup phase:
-    # load config -> build robot -> preload skills -> expose ROS2 service.
+    # load config -> build robot -> expose ROS2 service.
     init_logging()
     logging.info(pformat(asdict(cfg)))
 
