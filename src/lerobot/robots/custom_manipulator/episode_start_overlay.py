@@ -4,6 +4,7 @@ import numpy as np
 import rerun as rr
 
 from lerobot.datasets.video_utils import _default_decoder_cache, decode_video_frames
+from lerobot.utils.robot_utils import precise_sleep
 
 
 def _to_rgb_uint8(image):
@@ -70,21 +71,22 @@ def make_episode_start_overlay(dataset, camera_key="left_rgb", alpha=0.5, path="
         episodes = [episodes[i] for i in episode_indices]
     composite = make_initial_state_composite(dataset, camera_key, episodes)
     base_path = f"{path}/{camera_key}"
+    composite_logged = False
 
     def show(observation):
-        nonlocal composite
+        nonlocal composite, composite_logged
         if camera_key not in observation:
             return
         live = _to_rgb_uint8(observation[camera_key])
-        # rr.log(f"{base_path}/live", rr.Image(live))
         if composite is None:
             return
         composite_for_live = _resize_like(composite, live.shape)
-        rr.log(f"{base_path}/initial_state_composite", rr.Image(composite_for_live), static=True)
+        if not composite_logged:
+            rr.log(f"{base_path}/initial_state_composite", rr.Image(composite_for_live), static=True)
+            composite_logged = True
         rr.log(
             f"{base_path}/overlay",
             rr.Image(np.clip(alpha * composite_for_live + (1.0 - alpha) * live, 0.0, 255.0).astype(np.uint8)),
-            static=True
         )
 
     def on_episode_saved(dataset):
@@ -101,7 +103,7 @@ if __name__ == "__main__":
     from lerobot.datasets.lerobot_dataset import LeRobotDataset
     from lerobot.robots.custom_manipulator.config_custom_manipulator import CustomManipulatorConfig
     from lerobot.robots.custom_manipulator.custom_manipulator import CustomManipulator
-    from lerobot.utils.visualization_utils import init_rerun
+    from lerobot.utils.visualization_utils import init_rerun, shutdown_rerun
 
     repo_id = "HSP-IIT/toast_pick_and_place"
     left_serial = "123622270882"
@@ -110,6 +112,13 @@ if __name__ == "__main__":
     robot = CustomManipulator(CustomManipulatorConfig(cameras={"left": RealSenseCameraConfig(serial_number_or_name=left_serial, fps=30, width=640, height=480, use_depth=False)}))
     init_rerun(session_name="episode_start_overlay")
     overlay = make_episode_start_overlay(dataset, camera_key="left_rgb", episode_indices=episode_indices)
-    robot.connect()
-    while True:
-        overlay.show(robot.get_observation())
+    try:
+        robot.connect()
+        while True:
+            overlay.show(robot.get_observation())
+            precise_sleep(1.0 / 30.0)
+    except KeyboardInterrupt:
+        pass
+    finally:
+        robot.disconnect()
+        shutdown_rerun()
