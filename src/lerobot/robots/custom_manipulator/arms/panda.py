@@ -4,19 +4,15 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import numpy as np
-import rclpy
 
 os.environ.setdefault("OSQP_ALGEBRA_BACKEND", "builtin")
 import pinocchio as pin
-import draccus
-from lerobot.configs.types import FeatureType, PolicyFeature
 from panda_interface.msg import PandaCommand
 from panda_interface.srv import ApplyCommands, Close, Connect, GetSensors
 from pink import Configuration
 from pink.solve_ik import solve_ik
 from pink.tasks import FrameTask, PostureTask
 from rclpy.node import Node
-import xacro
 
 if not hasattr(np, "disp"):
     np.disp = lambda message, device=None, linefeed=True: print(message, end="\n" if linefeed else "")
@@ -26,6 +22,7 @@ if not hasattr(np, "int"):
 from scipy.spatial.transform import Rotation as R
 
 from ..configs import ArmConfig
+from ..ros_spin import spin_until_future_complete
 try:
     from .panda_utils import PandaDebugTools
 except ModuleNotFoundError as exc:
@@ -49,10 +46,56 @@ HOME_ROT = R.from_rotvec([np.pi, 0.0, 0.0])
 class PandaConfig(ArmConfig):
     visualize: bool = False
     use_delta_actions: bool = False
+    urdf_path: str | None = None
 
     @property
     def type(self) -> str:
         return "panda"
+
+
+def _resolve_panda_urdf_path(config: PandaConfig) -> Path:
+    if config.urdf_path is not None:
+        path = Path(config.urdf_path).expanduser()
+        if path.exists():
+            return path
+        raise FileNotFoundError(f"Configured Panda URDF path does not exist: {path}")
+
+    env_path = os.environ.get("PANDA_URDF_PATH")
+    if env_path:
+        path = Path(env_path).expanduser()
+        if path.exists():
+            return path
+        raise FileNotFoundError(f"PANDA_URDF_PATH does not exist: {path}")
+
+    env_description_path = os.environ.get("FRANKA_DESCRIPTION_PATH")
+    if env_description_path:
+        description_path = Path(env_description_path).expanduser()
+        candidates = [
+            description_path / "panda.urdf",
+            description_path / "robots" / "panda.urdf",
+        ]
+        for path in candidates:
+            if path.exists():
+                return path
+        raise FileNotFoundError(
+            "FRANKA_DESCRIPTION_PATH is set, but no Panda URDF was found at "
+            f"{candidates[0]} or {candidates[1]}"
+        )
+
+    local_description = Path(__file__).resolve().parent / "franka_description"
+    candidates = [
+        local_description / "robots" / "panda.urdf",
+        local_description / "panda.urdf",
+        Path.home() / "Downloads" / "project" / "teleop" / "franka_description" / "panda.urdf",
+    ]
+    for path in candidates:
+        if path.exists():
+            return path
+
+    raise FileNotFoundError(
+        "Could not find Panda URDF. Set robot.arm.urdf_path, PANDA_URDF_PATH, "
+        "or FRANKA_DESCRIPTION_PATH."
+    )
 
 def _min_jerk_spaces(N: int, T: float):
     """
@@ -115,8 +158,7 @@ class Panda(Node):
         self._debug = None
         self._debug_urdf_path = None
 
-        base = Path(__file__).resolve().parent / "franka_description"
-        self.urdf_path = str(base / "robots" / "panda.urdf")
+        self.urdf_path = str(_resolve_panda_urdf_path(self.config))
         self._debug = PandaDebugTools(
             urdf_path=self.urdf_path,
             enable_rerun_visualization=self.config.visualize,
@@ -134,15 +176,14 @@ class Panda(Node):
         if self._pin_model is not None:
             return
 
-        base = Path(__file__).resolve().parent / "franka_description"
-        urdf_path = base / "robots" / "panda.urdf"
-        full = pin.buildModelFromUrdf(str(urdf_path))
+        full = pin.buildModelFromUrdf(self.urdf_path)
 
         q0 = pin.neutral(full)
-        if q0.shape[0] >= 2:
-            q0[-2:] = 0.04
+        panda_joint_names = {f"panda_joint{i}" for i in range(1, 8)}
         jids = []
-        for joint_name in ("panda_finger_joint1", "panda_finger_joint2"):
+        for joint_name in full.names[1:]:
+            if joint_name in panda_joint_names:
+                continue
             joint_id = full.getJointId(joint_name)
             if joint_id > 0 and joint_id not in jids:
                 jids.append(joint_id)
@@ -184,7 +225,7 @@ class Panda(Node):
         print("[panda] Calling /connect service...", flush=True)
         self.future = self.client_names['connect'].call_async(request)
 
-        rclpy.spin_until_future_complete(self, self.future)
+        spin_until_future_complete(self, self.future)
         print("[panda] /connect service returned.", flush=True)
         return self.future.result()
 
@@ -194,7 +235,7 @@ class Panda(Node):
             # Get current joint positions for IK seed
             request = Panda.interfaces['get_sensors'].Request()
             self.future = self.client_names['get_sensors'].call_async(request)
-            rclpy.spin_until_future_complete(self, self.future)
+            spin_until_future_complete(self, self.future)
             state = self.future.result().state
             qpos = np.array(state.position)
             debug_state_q = qpos
@@ -249,7 +290,7 @@ class Panda(Node):
         request = Panda.interfaces['get_sensors'].Request()
 
         self.future = self.client_names['get_sensors'].call_async(request)
-        rclpy.spin_until_future_complete(self, self.future)
+        spin_until_future_complete(self, self.future)
 
         state = self.future.result().state
         
@@ -300,7 +341,7 @@ class Panda(Node):
         # Get current position
         request = Panda.interfaces['get_sensors'].Request()
         self.future = self.client_names['get_sensors'].call_async(request)
-        rclpy.spin_until_future_complete(self, self.future)
+        spin_until_future_complete(self, self.future)
         state = self.future.result().state
         current_pos = np.array(state.position)
         

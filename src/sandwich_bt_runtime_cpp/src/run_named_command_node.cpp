@@ -49,7 +49,7 @@ BT::NodeStatus RunNamedCommandNode::onStart()
   }
   getInput("timeout_s", timeout_s);
 
-  if (!client_->wait_for_service(std::chrono::seconds(1))) {
+  if (!client_->wait_for_service(std::chrono::seconds(5))) {
     RCLCPP_ERROR(ros_node_->get_logger(), "Service '%s' not available.", service_name_.c_str());
     return BT::NodeStatus::FAILURE;
   }

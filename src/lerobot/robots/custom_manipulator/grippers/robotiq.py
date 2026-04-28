@@ -1,13 +1,11 @@
 import time
 import numpy as np
-import rclpy
 from rclpy.node import Node
 from rclpy.task import Future
 from robotiq_85_msgs.msg import GripperStat, GripperCmd
 from dataclasses import dataclass
-import draccus
 from ..configs import GripperConfig
-from lerobot.configs.types import FeatureType, PolicyFeature
+from ..ros_spin import spin_until_future_complete
 
 @GripperConfig.register_subclass("robotiq")
 @dataclass
@@ -45,7 +43,7 @@ class Robotiq(Node):
     def get_sensors(self):
         self.gripper_state = Future()
         # This spins until a message is received on the topic
-        rclpy.spin_until_future_complete(self, self.gripper_state)
+        spin_until_future_complete(self, self.gripper_state)
         return {'gripper': self.gripper_state.result().position}
 
     def connect(self):

@@ -117,12 +117,23 @@ class CustomManipulator(Robot):
     def disconnect(self) -> None:
         if not self.is_connected:
             return
-            
-        self.arm_interface.close()
-        self.gripper_interface.close()
+
+        try:
+            self.arm_interface.close()
+        except Exception:  # noqa: BLE001
+            logger.exception("Best-effort arm shutdown failed.")
+
+        try:
+            self.gripper_interface.close()
+        except Exception:  # noqa: BLE001
+            logger.exception("Best-effort gripper shutdown failed.")
+
         for cam in self.cameras.values():
-            cam.disconnect()
-        
+            try:
+                cam.disconnect()
+            except Exception:  # noqa: BLE001
+                logger.exception("Best-effort camera shutdown failed for %s.", cam)
+
         self._is_connected = False
         logger.info(f"{self} disconnected.")
 

@@ -38,7 +38,12 @@ rename_map: {}
 
 # Robot-side processors used before sending actions / after reading observations.
 robot_action_processor:
-  steps: []
+  steps:
+    - class: "lerobot.robots.custom_manipulator.processor.safety_processor.CartesianActionSafetyProcessor"
+      config:
+        max_translation_m: 0.015
+        max_rotation_rad: 0.12
+        mode: error
 robot_observation_processor:
   steps: []
 
@@ -46,7 +51,7 @@ robot_observation_processor:
 # Each entry points to its own dataset metadata and its own trained ACT checkpoint.
 skills:
   - name: place_first_toast
-    dataset_repo_id: "HSP-IIT/eval_toast_pick_and_place"
+    dataset_repo_id: "HSP-IIT/toast_pick_and_place"
     task: "Pick the toast upon the table."
     policy:
       type: act
