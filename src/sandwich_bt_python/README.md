@@ -26,11 +26,16 @@ It does not own:
 
 Those belong to `sandwich_bt_runtime_cpp`.
 
-## Files
+## Python Files
 
+- `__init__.py`: package export surface for the public config dataclasses
+- `config.py`: draccus config dataclasses for skills, recoveries, and the server
+- `conditions.py`: helpers that evaluate observation-based success and failure checks
+- `executor.py`: learned skill and recovery dispatcher used by the server
+- `recoveries.py`: deterministic recovery motions executed between BT attempts
 - `server.py`: ROS2 service node for `/sandwich_bt/run_command`
-- `executor.py`: learned skill and recovery dispatcher
-- `recoveries.py`: deterministic recovery motions
-- `conditions.py`: observation condition helpers for skill termination
-- `config.py`: draccus config dataclasses
-- `sandwich_bt_executor.yaml`: runtime config for the skill server
+- `simulation.py`: hardware-free mock robot plus an optional ROS2 service harness for local smoke tests
+
+## Runtime Config
+
+- `sandwich_bt_executor.yaml`: runtime config loaded by `server.py`

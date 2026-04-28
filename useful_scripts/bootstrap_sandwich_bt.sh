@@ -130,6 +130,10 @@ export CMAKE_PREFIX_PATH="$CONDA_PREFIX:${CMAKE_PREFIX_PATH:-}"
 log "PKG_CONFIG_PATH and CMAKE_PREFIX_PATH configured"
 
 if [[ "${SKIP_PYTHON}" -eq 0 ]]; then
+  if ! python -c "import em" >/dev/null 2>&1; then
+    log "Installing ROS interface dependency: empy"
+    python -m pip install empy
+  fi
   if [[ "${FULL_PYTHON}" -eq 1 ]]; then
     log "Installing full Python dependencies from requirements-ubuntu.txt"
     python -m pip install -r requirements-ubuntu.txt
@@ -145,9 +149,17 @@ if [[ "${SKIP_BUILD}" -eq 0 ]]; then
     CLEAN_ARGS+=(--cmake-clean-cache)
   fi
 
-  log "Building ROS packages: behaviortree_cpp -> sandwich_bt_runtime_cpp"
+  BUILD_PACKAGES=()
+  if [[ -f "src/behaviortree_cpp/package.xml" ]]; then
+    BUILD_PACKAGES+=(behaviortree_cpp)
+  elif [[ -f "src/behaviortree_cpp_v3/package.xml" ]]; then
+    BUILD_PACKAGES+=(behaviortree_cpp_v3)
+  fi
+  BUILD_PACKAGES+=(sandwich_bt_interfaces sandwich_bt_runtime_cpp)
+
+  log "Building ROS packages: ${BUILD_PACKAGES[*]}"
   colcon build --base-paths src \
-    --packages-up-to behaviortree_cpp sandwich_bt_runtime_cpp \
+    --packages-up-to "${BUILD_PACKAGES[@]}" \
     "${CLEAN_ARGS[@]}"
 fi
 
@@ -157,8 +169,26 @@ if [[ -f "install/setup.bash" ]]; then
 fi
 
 # Fallback for cases where overlay setup indexes only part of workspace.
-export COLCON_PREFIX_PATH="${REPO_ROOT}/install/sandwich_bt_runtime_cpp:${REPO_ROOT}/install/sandwich_bt_interfaces:${REPO_ROOT}/install/behaviortree_cpp:${COLCON_PREFIX_PATH:-}"
-export AMENT_PREFIX_PATH="${REPO_ROOT}/install/sandwich_bt_runtime_cpp:${REPO_ROOT}/install/sandwich_bt_interfaces:${REPO_ROOT}/install/behaviortree_cpp:${AMENT_PREFIX_PATH:-}"
+PREFIX_PATHS=(
+  "${REPO_ROOT}/install/sandwich_bt_runtime_cpp"
+  "${REPO_ROOT}/install/sandwich_bt_interfaces"
+)
+if [[ -d "${REPO_ROOT}/install/behaviortree_cpp" ]]; then
+  PREFIX_PATHS+=("${REPO_ROOT}/install/behaviortree_cpp")
+elif [[ -d "${REPO_ROOT}/install/behaviortree_cpp_v3" ]]; then
+  PREFIX_PATHS+=("${REPO_ROOT}/install/behaviortree_cpp_v3")
+fi
+PREFIX_JOINED="$(IFS=:; echo "${PREFIX_PATHS[*]}")"
+if [[ -n "${COLCON_PREFIX_PATH:-}" ]]; then
+  export COLCON_PREFIX_PATH="${PREFIX_JOINED}:${COLCON_PREFIX_PATH}"
+else
+  export COLCON_PREFIX_PATH="${PREFIX_JOINED}"
+fi
+if [[ -n "${AMENT_PREFIX_PATH:-}" ]]; then
+  export AMENT_PREFIX_PATH="${PREFIX_JOINED}:${AMENT_PREFIX_PATH}"
+else
+  export AMENT_PREFIX_PATH="${PREFIX_JOINED}"
+fi
 
 log "Bootstrap completed"
 log "Quick checks:"

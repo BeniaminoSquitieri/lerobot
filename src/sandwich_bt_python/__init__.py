@@ -1,21 +1,8 @@
-"""Python execution layer for the sandwich Behavior Tree stack.
+"""Python execution layer for the sandwich Behavior Tree stack."""
 
-Flow role:
-1. The C++ BT asks for a named command via ROS2.
-2. This package resolves that command into either:
-   - a learned ACT skill, or
-   - a scripted recovery.
-3. The result is returned to the BT as SUCCESS/FAILURE.
-"""
+from __future__ import annotations
 
-from .config import (
-    ObservationConditionConfig,
-    PrimitiveSkillConfig,
-    RecoveryConfig,
-    RecoveryStepConfig,
-    SkillCommandServerConfig,
-    SkillTransitionConfig,
-)
+from typing import Any
 
 __all__ = [
     "ObservationConditionConfig",
@@ -25,3 +12,27 @@ __all__ = [
     "SkillCommandServerConfig",
     "SkillTransitionConfig",
 ]
+
+
+def __getattr__(name: str) -> Any:
+    if name not in __all__:
+        raise AttributeError(f"module '{__name__}' has no attribute '{name}'")
+
+    from .config import (
+        ObservationConditionConfig,
+        PrimitiveSkillConfig,
+        RecoveryConfig,
+        RecoveryStepConfig,
+        SkillCommandServerConfig,
+        SkillTransitionConfig,
+    )
+
+    exported = {
+        "ObservationConditionConfig": ObservationConditionConfig,
+        "PrimitiveSkillConfig": PrimitiveSkillConfig,
+        "RecoveryConfig": RecoveryConfig,
+        "RecoveryStepConfig": RecoveryStepConfig,
+        "SkillCommandServerConfig": SkillCommandServerConfig,
+        "SkillTransitionConfig": SkillTransitionConfig,
+    }
+    return exported[name]

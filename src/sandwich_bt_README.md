@@ -217,6 +217,62 @@ This tree requests only:
 1. `recover_place_first_toast`
 2. `place_first_toast`
 
+## Hardware-Free Simulation
+
+If you only want to exercise the named-command flow without ROS2 hardware, use the in-process mock
+service:
+
+```bash
+uv run lerobot-bt-skill-sim
+```
+
+You can also pass explicit commands:
+
+```bash
+uv run lerobot-bt-skill-sim \
+  --command recovery:recover_place_first_toast \
+  --command skill:place_first_toast
+```
+
+This path does not talk to Panda, Robotiq, or the C++ BT runner. It is meant for smoke-testing the
+Python command dispatch and recovery logic.
+
+## BT Simulation
+
+To run the C++ BT runner against the mock ROS2 service, first build the workspace from the
+repository root. On a fresh machine, the bootstrap script is the shortest path:
+
+```bash
+conda activate lerobot
+bash useful_scripts/bootstrap_sandwich_bt.sh
+```
+
+That step creates `install/setup.bash` and installs `lerobot-bt-skill-sim` into the active conda
+environment.
+
+Then start the simulated service in one terminal:
+
+```bash
+source install/setup.bash
+lerobot-bt-skill-sim --ros2-service
+```
+
+Then start the runner in another terminal:
+
+```bash
+source install/setup.bash
+ros2 run sandwich_bt_runtime_cpp sandwich_bt_runner --ros-args \
+  -p tree_xml_path:="$(pwd)/src/sandwich_bt_runtime_cpp/trees/sandwich_tree_first_primitive_only.xml"
+```
+
+If you want the full tree instead of the one-primitive smoke test, omit `tree_xml_path` and keep the
+default `sandwich_tree.xml`.
+
+The BT XML, service name, and request fields are the same as in the real-robot flow. What changes is
+the Python side: `lerobot-bt-skill-sim --ros2-service` exposes a mock command handler, while
+`lerobot-bt-skill-server` connects to the actual robot, cameras, and trained checkpoints. So the BT
+orchestration is the same, but the underlying robot behavior is not a physics-level guarantee.
+
 ## Groot
 
 The C++ runner enables a Groot publisher when the installed BehaviorTree.CPP version provides a compatible publisher header.
@@ -225,6 +281,10 @@ If no compatible publisher is available, the BT still runs and the runner logs a
 
 ## Common Failures
 
+- `ModuleNotFoundError: No module named 'em'` while building `sandwich_bt_interfaces`: install `empy` in the active conda env, or rerun `bash useful_scripts/bootstrap_sandwich_bt.sh` so it installs the missing ROS interface dependency automatically.
+- `Package 'behaviortree_cpp' specified with --packages-up-to was not found`: rerun the updated bootstrap script; it now builds only the local sandwich packages and includes a BehaviorTree.CPP source checkout only if one exists in `src/`.
+- `install/setup.bash` is missing: build the workspace first with `bash useful_scripts/bootstrap_sandwich_bt.sh`, then source the overlay.
+- `lerobot-bt-skill-sim` is not found: make sure the conda env is active and the bootstrap script has been run, or use `uv run lerobot-bt-skill-sim --ros2-service`.
 - Service unavailable: start `lerobot-bt-skill-server` before the C++ runner.
 - Python import error for `sandwich_bt_interfaces.srv`: build and source the ROS2 workspace.
 - Colcon tries to parse the repository root as a Python package: build with `--base-paths src`.
