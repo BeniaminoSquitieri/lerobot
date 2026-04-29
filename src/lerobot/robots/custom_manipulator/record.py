@@ -39,6 +39,7 @@ from lerobot.processor.converters import (
 )
 from lerobot.robots.custom_manipulator.custom_manipulator import CustomManipulator
 from lerobot.robots.custom_manipulator.episode_start_overlay import make_episode_start_overlay
+from lerobot.robots.custom_manipulator.policy_rollout_viewer import log_policy_rollout
 from lerobot.robots.custom_manipulator.record_config import (
     RecordConfig,
     get_missing_policy_source_message,
@@ -236,6 +237,10 @@ def record_loop(
                     task=single_task,
                     robot_type=robot.robot_type,
                 )
+
+                if display_data:
+                    log_policy_rollout(action_values, list(policy._action_queue), dataset.features, postprocessor)
+
                 selected_action = make_robot_action(action_values, dataset.features)
             else:
                 logging.info(
@@ -247,7 +252,6 @@ def record_loop(
                 continue
 
         # Applies a pipeline to the action, default is IdentityProcessor
-        action_values = selected_action
         robot_action_to_send = robot_action_processor((selected_action, obs))
 
         _sent_action = robot.send_action(robot_action_to_send)
