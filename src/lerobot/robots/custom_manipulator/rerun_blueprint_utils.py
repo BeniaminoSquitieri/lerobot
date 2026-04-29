@@ -1,8 +1,12 @@
-import rerun as rr
-import rerun.blueprint as rrb
+def send_custom_manipulator_blueprint(
+    *,
+    hand_view_name: str = "xHand",
+    hand_contents: list[str] | None = None,
+    hand_target_frame: str = "tf#/xhand/right_hand_link",
+):
+    import rerun as rr
+    import rerun.blueprint as rrb
 
-
-def send_custom_manipulator_blueprint():
     rr.send_blueprint(
         rrb.Blueprint(
             rrb.Horizontal(
@@ -17,11 +21,11 @@ def send_custom_manipulator_blueprint():
                     ),
                 ),
                 rrb.Spatial3DView(
-                    name="xHand",
+                    name=hand_view_name,
                     origin="/",
-                    contents=["/xhand/**", "/tips/**", "/targets/**", "/forces/**"],
+                    contents=hand_contents or ["/xhand/**", "/tips/**", "/targets/**", "/forces/**"],
                     spatial_information=rrb.SpatialInformation(
-                        target_frame="tf#/xhand/right_hand_link",
+                        target_frame=hand_target_frame,
                         show_axes=True,
                         show_bounding_box=True,
                     ),

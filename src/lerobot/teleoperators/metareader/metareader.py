@@ -5,9 +5,9 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
-from scipy.spatial.transform import Rotation as R
 
 from lerobot.teleoperators.teleoperator import Teleoperator
+from lerobot.utils.rotation import Rotation as R
 from lerobot.utils.errors import DeviceNotConnectedError
 
 from .config_metareader import MetaReaderConfig
@@ -170,7 +170,7 @@ class MetaReaderTeleoperator(Teleoperator):
     def _frame_to_action(self, frame: Any) -> dict[str, float]:
         hand = frame.right_hand
         palm = getattr(hand.palm, "pose", None)
-        engaged = float((hand.tracked or not self.config.require_tracked_right_hand) and self._clutch.pressed)
+        engaged = 1.0#float((hand.tracked or not self.config.require_tracked_right_hand) and self._clutch.pressed)
         if engaged == 0.0 or palm is None or not palm.valid:
             return self._neutral_action(engaged)
 
