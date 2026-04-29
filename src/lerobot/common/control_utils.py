@@ -168,7 +168,7 @@ def init_keyboard_listener():
     return listener, events
 
 
-def sanity_check_dataset_name(repo_id, policy_cfg):
+def sanity_check_dataset_name(repo_id, policy_cfg, teleop_cfg):
     """
     Validates the dataset repository name against the presence of a policy configuration.
 
@@ -193,7 +193,7 @@ def sanity_check_dataset_name(repo_id, policy_cfg):
         )
 
     # Check if dataset_name does not start with "eval_" but policy is provided
-    if not dataset_name.startswith("eval_") and policy_cfg is not None:
+    if not dataset_name.startswith("eval_") and policy_cfg is not None and teleop_cfg is None:
         raise ValueError(
             f"Your dataset name does not begin with 'eval_' ({dataset_name}), but a policy is provided ({policy_cfg.type})."
         )

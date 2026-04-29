@@ -381,7 +381,7 @@ def record(cfg: RecordConfig):
         )
         sanity_check_dataset_robot_compatibility(dataset, robot, cfg.dataset.fps, dataset_features)
     else:
-        sanity_check_dataset_name(cfg.dataset.repo_id, cfg.policy)
+        sanity_check_dataset_name(cfg.dataset.repo_id, cfg.policy, cfg.teleop)
         dataset = LeRobotDataset.create(
             cfg.dataset.repo_id,
             cfg.dataset.fps,
