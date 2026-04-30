@@ -337,7 +337,6 @@ def record(cfg: RecordConfig):
     
     if cfg.display_data:
         init_rerun(session_name="recording_custom_manipulator")
-        if cfg.rerun_blueprint: getattr(importlib.import_module(cfg.rerun_blueprint.rsplit(".", 1)[0]), cfg.rerun_blueprint.rsplit(".", 1)[1])()
 
     # Initialize robot and teleop from config
     robot = CustomManipulator(cfg.robot)
