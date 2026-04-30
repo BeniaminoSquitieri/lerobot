@@ -160,10 +160,10 @@ class CustomManipulator(Robot):
     def reset(self) -> None:
         if not self.is_connected:
             raise DeviceNotConnectedError(f"{self} is not connected.")
-
-        print("[robot] Resetting arm...", flush=True)
-        self.arm_interface.reset()
-        print("[robot] Arm reset complete.", flush=True)
         print("[robot] Resetting gripper...", flush=True)
         self.gripper_interface.reset()
         print("[robot] Gripper reset complete.", flush=True)
+        print("[robot] Resetting arm...", flush=True)
+        self.arm_interface.reset()
+        print("[robot] Arm reset complete.", flush=True)
+
