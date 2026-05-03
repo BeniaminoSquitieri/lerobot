@@ -89,3 +89,28 @@ not:
 ```xml
 <RunNamedCommand kind="skill" name="place_first_toast"/>
 ```
+
+## Doxygen not installed
+
+**Symptom:**
+```text
+./useful_scripts/build_sandwich_bt_docs.sh: line X: doxygen: command not found
+```
+
+**Cause:**
+Doxygen (and optionally Graphviz) are not installed on the developer machine.
+
+**Fix:**
+Install Doxygen and Graphviz. Example:
+```bash
+sudo apt update && sudo apt install doxygen graphviz
+```
+or with conda:
+```bash
+conda install -c conda-forge doxygen graphviz
+```
+
+After installation, re-run:
+```bash
+useful_scripts/build_sandwich_bt_docs.sh
+```
