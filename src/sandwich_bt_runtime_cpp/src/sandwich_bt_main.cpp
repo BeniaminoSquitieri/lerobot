@@ -1,3 +1,10 @@
+/**
+ * @file sandwich_bt_main.cpp
+ * @brief Entry point for the BehaviorTree.CPP sandwich runner.
+ *
+ * This executable loads a BT XML file, registers custom BT nodes, ticks the tree,
+ * and exposes optional Groot monitoring when supported.
+ */
 #include <chrono>
 #include <memory>
 #include <string>

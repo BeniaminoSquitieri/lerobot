@@ -1,3 +1,5 @@
+"""Backends for executing named BT commands."""
+
 """Named-command backends for BT subtree execution."""
 
 from __future__ import annotations

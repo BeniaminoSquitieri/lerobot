@@ -1,3 +1,8 @@
+"""ROS2 command server for the sandwich BT stack.
+
+Exposes `/sandwich_bt/run_command` and delegates named command execution.
+"""
+
 #!/usr/bin/env python
 
 """ROS2 service server for the Python execution layer.

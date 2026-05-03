@@ -1,0 +1,33 @@
+PROJECT_NAME           = "Sandwich BT Stack"
+PROJECT_BRIEF          = "Behavior Tree stack for long-horizon sandwich manipulation with robot-human collaboration"
+OUTPUT_DIRECTORY       = docs/doxygen/build
+INPUT                  = src/sandwich_bt_README.md \
+                         src/sandwich_bt_runtime_cpp \
+                         src/sandwich_bt_python \
+                         src/sandwich_bt_supervisor \
+                         src/sandwich_bt_interfaces \
+                         docs/doxygen/mainpage.md \
+                         docs/doxygen/architecture.md \
+                         docs/doxygen/runtime_flows.md \
+                         docs/doxygen/troubleshooting.md
+FILE_PATTERNS          = *.cpp *.hpp *.h *.py *.srv *.md *.xml *.yaml
+RECURSIVE              = YES
+USE_MDFILE_AS_MAINPAGE = docs/doxygen/mainpage.md
+EXTRACT_ALL            = YES
+EXTRACT_PRIVATE        = NO
+EXTRACT_STATIC         = YES
+HIDE_UNDOC_MEMBERS     = NO
+HIDE_UNDOC_CLASSES     = NO
+MARKDOWN_SUPPORT       = YES
+GENERATE_HTML          = YES
+GENERATE_LATEX         = NO
+SOURCE_BROWSER         = YES
+INLINE_SOURCES         = NO
+REFERENCED_BY_RELATION = YES
+REFERENCES_RELATION    = YES
+CALL_GRAPH             = NO
+CALLER_GRAPH           = NO
+WARNINGS               = YES
+WARN_IF_UNDOCUMENTED   = NO
+WARN_IF_DOC_ERROR      = YES
+QUIET                  = NO

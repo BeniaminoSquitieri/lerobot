@@ -1,3 +1,7 @@
+/**
+ * @file run_named_command_node.cpp
+ * @brief BehaviorTree.CPP node bridging BT leaves to Python command server.
+ */
 #include "sandwich_bt_runtime_cpp/run_named_command_node.hpp"
 
 // BT leaf node implementation.
