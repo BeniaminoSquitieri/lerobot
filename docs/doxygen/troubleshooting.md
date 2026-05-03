@@ -114,3 +114,63 @@ After installation, re-run:
 ```bash
 useful_scripts/build_sandwich_bt_docs.sh
 ```
+
+## Building BehaviorTree.CPP / missing `catkin_pkg` or rosdep failures
+
+**Symptom:**
+```text
+ModuleNotFoundError: No module named 'catkin_pkg'
+or colcon build aborts with missing dependencies for behaviortree_cpp
+```
+
+**Cause:**
+- The build picked a Conda Python that does not contain ROS helper packages (e.g. `catkin_pkg`).
+- Native build dependencies (ZeroMQ headers, etc.) are missing or `rosdep` was not run.
+
+**Fix (steps we used successfully):**
+
+1. Fast option: install prebuilt package
+```bash
+sudo apt update
+sudo apt install ros-${ROS_DISTRO}-behaviortree-cpp
+# or, if you need the v3 API:
+sudo apt install ros-${ROS_DISTRO}-behaviortree-cpp-v3
+```
+
+2. To build from source (if you need latest examples):
+```bash
+# install native deps
+sudo apt install libzmq3-dev
+
+# clone into src/ so colcon will build it
+cd $(pwd)
+cd src
+git clone https://github.com/BehaviorTree/BehaviorTree.CPP.git behaviortree_cpp
+cd ..
+```
+
+3. Ensure `rosdep` and system python ROS packages are available:
+```bash
+sudo apt install python3-rosdep2
+# optionally: pip install -U catkin_pkg  # if you prefer to fix the active python
+```
+
+4. Use `rosdep` to install OS-level deps and then build using system python:
+```bash
+rosdep update || true
+rosdep install --from-paths src --ignore-src -r -y
+
+# clean previous artifacts
+rm -rf build install log
+
+source /opt/ros/${ROS_DISTRO}/setup.bash
+colcon build --base-paths src \
+  --packages-up-to behaviortree_cpp sandwich_bt_runtime_cpp \
+  --cmake-args -DPython3_EXECUTABLE=/usr/bin/python3
+source install/setup.bash
+```
+
+Notes:
+- If `ModuleNotFoundError: No module named 'catkin_pkg'` appears while a Conda env is active, either install `catkin_pkg` into that env (`pip install -U catkin_pkg`) or tell `colcon` to use the system Python as shown above.
+- Installing the ROS-provided package is the simplest approach for most developers.
+
