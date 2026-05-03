@@ -17,7 +17,6 @@ import threading
 import time
 from dataclasses import dataclass
 
-from lerobot.datasets.lerobot_dataset import LeRobotDatasetMetadata
 from lerobot.policies.factory import make_policy, make_pre_post_processors
 from lerobot.policies.pretrained import PreTrainedPolicy
 from lerobot.policies.utils import make_robot_action
@@ -40,7 +39,7 @@ class SkillRuntime:
     # Runtime bundle for one learned primitive:
     # config + dataset metadata + policy + processors.
     cfg: PrimitiveSkillConfig
-    ds_meta: LeRobotDatasetMetadata
+    ds_meta: "LeRobotDatasetMetadata"
     policy: PreTrainedPolicy
     preprocessor: PolicyProcessorPipeline[dict, dict]
     postprocessor: PolicyProcessorPipeline[PolicyAction, PolicyAction]
@@ -66,6 +65,8 @@ def _build_skill_runtime(
     # Prepares everything needed to execute one named skill at runtime.
     # This is where a skill name becomes:
     # dataset metadata + policy checkpoint + processors.
+    from lerobot.datasets.lerobot_dataset import LeRobotDatasetMetadata
+    
     ds_meta = LeRobotDatasetMetadata(
         skill_cfg.dataset_repo_id,
         root=skill_cfg.dataset_root,
