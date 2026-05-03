@@ -7,18 +7,19 @@ Flow role:
    the next ACT attempt starts.
 """
 
+from __future__ import annotations
+
 import time
 
 import numpy as np
 from scipy.spatial.transform import Rotation as R
 
-from lerobot.robots.custom_manipulator.custom_manipulator import CustomManipulator
 from lerobot.utils.robot_utils import precise_sleep
 
 from .config import RecoveryConfig, RecoveryStepConfig
 
 
-def _current_robot_state(robot: CustomManipulator) -> tuple[np.ndarray, np.ndarray, float]:
+def _current_robot_state(robot: "CustomManipulator") -> tuple[np.ndarray, np.ndarray, float]:
     # Reads the minimum robot state needed to build recovery commands.
     obs = robot.get_observation()
     position = np.array([obs["position.x"], obs["position.y"], obs["position.z"]], dtype=float)
@@ -27,7 +28,7 @@ def _current_robot_state(robot: CustomManipulator) -> tuple[np.ndarray, np.ndarr
     return position, rotation, gripper
 
 
-def _set_gripper(robot: CustomManipulator, gripper_value: float) -> None:
+def _set_gripper(robot: "CustomManipulator", gripper_value: float) -> None:
     # Supports both dict-based and scalar-based gripper driver APIs.
     try:
         robot.gripper_interface.apply_commands({"gripper": float(gripper_value)})
@@ -36,7 +37,7 @@ def _set_gripper(robot: CustomManipulator, gripper_value: float) -> None:
 
 
 def _run_cartesian_delta(
-    robot: CustomManipulator,
+    robot: "CustomManipulator",
     step_cfg: RecoveryStepConfig,
     fps: int,
     timeout_override_s: float,
@@ -94,7 +95,7 @@ def _run_cartesian_delta(
 
 
 def execute_recovery(
-    robot: CustomManipulator,
+    robot: "CustomManipulator",
     recovery_cfg: RecoveryConfig,
     fps: int,
     timeout_override_s: float = 0.0,
