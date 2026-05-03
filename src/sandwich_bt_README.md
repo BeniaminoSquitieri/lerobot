@@ -31,7 +31,7 @@ The collaborative path keeps the BT reactive and moves step selection above it:
 
 1. `sandwich_bt_supervisor` estimates the current sandwich state.
 2. The supervisor picks the next closed-set step and assigns it to `robot` or `human`.
-3. Robot-owned steps still execute through learned skills plus recoveries.
+3. Robot-owned steps execute through small BT subtrees, which keep recovery and retry logic below the supervisor.
 4. Human-owned steps require explicit confirmation and then scene verification.
 5. After each step, the supervisor checks the scene again and decides the next handoff.
 
@@ -39,6 +39,10 @@ The collaborative path keeps the BT reactive and moves step selection above it:
 
 - Full tree: `src/sandwich_bt_runtime_cpp/trees/sandwich_tree.xml`
 - First-primitive test tree: `src/sandwich_bt_runtime_cpp/trees/sandwich_tree_first_primitive_only.xml`
+- Robot step subtrees:
+  - `src/sandwich_bt_runtime_cpp/trees/place_first_toast_subtree.xml`
+  - `src/sandwich_bt_runtime_cpp/trees/pour_subtree.xml`
+  - `src/sandwich_bt_runtime_cpp/trees/place_second_toast_subtree.xml`
 - Python config: `src/sandwich_bt_python/sandwich_bt_executor.yaml`
 - Supervisor config: `src/sandwich_bt_supervisor/sandwich_bt_supervisor.yaml`
 - ROS2 service: `src/sandwich_bt_interfaces/srv/RunNamedCommand.srv`
@@ -264,11 +268,24 @@ uv run lerobot-bt-supervisor-sim
 
 That simulation runs the closed-set sequence:
 
-1. robot `place_first_toast`
+1. robot subtree `place_first_toast_subtree.xml`
 2. human `pour_ingredient`
-3. robot `place_second_toast`
+3. robot subtree `place_second_toast_subtree.xml`
 
 and exits when the supervisor reaches `DONE`.
+
+For the negative path:
+
+```bash
+uv run lerobot-bt-supervisor-sim --deny-human-confirmation
+```
+
+Recommended validation order:
+
+1. `uv run lerobot-bt-skill-sim`
+2. `uv run lerobot-bt-supervisor-sim`
+3. `uv run lerobot-bt-supervisor-sim --deny-human-confirmation`
+4. `lerobot-bt-skill-sim --ros2-service` plus `ros2 run sandwich_bt_runtime_cpp sandwich_bt_runner`
 
 ## BT Simulation
 

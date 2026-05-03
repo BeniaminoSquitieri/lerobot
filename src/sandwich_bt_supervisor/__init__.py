@@ -1,5 +1,6 @@
 """Collaborative sandwich supervisor primitives."""
 
+from .bt_executor import BtXmlRobotExecutor, ExecutedBtCommand, default_subtree_path
 from .human_interface import HumanCommandExecutor
 from .planner_schema import (
     ExecutedSupervisorStep,
@@ -17,7 +18,9 @@ from .task_allocator import SandwichTaskAllocator
 from .vlm_supervisor import CollaborativeSandwichSupervisor
 
 __all__ = [
+    "BtXmlRobotExecutor",
     "CollaborativeSandwichSupervisor",
+    "ExecutedBtCommand",
     "ExecutedSupervisorStep",
     "HumanCommandExecutor",
     "PlanStepDecision",
@@ -31,5 +34,6 @@ __all__ = [
     "SupervisorRunResult",
     "TaskPrimitive",
     "build_demo_supervisor_stack",
+    "default_subtree_path",
     "make_demo_supervisor_config",
 ]

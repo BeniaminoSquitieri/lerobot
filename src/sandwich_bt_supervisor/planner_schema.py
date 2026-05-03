@@ -22,6 +22,7 @@ class TaskPrimitive:
     success_condition: str
     difficulty: str = "unspecified"
     robot_skill: str | None = None
+    bt_xml_path: str | None = None
     recovery: str | None = None
     human_instruction: str | None = None
 
@@ -49,6 +50,8 @@ class TaskPrimitive:
             raise ValueError(f"Robot primitive '{self.name}' must not define human_instruction.")
         if self.actor == "human" and self.robot_skill is not None:
             raise ValueError(f"Human primitive '{self.name}' must not define robot_skill.")
+        if self.actor == "human" and self.bt_xml_path is not None:
+            raise ValueError(f"Human primitive '{self.name}' must not define bt_xml_path.")
 
 
 @dataclass

@@ -33,3 +33,6 @@ Those belong to `sandwich_bt_python`.
 - `include/sandwich_bt_runtime_cpp/run_named_command_node.hpp`: BT leaf declaration
 - `trees/sandwich_tree.xml`: full sandwich task tree
 - `trees/sandwich_tree_first_primitive_only.xml`: bring-up tree for only `place_first_toast`
+- `trees/place_first_toast_subtree.xml`: retry/recovery subtree for the first toast step
+- `trees/pour_subtree.xml`: retry/recovery subtree for the pouring step
+- `trees/place_second_toast_subtree.xml`: retry/recovery subtree for the second toast step

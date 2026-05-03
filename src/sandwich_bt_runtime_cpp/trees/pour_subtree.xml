@@ -1,0 +1,10 @@
+<root BTCPP_format="4" main_tree_to_execute="MainTree">
+  <BehaviorTree ID="MainTree">
+    <RetryUntilSuccessful num_attempts="2">
+      <Sequence name="pour_with_recovery">
+        <RunNamedCommand kind="recovery" command_name="recover_pour"/>
+        <RunNamedCommand kind="skill" command_name="pour"/>
+      </Sequence>
+    </RetryUntilSuccessful>
+  </BehaviorTree>
+</root>

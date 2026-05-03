@@ -5,10 +5,16 @@ from __future__ import annotations
 import argparse
 from dataclasses import dataclass, field
 
-from sandwich_bt_python.simulation import MockSkillCommandExecutor, build_demo_stack
+from sandwich_bt_python.simulation import (
+    MockRunNamedCommandResponse,
+    MockRunNamedCommandService,
+    MockSkillCommandExecutor,
+    build_demo_stack,
+)
 
+from .bt_executor import BtXmlRobotExecutor, default_subtree_path
 from .human_interface import HumanCommandExecutor
-from .planner_schema import StepExecutionResult, SupervisorConfig, TaskPrimitive
+from .planner_schema import SupervisorConfig, TaskPrimitive
 from .scene_state import SandwichSceneEstimator, SandwichSceneObservation
 from .task_allocator import SandwichTaskAllocator
 from .vlm_supervisor import CollaborativeSandwichSupervisor
@@ -51,56 +57,16 @@ class MockHumanParticipant:
         return True
 
 
-class MockRobotBtExecutor:
-    def __init__(self, executor: MockSkillCommandExecutor, scene: MockSandwichScene) -> None:
-        self.executor = executor
+class MockRobotSceneEffects:
+    def __init__(self, scene: MockSandwichScene) -> None:
         self.scene = scene
 
-    def execute(self, primitive: TaskPrimitive) -> StepExecutionResult:
-        elapsed_s = 0.0
-
-        if primitive.recovery is not None:
-            recovery_result = self.executor.execute_named_recovery(primitive.recovery)
-            elapsed_s += recovery_result.elapsed_s
-            if not recovery_result.success:
-                return StepExecutionResult(
-                    step_name=primitive.name,
-                    actor="robot",
-                    success=False,
-                    status=recovery_result.status,
-                    elapsed_s=elapsed_s,
-                    message=recovery_result.message,
-                )
-
-        assert primitive.robot_skill is not None
-        skill_result = self.executor.execute_skill(primitive.robot_skill)
-        elapsed_s += skill_result.elapsed_s
-        if not skill_result.success:
-            return StepExecutionResult(
-                step_name=primitive.name,
-                actor="robot",
-                success=False,
-                status=skill_result.status,
-                elapsed_s=elapsed_s,
-                message=skill_result.message,
-            )
-
-        self._apply_scene_effect(primitive.name)
-        self.scene.events.append(f"robot_completed:{primitive.name}")
-        return StepExecutionResult(
-            step_name=primitive.name,
-            actor="robot",
-            success=True,
-            status=skill_result.status,
-            elapsed_s=elapsed_s,
-            message=skill_result.message,
-        )
-
-    def _apply_scene_effect(self, primitive_name: str) -> None:
+    def mark_completed(self, primitive_name: str) -> None:
         if primitive_name == "place_first_toast":
             self.scene.first_toast_on_plate = True
         elif primitive_name == "place_second_toast":
             self.scene.second_toast_on_top = True
+        self.scene.events.append(f"robot_completed:{primitive_name}")
 
 
 @dataclass
@@ -109,7 +75,8 @@ class MockCollaborativeSupervisorStack:
     scene: MockSandwichScene
     human: MockHumanParticipant
     supervisor: CollaborativeSandwichSupervisor
-    robot_executor: MockRobotBtExecutor
+    robot_executor: BtXmlRobotExecutor
+    service: MockRunNamedCommandService
     command_executor: MockSkillCommandExecutor
 
 
@@ -126,6 +93,7 @@ def make_demo_supervisor_config() -> SupervisorConfig:
                 required_state="NEED_FIRST_TOAST",
                 actor="robot",
                 robot_skill="place_first_toast",
+                bt_xml_path=str(default_subtree_path("place_first_toast_subtree.xml")),
                 recovery="recover_place_first_toast",
                 difficulty="easy",
                 success_condition="first toast is on plate",
@@ -145,6 +113,7 @@ def make_demo_supervisor_config() -> SupervisorConfig:
                 required_state="NEED_SECOND_TOAST",
                 actor="robot",
                 robot_skill="place_second_toast",
+                bt_xml_path=str(default_subtree_path("place_second_toast_subtree.xml")),
                 recovery="recover_place_second_toast",
                 difficulty="easy",
                 success_condition="second toast is on top",
@@ -159,15 +128,22 @@ def build_demo_supervisor_stack(
     *,
     auto_confirm_human: bool = True,
     use_delta_actions: bool = False,
+    scripted_responses: dict[tuple[str, str], list[MockRunNamedCommandResponse]] | None = None,
 ) -> MockCollaborativeSupervisorStack:
     supervisor_cfg = cfg if cfg is not None else make_demo_supervisor_config()
-    service = build_demo_stack(use_delta_actions=use_delta_actions)
+    service = build_demo_stack(
+        use_delta_actions=use_delta_actions,
+        scripted_responses=scripted_responses,
+    )
     scene = MockSandwichScene()
     human = MockHumanParticipant(scene, auto_confirm=auto_confirm_human)
     scene_estimator = SandwichSceneEstimator()
     task_allocator = SandwichTaskAllocator(supervisor_cfg)
     command_executor = service.executor
-    robot_executor = MockRobotBtExecutor(command_executor, scene)
+    robot_executor = BtXmlRobotExecutor(
+        service=service,
+        on_step_success=MockRobotSceneEffects(scene).mark_completed,
+    )
     human_executor = HumanCommandExecutor(
         observe_scene=scene.observe,
         verify_step=scene_estimator.verify_step,
@@ -188,6 +164,7 @@ def build_demo_supervisor_stack(
         human=human,
         supervisor=supervisor,
         robot_executor=robot_executor,
+        service=service,
         command_executor=command_executor,
     )
 
@@ -215,6 +192,12 @@ def main() -> None:
     for step in result.steps:
         print(
             f"{step.decision.actor}:{step.decision.step_name} -> {step.result.status} {step.result.message}"
+        )
+    for command in stack.robot_executor.command_history:
+        print(
+            "bt_command="
+            f"{command.attempt_index}:{command.request.kind}:{command.request.name}"
+            f" -> {command.response.status}"
         )
     print(f"final -> {result.final_decision.actor} ({result.final_decision.reason})")
 

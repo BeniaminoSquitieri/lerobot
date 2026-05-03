@@ -12,7 +12,6 @@ from dataclasses import dataclass, field
 from threading import Lock
 from typing import Any
 
-
 _ACTION_KEYS = (
     "position.x",
     "position.y",
@@ -67,7 +66,9 @@ class MockRecoveryStep:
     def __post_init__(self) -> None:
         allowed_kinds = {"pause", "robot_reset", "cartesian_delta", "set_gripper"}
         if self.kind not in allowed_kinds:
-            raise ValueError(f"Unsupported recovery step '{self.kind}'. Expected one of {sorted(allowed_kinds)}.")
+            raise ValueError(
+                f"Unsupported recovery step '{self.kind}'. Expected one of {sorted(allowed_kinds)}."
+            )
         if self.kind != "robot_reset" and self.duration_s < 0:
             raise ValueError("duration_s must be >= 0.")
         if self.kind == "set_gripper" and self.gripper_value is None:
@@ -159,11 +160,11 @@ class MockCustomManipulator:
 
     @property
     def observation_features(self) -> dict[str, type]:
-        return {key: float for key in self._state}
+        return dict.fromkeys(self._state, float)
 
     @property
     def action_features(self) -> dict[str, type]:
-        return {key: float for key in self._state}
+        return dict.fromkeys(self._state, float)
 
     @property
     def is_connected(self) -> bool:
@@ -388,11 +389,23 @@ class MockSkillCommandExecutor:
 class MockRunNamedCommandService:
     """Tiny stand-in for the ROS2 `RunNamedCommand` service."""
 
-    def __init__(self, executor: MockSkillCommandExecutor):
+    def __init__(
+        self,
+        executor: MockSkillCommandExecutor,
+        *,
+        scripted_responses: dict[tuple[str, str], list[MockRunNamedCommandResponse]] | None = None,
+    ):
         self.executor = executor
         self.service_name = executor.cfg.service_name
+        self.scripted_responses = scripted_responses if scripted_responses is not None else {}
+        self.request_log: list[MockRunNamedCommandRequest] = []
 
     def handle_request(self, request: MockRunNamedCommandRequest) -> MockRunNamedCommandResponse:
+        self.request_log.append(request)
+        scripted_queue = self.scripted_responses.get((request.kind, request.name))
+        if scripted_queue:
+            return scripted_queue.pop(0)
+
         if request.kind == "skill":
             result = self.executor.execute_skill(request.name, timeout_override_s=request.timeout_s)
         elif request.kind == "recovery":
@@ -417,6 +430,7 @@ def build_demo_stack(
     use_delta_actions: bool = False,
     fps: int = 10,
     service_name: str = "/sandwich_bt/run_command",
+    scripted_responses: dict[tuple[str, str], list[MockRunNamedCommandResponse]] | None = None,
 ) -> MockRunNamedCommandService:
     robot = MockCustomManipulator(
         MockRobotConfig(
@@ -474,7 +488,7 @@ def build_demo_stack(
         ],
     )
     executor = MockSkillCommandExecutor(cfg=cfg, robot=robot)
-    return MockRunNamedCommandService(executor)
+    return MockRunNamedCommandService(executor, scripted_responses=scripted_responses)
 
 
 def build_ros2_demo_stack(
@@ -499,9 +513,7 @@ def default_command_sequence() -> list[MockRunNamedCommandRequest]:
 def parse_command_spec(spec: str) -> MockRunNamedCommandRequest:
     parts = spec.split(":")
     if len(parts) not in {2, 3}:
-        raise argparse.ArgumentTypeError(
-            "Commands must use the form kind:name or kind:name:timeout_s."
-        )
+        raise argparse.ArgumentTypeError("Commands must use the form kind:name or kind:name:timeout_s.")
 
     kind, name = parts[0].strip(), parts[1].strip()
     timeout_s = float(parts[2]) if len(parts) == 3 and parts[2].strip() else 0.0
@@ -528,8 +540,7 @@ def run_requests(
 
 def _format_response(request: MockRunNamedCommandRequest, response: MockRunNamedCommandResponse) -> str:
     return (
-        f"{request.kind}:{request.name} -> {response.status} "
-        f"({response.elapsed_s:.2f}s) {response.message}"
+        f"{request.kind}:{request.name} -> {response.status} ({response.elapsed_s:.2f}s) {response.message}"
     )
 
 
@@ -539,6 +550,7 @@ def run_ros2_service(
     try:
         import rclpy
         from rclpy.node import Node
+
         from sandwich_bt_interfaces.srv import RunNamedCommand
     except ModuleNotFoundError as exc:  # pragma: no cover - depends on ROS2 install
         raise RuntimeError(
