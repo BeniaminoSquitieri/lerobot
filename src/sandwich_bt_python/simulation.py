@@ -1,5 +1,3 @@
-"""Simulation helpers for sandwich BT command execution."""
-
 """Hardware-free simulation harness for the sandwich BT stack.
 
 This module keeps the BT command contract intact without importing ROS2 or any

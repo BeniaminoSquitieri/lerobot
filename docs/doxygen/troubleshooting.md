@@ -73,6 +73,33 @@ source install/setup.bash
 lerobot-bt-skill-server --config_path "$(pwd)/src/sandwich_bt_python/sandwich_bt_executor.yaml"
 ```
 
+## Unknown recovery/skill
+
+**Symptom:**
+```text
+Unknown recovery 'recover_place_first_toast'
+```
+or:
+```text
+Unknown skill 'place_first_toast'
+```
+
+**Cause:**
+- The Python skill server is running with a config that does not include the
+  recovery/skill name (for example the headless config).
+- An old server process is still running with a stale config.
+
+**Fix:**
+1. Ensure the config has matching entries under `recoveries:` and `skills:`.
+2. Stop any existing server process and restart with the intended config.
+
+Example:
+```bash
+pkill -f lerobot-bt-skill-server || true
+source install/setup.bash
+lerobot-bt-skill-server --config_path "$(pwd)/src/sandwich_bt_python/sandwich_bt_executor.yaml"
+```
+
 ## BT port name reserved
 
 **Symptom:**

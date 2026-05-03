@@ -181,3 +181,4 @@ outputs/
 *.part
 src/lerobot/robots/ergocub/ergocub_hand_left/
 src/lerobot/robots/ergocub/ergocub_hand_right/
+src/behaviortree_cpp/
