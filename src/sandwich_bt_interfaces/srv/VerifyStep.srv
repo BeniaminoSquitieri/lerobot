@@ -1,0 +1,8 @@
+# Request sent by the collaborative supervisor client.
+string step_name
+---
+# Response returned after checking the current scene.
+bool success
+string observed_state
+string failure_reason
+float32 confidence

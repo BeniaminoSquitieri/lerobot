@@ -1,0 +1,48 @@
+# Closed-set collaborative supervisor reference config.
+#
+# This file is intentionally narrower than the robot skill config. It documents
+# the primitives that the supervisor may allocate. The robot still executes
+# learned skills and recoveries through sandwich_bt_python.
+
+goal: "make_sandwich"
+current_task: "sandwich_collaborative"
+
+service:
+  plan_service_name: "/sandwich_supervisor/next_action"
+  verify_service_name: "/sandwich_supervisor/verify_step"
+
+available_robot_skills:
+  - "place_first_toast"
+  - "place_second_toast"
+
+available_human_skills:
+  - "pour_ingredient"
+
+human_confirmation_timeout_s: 15.0
+
+task_primitives:
+  - name: "place_first_toast"
+    required_state: "NEED_FIRST_TOAST"
+    actor: "robot"
+    difficulty: "easy"
+    robot_skill: "place_first_toast"
+    recovery: "recover_place_first_toast"
+    success_condition: "first toast is on plate"
+    expected_state: "NEED_POURING"
+
+  - name: "pour_ingredient"
+    required_state: "NEED_POURING"
+    actor: "human"
+    difficulty: "hard"
+    human_instruction: "Pour the ingredient on the first toast."
+    success_condition: "ingredient is visible on first toast"
+    expected_state: "NEED_SECOND_TOAST"
+
+  - name: "place_second_toast"
+    required_state: "NEED_SECOND_TOAST"
+    actor: "robot"
+    difficulty: "easy"
+    robot_skill: "place_second_toast"
+    recovery: "recover_place_second_toast"
+    success_condition: "second toast is on top"
+    expected_state: "DONE"

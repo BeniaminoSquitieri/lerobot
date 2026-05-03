@@ -4,13 +4,17 @@ This is the single operational guide for the sandwich Behavior Tree stack.
 
 ## Ownership
 
-The stack has three ROS2 packages with separate responsibilities:
+The base stack has three runtime packages with separate responsibilities:
 
 - `sandwich_bt_runtime_cpp`: owns BehaviorTree.CPP orchestration, XML loading, retries, and Groot publication.
 - `sandwich_bt_python`: owns robot connection, learned policy execution, scripted recoveries, and command results.
 - `sandwich_bt_interfaces`: owns the ROS2 service contract between the two runtime layers.
 
 The Python package does not implement BT ordering. The C++ package does not load policies or command the robot directly.
+
+For collaborative execution there is now a fourth Python package:
+
+- `sandwich_bt_supervisor`: owns closed-set scene-state estimation, task allocation, human handoff, and step verification above the BT/runtime boundary.
 
 ## Runtime Flow
 
@@ -21,14 +25,29 @@ The Python package does not implement BT ordering. The C++ package does not load
 5. The Python server returns `success`, `status`, `elapsed_s`, and `message`.
 6. The C++ BT converts that reply into BT `SUCCESS` or `FAILURE`.
 
+## Collaborative Flow
+
+The collaborative path keeps the BT reactive and moves step selection above it:
+
+1. `sandwich_bt_supervisor` estimates the current sandwich state.
+2. The supervisor picks the next closed-set step and assigns it to `robot` or `human`.
+3. Robot-owned steps still execute through learned skills plus recoveries.
+4. Human-owned steps require explicit confirmation and then scene verification.
+5. After each step, the supervisor checks the scene again and decides the next handoff.
+
 ## Key Files
 
 - Full tree: `src/sandwich_bt_runtime_cpp/trees/sandwich_tree.xml`
 - First-primitive test tree: `src/sandwich_bt_runtime_cpp/trees/sandwich_tree_first_primitive_only.xml`
 - Python config: `src/sandwich_bt_python/sandwich_bt_executor.yaml`
+- Supervisor config: `src/sandwich_bt_supervisor/sandwich_bt_supervisor.yaml`
 - ROS2 service: `src/sandwich_bt_interfaces/srv/RunNamedCommand.srv`
+- Supervisor services:
+  - `src/sandwich_bt_interfaces/srv/PlanNextStep.srv`
+  - `src/sandwich_bt_interfaces/srv/VerifyStep.srv`
 - Python server: `src/sandwich_bt_python/server.py`
 - Python executor: `src/sandwich_bt_python/executor.py`
+- Supervisor planner: `src/sandwich_bt_supervisor/vlm_supervisor.py`
 - C++ runner: `src/sandwich_bt_runtime_cpp/src/sandwich_bt_main.cpp`
 - C++ BT leaf: `src/sandwich_bt_runtime_cpp/src/run_named_command_node.cpp`
 
@@ -236,6 +255,20 @@ uv run lerobot-bt-skill-sim \
 
 This path does not talk to Panda, Robotiq, or the C++ BT runner. It is meant for smoke-testing the
 Python command dispatch and recovery logic.
+
+To exercise the minimal collaborative loop on top of that same mock execution backend:
+
+```bash
+uv run lerobot-bt-supervisor-sim
+```
+
+That simulation runs the closed-set sequence:
+
+1. robot `place_first_toast`
+2. human `pour_ingredient`
+3. robot `place_second_toast`
+
+and exits when the supervisor reaches `DONE`.
 
 ## BT Simulation
 

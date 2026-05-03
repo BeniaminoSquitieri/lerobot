@@ -1,0 +1,12 @@
+# Request sent by the collaborative supervisor client.
+string goal
+string current_task
+string[] available_robot_skills
+string[] available_human_skills
+---
+# Response returned by the collaborative supervisor.
+string step_name
+string actor
+string reason
+string expected_state
+float32 confidence

@@ -129,6 +129,18 @@ export CMAKE_PREFIX_PATH="$CONDA_PREFIX:${CMAKE_PREFIX_PATH:-}"
 
 log "PKG_CONFIG_PATH and CMAKE_PREFIX_PATH configured"
 
+# Ensure sandwich_bt_interfaces source exists or clone from user-provided remote
+if [[ ! -d "${REPO_ROOT}/src/sandwich_bt_interfaces" ]]; then
+  if [[ -n "${SANDWICH_BT_REMOTE:-}" ]]; then
+    log "src/sandwich_bt_interfaces not found — cloning from SANDWICH_BT_REMOTE"
+    git clone "${SANDWICH_BT_REMOTE}" "src/sandwich_bt_interfaces"
+  else
+    log "Warning: src/sandwich_bt_interfaces not present."
+    log "If this repo is split, set SANDWICH_BT_REMOTE to the git URL and re-run."
+    log "Example: SANDWICH_BT_REMOTE=https://github.com/<org>/sandwich_bt_interfaces.git bash $0"
+  fi
+fi
+
 if [[ "${SKIP_PYTHON}" -eq 0 ]]; then
   if ! python -c "import em" >/dev/null 2>&1; then
     log "Installing ROS interface dependency: empy"
@@ -158,9 +170,19 @@ if [[ "${SKIP_BUILD}" -eq 0 ]]; then
   BUILD_PACKAGES+=(sandwich_bt_interfaces sandwich_bt_runtime_cpp)
 
   log "Building ROS packages: ${BUILD_PACKAGES[*]}"
+  set +e
   colcon build --base-paths src \
     --packages-up-to "${BUILD_PACKAGES[@]}" \
     "${CLEAN_ARGS[@]}"
+  BUILD_STATUS=$?
+  set -e
+  if [[ ${BUILD_STATUS} -ne 0 ]]; then
+    log "colcon build failed (exit=${BUILD_STATUS}). Capturing brief logs and retrying with verbose output."
+    mkdir -p "${REPO_ROOT}/log"
+    colcon build --base-paths src --packages-select sandwich_bt_interfaces --event-handlers console_direct+ --cmake-args -DCMAKE_VERBOSE_MAKEFILE=ON 2>&1 | tee "${REPO_ROOT}/log/sandwich_bt_interfaces_build.log" || true
+    log "Please inspect ${REPO_ROOT}/log/sandwich_bt_interfaces_build.log for details."
+    die "Build failed. Common fixes: install 'empy' (python -m pip install empy), ensure ROS/colcon tools available, or set SANDWICH_BT_REMOTE and re-run."
+  fi
 fi
 
 if [[ -f "install/setup.bash" ]]; then
