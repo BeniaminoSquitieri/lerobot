@@ -1,3 +1,5 @@
+"""Collaborative sandwich execution loop."""
+
 #!/usr/bin/env python
 
 """Collaborative runner above the supervisor ROS2 services."""

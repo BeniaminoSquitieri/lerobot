@@ -1,3 +1,5 @@
+"""Task-to-actor allocation logic for robot/human collaboration."""
+
 """Closed-set task allocation for the collaborative sandwich supervisor."""
 
 from __future__ import annotations

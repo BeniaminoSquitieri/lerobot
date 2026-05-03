@@ -1,3 +1,5 @@
+"""Minimal BT XML interpreter for contract tests."""
+
 """Execute robot subtasks through BT XML subtrees and RunNamedCommand requests."""
 
 from __future__ import annotations

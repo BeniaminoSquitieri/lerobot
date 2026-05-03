@@ -1,3 +1,6 @@
+# Request one named command from the Python skill/recovery executor.
+#
+# This is the C++ BT -> Python execution boundary.
 # Request sent by the C++ BT to the Python server.
 # kind:
 #   - "skill"    -> run one learned primitive

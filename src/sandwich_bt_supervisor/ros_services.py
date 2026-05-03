@@ -1,3 +1,5 @@
+"""ROS2 service loading and schema validation utilities."""
+
 """Helpers for loading generated ROS2 service interfaces for the supervisor."""
 
 from __future__ import annotations

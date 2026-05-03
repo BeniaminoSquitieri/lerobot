@@ -1,3 +1,6 @@
+# Verify whether a previously executed step produced expected scene state.
+#
+# This is the runner -> supervisor verification boundary.
 # Request sent by the collaborative supervisor client.
 string step_name
 bool first_toast_on_plate

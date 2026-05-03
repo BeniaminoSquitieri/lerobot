@@ -1,3 +1,6 @@
+# Plan the next closed-set sandwich step.
+#
+# This is the runner -> supervisor planning boundary.
 # Request sent by the collaborative supervisor client.
 string goal
 string current_task
