@@ -6,6 +6,10 @@ For build/run instructions and the architecture overview, use the shared guide:
 
 - [`../sandwich_bt_README.md`](../sandwich_bt_README.md)
 
+Architecture diagram:
+
+- [`sandwich_bt_architecture.svg`](./sandwich_bt_architecture.svg)
+
 ## Responsibility
 
 This package owns BT orchestration.
