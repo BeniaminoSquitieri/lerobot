@@ -15,6 +15,8 @@ Flow role:
 3. Return the result to the BT so the tree can continue or retry.
 """
 
+from __future__ import annotations
+
 import importlib
 import logging
 import os
@@ -35,7 +37,6 @@ from lerobot.processor.converters import (
     transition_to_observation,
     transition_to_robot_action,
 )
-from lerobot.robots.custom_manipulator.custom_manipulator import CustomManipulator
 from lerobot.common.control_utils import is_headless
 from lerobot.utils.utils import init_logging, log_say
 from lerobot.utils.visualization_utils import init_rerun as init_rerun_viz
@@ -126,7 +127,7 @@ class SkillCommandServer(Node):
     def __init__(
         self,
         cfg: SkillCommandServerConfig,
-        robot: CustomManipulator,
+        robot: "CustomManipulator",
         executor_backend: SkillCommandExecutor,
         robot_action_processor: RobotProcessorPipeline,
         robot_observation_processor: RobotProcessorPipeline,
@@ -207,6 +208,7 @@ def run(cfg: SkillCommandServerConfig) -> None:
         logging.info("Rerun visualization is ready.")
 
     logging.info("Constructing CustomManipulator.")
+    from lerobot.robots.custom_manipulator.custom_manipulator import CustomManipulator
     robot = CustomManipulator(cfg.robot)
     logging.info("CustomManipulator constructed.")
 
