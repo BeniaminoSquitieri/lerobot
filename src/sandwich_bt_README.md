@@ -52,6 +52,7 @@ The collaborative path keeps the BT reactive and moves step selection above it:
 - Python server: `src/sandwich_bt_python/server.py`
 - Python executor: `src/sandwich_bt_python/executor.py`
 - Supervisor planner: `src/sandwich_bt_supervisor/vlm_supervisor.py`
+- Supervisor server: `src/sandwich_bt_supervisor/server.py`
 - C++ runner: `src/sandwich_bt_runtime_cpp/src/sandwich_bt_main.cpp`
 - C++ BT leaf: `src/sandwich_bt_runtime_cpp/src/run_named_command_node.cpp`
 
@@ -285,7 +286,26 @@ Recommended validation order:
 1. `uv run lerobot-bt-skill-sim`
 2. `uv run lerobot-bt-supervisor-sim`
 3. `uv run lerobot-bt-supervisor-sim --deny-human-confirmation`
-4. `lerobot-bt-skill-sim --ros2-service` plus `ros2 run sandwich_bt_runtime_cpp sandwich_bt_runner`
+4. `colcon build --base-paths src --packages-select sandwich_bt_interfaces && source install/setup.bash`
+5. `uv run lerobot-bt-supervisor-server` plus `uv run lerobot-bt-supervisor-probe`
+6. `uv run lerobot-bt-supervisor-server` plus `uv run lerobot-bt-collaborative-runner --mock-scene`
+7. `uv run lerobot-bt-supervisor-server` plus `uv run lerobot-bt-skill-sim --ros2-service` plus `uv run lerobot-bt-collaborative-runner --mock-scene --robot-backend ros2`
+8. `lerobot-bt-skill-sim --ros2-service` plus `ros2 run sandwich_bt_runtime_cpp sandwich_bt_runner`
+
+If the interfaces build fails in a conda environment with `ModuleNotFoundError: catkin_pkg`, rerun step 4 as:
+
+```bash
+colcon build --base-paths src --packages-select sandwich_bt_interfaces \
+  --cmake-args -DPython3_EXECUTABLE=/usr/bin/python3
+source install/setup.bash
+```
+
+The collaborative runner uses these exit codes:
+
+- `0`: `DONE`
+- `1`: task abort / verification failure
+- `2`: ROS2 supervisor service or `/sandwich_bt/run_command` unavailable
+- `3`: invalid config or stale generated interfaces
 
 ## BT Simulation
 

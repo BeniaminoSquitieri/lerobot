@@ -14,6 +14,7 @@ from sandwich_bt_python.simulation import (
 
 from .bt_executor import BtXmlRobotExecutor, default_subtree_path
 from .human_interface import HumanCommandExecutor
+from .named_command_backends import InProcessMockNamedCommandBackend
 from .planner_schema import SupervisorConfig, TaskPrimitive
 from .scene_state import SandwichSceneEstimator, SandwichSceneObservation
 from .task_allocator import SandwichTaskAllocator
@@ -141,7 +142,7 @@ def build_demo_supervisor_stack(
     task_allocator = SandwichTaskAllocator(supervisor_cfg)
     command_executor = service.executor
     robot_executor = BtXmlRobotExecutor(
-        service=service,
+        command_backend=InProcessMockNamedCommandBackend(service),
         on_step_success=MockRobotSceneEffects(scene).mark_completed,
     )
     human_executor = HumanCommandExecutor(
@@ -197,7 +198,7 @@ def main() -> None:
         print(
             "bt_command="
             f"{command.attempt_index}:{command.request.kind}:{command.request.name}"
-            f" -> {command.response.status}"
+            f" -> {command.result.status}"
         )
     print(f"final -> {result.final_decision.actor} ({result.final_decision.reason})")
 

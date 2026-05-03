@@ -584,7 +584,10 @@ def run_ros2_service(
 
     node = MockRunNamedCommandNode()
     try:
-        rclpy.spin(node)
+        try:
+            rclpy.spin(node)
+        except KeyboardInterrupt:
+            node.get_logger().info("Mock BT command service interrupted, shutting down.")
     finally:
         node.destroy_node()
         if rclpy.ok():

@@ -7,12 +7,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from xml.etree import ElementTree
 
-from sandwich_bt_python.simulation import (
-    MockRunNamedCommandRequest,
-    MockRunNamedCommandResponse,
-    MockRunNamedCommandService,
-)
-
+from .named_command_backends import NamedCommandBackend, NamedCommandRequest, NamedCommandResult
 from .planner_schema import StepExecutionResult, TaskPrimitive
 
 
@@ -24,8 +19,8 @@ def default_subtree_path(filename: str) -> Path:
 class ExecutedBtCommand:
     tree_xml_path: str
     attempt_index: int
-    request: MockRunNamedCommandRequest
-    response: MockRunNamedCommandResponse
+    request: NamedCommandRequest
+    result: NamedCommandResult
 
 
 class BtXmlRobotExecutor:
@@ -40,10 +35,10 @@ class BtXmlRobotExecutor:
     def __init__(
         self,
         *,
-        service: MockRunNamedCommandService,
+        command_backend: NamedCommandBackend,
         on_step_success: Callable[[str], None] | None = None,
     ) -> None:
-        self._service = service
+        self._command_backend = command_backend
         self._on_step_success = on_step_success or (lambda _step_name: None)
         self.command_history: list[ExecutedBtCommand] = []
 
@@ -177,21 +172,25 @@ class BtXmlRobotExecutor:
         tree_xml_path: Path,
         attempt_index: int,
     ) -> tuple[bool, float, str]:
-        request = MockRunNamedCommandRequest(
+        request = NamedCommandRequest(
             kind=node.attrib["kind"],
             name=node.attrib["command_name"],
             timeout_s=float(node.attrib.get("timeout_s", 0.0)),
         )
-        response = self._service.handle_request(request)
+        result = self._command_backend.run_named_command(
+            kind=request.kind,
+            name=request.name,
+            timeout_s=request.timeout_s,
+        )
         self.command_history.append(
             ExecutedBtCommand(
                 tree_xml_path=str(tree_xml_path),
                 attempt_index=attempt_index,
                 request=request,
-                response=response,
+                result=result,
             )
         )
-        return response.success, response.elapsed_s, response.message
+        return result.success, result.elapsed_s, result.message
 
     @staticmethod
     def _tag(node: ElementTree.Element) -> str:

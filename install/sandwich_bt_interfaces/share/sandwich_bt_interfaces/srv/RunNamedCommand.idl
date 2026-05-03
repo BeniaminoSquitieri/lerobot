@@ -1,0 +1,37 @@
+// generated from rosidl_adapter/resource/srv.idl.em
+// with input from sandwich_bt_interfaces/srv/RunNamedCommand.srv
+// generated code does not contain a copyright notice
+
+
+module sandwich_bt_interfaces {
+  module srv {
+    @verbatim (language="comment", text=
+      "Request sent by the C++ BT to the Python server." "\n"
+      "kind:" "\n"
+      "  - \"skill\"    -> run one learned primitive" "\n"
+      "  - \"recovery\" -> run one scripted recovery" "\n"
+      "name:" "\n"
+      "  must match one configured entry on the Python side" "\n"
+      "timeout_s:" "\n"
+      "  optional override for the command duration")
+    struct RunNamedCommand_Request {
+      string kind;
+
+      string name;
+
+      float timeout_s;
+    };
+    @verbatim (language="comment", text=
+      "Response returned by the Python server to the BT." "\n"
+      "success/status are what the BT uses to decide whether to continue or retry.")
+    struct RunNamedCommand_Response {
+      boolean success;
+
+      string status;
+
+      float elapsed_s;
+
+      string message;
+    };
+  };
+};
