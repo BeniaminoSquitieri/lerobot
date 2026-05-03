@@ -1,5 +1,7 @@
 """Execution backend for learned skills and scripted recoveries."""
 
+from __future__ import annotations
+
 """Execution backend for learned skills and scripted recoveries.
 
 Flow role:
@@ -21,7 +23,6 @@ from lerobot.policies.pretrained import PreTrainedPolicy
 from lerobot.policies.utils import make_robot_action
 from lerobot.processor import PolicyAction, PolicyProcessorPipeline, RobotProcessorPipeline
 from lerobot.processor.rename_processor import rename_stats
-from lerobot.robots.custom_manipulator.custom_manipulator import CustomManipulator
 from lerobot.common.control_utils import predict_action
 from lerobot.utils.device_utils import get_safe_torch_device
 from lerobot.utils.feature_utils import build_dataset_frame
@@ -90,7 +91,7 @@ def _build_skill_runtime(
 
 
 class SkillCommandExecutor:
-    def __init__(self, cfg: SkillCommandServerConfig, robot: CustomManipulator) -> None:
+    def __init__(self, cfg: SkillCommandServerConfig, robot: "CustomManipulator") -> None:
         self.cfg = cfg
         self.robot = robot
         # Names are the bridge between the BT XML and the policy configs.
