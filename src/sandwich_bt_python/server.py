@@ -3,8 +3,6 @@
 Exposes `/sandwich_bt/run_command` and delegates named command execution.
 """
 
-from __future__ import annotations
-
 #!/usr/bin/env python
 
 """ROS2 service server for the Python execution layer.
