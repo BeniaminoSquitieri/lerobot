@@ -1,6 +1,0 @@
-srv/PlanNextStep.idl
-srv/PlanNextStep.srv
-srv/RunNamedCommand.idl
-srv/RunNamedCommand.srv
-srv/VerifyStep.idl
-srv/VerifyStep.srv

@@ -1,8 +1,0 @@
-source;share/sandwich_bt_runtime_cpp/hook/cmake_prefix_path.ps1
-source;share/sandwich_bt_runtime_cpp/hook/cmake_prefix_path.dsv
-source;share/sandwich_bt_runtime_cpp/hook/cmake_prefix_path.sh
-source;share/sandwich_bt_runtime_cpp/local_setup.bash
-source;share/sandwich_bt_runtime_cpp/local_setup.dsv
-source;share/sandwich_bt_runtime_cpp/local_setup.ps1
-source;share/sandwich_bt_runtime_cpp/local_setup.sh
-source;share/sandwich_bt_runtime_cpp/local_setup.zsh

@@ -182,3 +182,6 @@ outputs/
 src/lerobot/robots/ergocub/ergocub_hand_left/
 src/lerobot/robots/ergocub/ergocub_hand_right/
 src/behaviortree_cpp/
+
+# ROS2/colcon generated install tree (keep local, never track)
+install/
