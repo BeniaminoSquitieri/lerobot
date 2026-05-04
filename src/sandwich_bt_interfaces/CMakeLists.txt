@@ -7,7 +7,10 @@ project(sandwich_bt_interfaces)
 # - the C++ BT runtime
 
 find_package(ament_cmake REQUIRED)
-find_package(rosidl_default_generators REQUIRED)
+find_package(rosidl_cmake REQUIRED)
+find_package(rosidl_generator_c REQUIRED)
+find_package(rosidl_generator_cpp REQUIRED)
+find_package(rosidl_generator_py REQUIRED)
 
 # Single contract used between BT orchestration and robot-facing execution.
 rosidl_generate_interfaces(${PROJECT_NAME}

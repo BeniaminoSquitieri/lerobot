@@ -100,7 +100,7 @@ def _prepend_generated_interface_paths() -> None:
 
     for prefix in prefixes:
         site_packages = prefix / "lib" / python_dir / "site-packages"
-        if (site_packages / "sandwich_bt_interfaces" / "srv" / "__init__.py").exists():
+        if (site_packages / "sandwich_bt_interfaces" / "srv").exists():
             site_packages_str = str(site_packages)
             if site_packages_str not in sys.path:
                 sys.path.insert(0, site_packages_str)

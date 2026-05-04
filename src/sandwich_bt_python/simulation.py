@@ -9,13 +9,22 @@ from __future__ import annotations
 import argparse
 from collections.abc import Sequence
 from dataclasses import dataclass, field
+from pathlib import Path
+import sys
 from threading import Lock
 from typing import Any
 
-from .verification import (
-    UNKNOWN_VERIFICATION_STATUS,
-    SkillVerificationRegistry,
-)
+if __package__ in {None, ""}:
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+    from sandwich_bt_python.verification import (  # type: ignore
+        UNKNOWN_VERIFICATION_STATUS,
+        SkillVerificationRegistry,
+    )
+else:
+    from .verification import (
+        UNKNOWN_VERIFICATION_STATUS,
+        SkillVerificationRegistry,
+    )
 
 _ACTION_KEYS = (
     "position.x",
@@ -681,13 +690,20 @@ def run_ros2_service(
 ) -> int:
     try:
         import rclpy
+        from rclpy.executors import ExternalShutdownException
         from rclpy.node import Node
+        from sandwich_bt_python.server import _load_bt_services
 
-        from sandwich_bt_interfaces.srv import GetSkillVerification, ReportSkillVerification, RunNamedCommand
+        RunNamedCommand, GetSkillVerification, ReportSkillVerification = _load_bt_services()
     except ModuleNotFoundError as exc:  # pragma: no cover - depends on ROS2 install
         raise RuntimeError(
             "ROS2 simulation mode requires rclpy and sandwich_bt_interfaces. "
-            "Source the ROS workspace before running --ros2-service."
+            "Source the ROS workspace and build sandwich_bt_interfaces before running --ros2-service."
+        ) from exc
+    except ImportError as exc:  # pragma: no cover - depends on ROS2/generated interfaces
+        raise RuntimeError(
+            "ROS2 simulation mode could not load the generated sandwich_bt_interfaces bindings. "
+            "Run a ROS2 build for sandwich_bt_interfaces, then source install/local_setup.bash."
         ) from exc
 
     class MockRunNamedCommandNode(Node):
@@ -756,6 +772,8 @@ def run_ros2_service(
             rclpy.spin(node)
         except KeyboardInterrupt:
             node.get_logger().info("Mock BT command service interrupted, shutting down.")
+        except ExternalShutdownException:
+            print("Mock BT command service stopped, shutting down.")
     finally:
         node.destroy_node()
         if rclpy.ok():
