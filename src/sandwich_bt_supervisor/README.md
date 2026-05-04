@@ -190,7 +190,12 @@ closed-set task graph.
 
 ## Simulation
 
-For startup and execution commands, use the shared guide:
+For startup and execution commands, use the shared guide. The recommended order is:
+
+1. bring up the supervisor services in section `15.1`
+2. probe the services in section `15.2`
+3. run the collaborative loop in section `15.3`
+4. switch to the ROS2 robot backend in section `15.4`
 
 - [`../sandwich_bt_README.md`](../sandwich_bt_README.md), section `15`
 
@@ -236,6 +241,11 @@ mode it uses:
 By default the robot subtree executor uses an in-process `RunNamedCommand` backend.
 The shared guide also covers the live ROS2 `RunNamedCommand` validation path with the
 mock skill server.
+
+In other words:
+
+- use `--mock-scene` alone when you only want to test the collaborative logic
+- add `--robot-backend ros2` when you also want to validate the ROS2 robot-command boundary
 
 If `/sandwich_bt/run_command` is unavailable, the runner exits with code `2`.
 

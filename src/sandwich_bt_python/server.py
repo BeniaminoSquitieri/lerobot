@@ -1,8 +1,3 @@
-"""ROS2 command server for the sandwich BT stack.
-
-Exposes `/sandwich_bt/run_command` and delegates named command execution.
-"""
-
 #!/usr/bin/env python
 
 """ROS2 service server for the Python execution layer.
@@ -22,11 +17,12 @@ import sys
 from dataclasses import asdict
 from pathlib import Path
 from pprint import pformat
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import rclpy
 from rclpy.node import Node
 
+from lerobot.common.control_utils import is_headless
 from lerobot.configs import parser
 from lerobot.processor import ProcessorStepRegistry, RobotProcessorPipeline
 from lerobot.processor.converters import (
@@ -35,20 +31,35 @@ from lerobot.processor.converters import (
     transition_to_observation,
     transition_to_robot_action,
 )
-from lerobot.common.control_utils import is_headless
 from lerobot.utils.utils import init_logging, log_say
 from lerobot.utils.visualization_utils import init_rerun as init_rerun_viz
 
 from .config import SkillCommandServerConfig
-from .executor import SkillCommandExecutor
+from .executor import CommandResult, SkillCommandExecutor
 from .verification import (
     PENDING_VERIFICATION_STATUS,
+    SUCCESSFUL_VERIFICATION_STATUS,
     UNKNOWN_VERIFICATION_STATUS,
     SkillVerificationRegistry,
 )
 
-
 DEFAULT_CONFIG_PATH = Path(__file__).resolve().parent / "sandwich_bt_executor.yaml"
+
+if TYPE_CHECKING:
+    from lerobot.robots.custom_manipulator.custom_manipulator import CustomManipulator
+
+SIMULATED_RECOVERY_KIND = "simulated_recovery"
+SIMULATED_SKILL_KIND = "simulated_skill"
+SIMULATED_SKILL_PENDING_KIND = "simulated_skill_pending"
+
+_KINDS_THAT_OPEN_VERIFICATION = {
+    "skill",
+    SIMULATED_SKILL_KIND,
+    SIMULATED_SKILL_PENDING_KIND,
+}
+_KINDS_THAT_AUTO_VERIFY = {
+    SIMULATED_SKILL_KIND,
+}
 
 
 def _instantiate_processor_step(step_spec: Any):
@@ -145,15 +156,15 @@ class SkillCommandServer(Node):
         self.verification_registry = verification_registry
 
         # ROS2 entrypoints used by the BT runtime and the external verifier.
-        RunNamedCommand, GetSkillVerification, ReportSkillVerification = _load_bt_services()
-        self._command_service = self.create_service(RunNamedCommand, cfg.service_name, self._handle_request)
+        run_named_command, get_skill_verification, report_skill_verification = _load_bt_services()
+        self._command_service = self.create_service(run_named_command, cfg.service_name, self._handle_request)
         self._verification_query_service = self.create_service(
-            GetSkillVerification,
+            get_skill_verification,
             cfg.verification_query_service_name,
             self._handle_get_skill_verification,
         )
         self._verification_report_service = self.create_service(
-            ReportSkillVerification,
+            report_skill_verification,
             cfg.verification_report_service_name,
             self._handle_report_skill_verification,
         )
@@ -181,6 +192,27 @@ class SkillCommandServer(Node):
                     recovery_name=request.name,
                     timeout_override_s=request.timeout_s,
                 )
+            elif request.kind == SIMULATED_SKILL_KIND:
+                result = CommandResult(
+                    True,
+                    "SUCCESS",
+                    0.0,
+                    f"Simulated skill '{request.name}' completed without robot execution.",
+                )
+            elif request.kind == SIMULATED_SKILL_PENDING_KIND:
+                result = CommandResult(
+                    True,
+                    "SUCCESS",
+                    0.0,
+                    f"Simulated skill '{request.name}' completed and is awaiting external verification.",
+                )
+            elif request.kind == SIMULATED_RECOVERY_KIND:
+                result = CommandResult(
+                    True,
+                    "SUCCESS",
+                    0.0,
+                    f"Simulated recovery '{request.name}' completed without robot execution.",
+                )
             else:
                 result = None
         except Exception as exc:  # noqa: BLE001
@@ -199,13 +231,36 @@ class SkillCommandServer(Node):
             self.get_logger().error(response.message)
             return response
 
-        if request.kind == "skill" and result.success:
-            verification_snapshot = self.verification_registry.begin_attempt(request.name)
-            result.message = (
-                f"{result.message} "
-                f"Verification attempt {verification_snapshot.attempt_id} is now pending on "
-                f"'{self.cfg.verification_query_service_name}'."
-            )
+        if request.kind in _KINDS_THAT_OPEN_VERIFICATION and result.success:
+            try:
+                if request.kind in {SIMULATED_SKILL_KIND, SIMULATED_SKILL_PENDING_KIND}:
+                    self.verification_registry.register_skill_name(request.name)
+                verification_snapshot = self.verification_registry.begin_attempt(request.name)
+                if request.kind in _KINDS_THAT_AUTO_VERIFY:
+                    self.verification_registry.report(
+                        skill_name=request.name,
+                        attempt_id=verification_snapshot.attempt_id,
+                        status=SUCCESSFUL_VERIFICATION_STATUS,
+                        message=f"Simulated verifier accepted skill '{request.name}'.",
+                        confidence=1.0,
+                    )
+                    result.message = (
+                        f"{result.message} "
+                        f"Verification attempt {verification_snapshot.attempt_id} was auto-resolved as SUCCESS."
+                    )
+                else:
+                    result.message = (
+                        f"{result.message} "
+                        f"Verification attempt {verification_snapshot.attempt_id} is now pending on "
+                        f"'{self.cfg.verification_query_service_name}'."
+                    )
+            except Exception as exc:  # noqa: BLE001
+                response.success = False
+                response.status = "ERROR"
+                response.elapsed_s = float(result.elapsed_s)
+                response.message = f"Could not open verification for command '{request.name}': {exc}"
+                self.get_logger().error(response.message)
+                return response
 
         response.success = bool(result.success)
         response.status = result.status

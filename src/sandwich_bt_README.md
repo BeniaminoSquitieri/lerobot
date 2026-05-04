@@ -26,6 +26,47 @@ Do not claim that the real robot makes the sandwich until the real Panda server,
 
 ---
 
+## 0. Start Here
+
+If your goal is simply to understand what this stack does and how to test it,
+use this order.
+
+### What the stack does
+
+The stack separates task orchestration from robot execution.
+
+* `sandwich_bt_runtime_cpp` decides the order of steps through BT XML.
+* `sandwich_bt_python` executes one named robot skill or recovery when the BT asks for it.
+* `sandwich_bt_supervisor` adds an optional collaborative layer that can choose whether the next step belongs to the robot or to the human.
+* `sandwich_bt_interfaces` defines the ROS2 services between those pieces.
+
+In practice, the stack is trying to answer two different questions:
+
+1. Does the BT orchestration work end-to-end over ROS2?
+2. Do the real robot skills work safely on hardware?
+
+Those are different validation steps. Simulation answers the first question. It
+does not answer the second one.
+
+### Fastest path to confidence
+
+Run the checks in this order:
+
+1. Build the ROS2 packages in section `8`.
+2. Run the BT against the mock skill server in section `12`.
+3. Start the real Python server with the headless config in section `14`.
+4. Run the collaborative mock flow in section `15`.
+5. Only then move to the real robot flow in section `13`, starting with `sandwich_tree_first_primitive_only.xml`.
+
+### Which section should I use?
+
+* If you want to validate orchestration without hardware, go to section `12`.
+* If you want to check that the Python server boots without Panda hardware, go to section `14`.
+* If you want to test the robot-human collaborative logic without hardware, go to section `15`.
+* If you want to move toward real hardware execution, go to section `13`, but only after the simulated path is stable.
+
+---
+
 ## 1. Architecture
 
 The stack is split into four packages.
@@ -120,6 +161,46 @@ The VLM, when added, should not command robot motion directly. It should produce
 * `second_toast_on_top`
 * confidence
 * failure reason
+
+### Two Different Verification Paths
+
+This repository currently has two different "scene verification" paths. They
+are related, but they are not the same thing.
+
+#### A. BT skill verification
+
+This path belongs to `sandwich_bt_python` and is what the BT runtime waits on
+after a robot skill succeeds.
+
+Flow:
+
+1. the BT calls `/sandwich_bt/run_command`
+2. the Python server executes one skill
+3. the Python server opens a `PENDING` verification attempt
+4. the BT polls `/sandwich_bt/get_skill_verification`
+5. an external verifier calls `/sandwich_bt/report_skill_verification`
+6. the BT continues only after the verdict becomes `SUCCESS` or `FAILURE`
+
+This is the path you use when you want to simulate or replace a VLM for
+post-skill verification.
+
+#### B. Collaborative supervisor scene verification
+
+This path belongs to `sandwich_bt_supervisor`.
+
+Flow:
+
+1. the collaborative runner sends a closed-set observation to `/sandwich_supervisor/verify_step`
+2. the supervisor checks whether that observation matches the expected effect of the step
+
+In `--mock-scene` mode, those observations are produced by a deterministic mock
+scene provider inside the runner. No external VLM service is involved.
+
+Practical consequence:
+
+* use `vlm_stub.py` or `ReportSkillVerification` when you want to simulate the external verifier for the BT
+* use `lerobot-bt-collaborative-runner --mock-scene` when you want to test the collaborative robot/human logic
+* do not expect the collaborative mock scene to exercise `vlm_stub.py`
 
 ---
 
@@ -216,6 +297,7 @@ BT files:
 
 * Full tree: `src/sandwich_bt_runtime_cpp/trees/sandwich_tree.xml`
 * First-primitive test tree: `src/sandwich_bt_runtime_cpp/trees/sandwich_tree_first_primitive_only.xml`
+* First real primitive, rest simulated: `src/sandwich_bt_runtime_cpp/trees/sandwich_tree_first_real_rest_simulated.xml`
 * First toast subtree: `src/sandwich_bt_runtime_cpp/trees/place_first_toast_subtree.xml`
 * Pour subtree: `src/sandwich_bt_runtime_cpp/trees/pour_subtree.xml`
 * Second toast subtree: `src/sandwich_bt_runtime_cpp/trees/place_second_toast_subtree.xml`
@@ -242,6 +324,7 @@ Runtime entry points:
 * Python skill server: `src/sandwich_bt_python/server.py`
 * Python skill executor: `src/sandwich_bt_python/executor.py`
 * Python mock skill simulation: `src/sandwich_bt_python/simulation.py`
+* Python VLM stub: `src/sandwich_bt_python/vlm_stub.py`
 * C++ BT runner: `src/sandwich_bt_runtime_cpp/src/sandwich_bt_main.cpp`
 * C++ BT leaf: `src/sandwich_bt_runtime_cpp/src/run_named_command_node.cpp`
 * Supervisor ROS2 server: `src/sandwich_bt_supervisor/server.py`
@@ -538,6 +621,85 @@ Use:
 src/sandwich_bt_python/sandwich_bt_executor.yaml
 ```
 
+This is the main file where you set the policy names and checkpoint paths used
+by the sandwich stack.
+
+More precisely:
+
+* each robot primitive is listed under `skills:`
+* each primitive has its own `policy:` block
+* the field that points to the trained policy is `policy.pretrained_path`
+
+Example:
+
+```yaml
+skills:
+  - name: place_first_toast
+    policy:
+      type: act
+      device: cuda
+      pretrained_path: "HSP-IIT/act_toast_pick_and_place"
+```
+
+For the current repository, edit:
+
+* [src/sandwich_bt_python/sandwich_bt_executor.yaml](/home/bsquitieri-iit.local/lerobot/src/sandwich_bt_python/sandwich_bt_executor.yaml:54) for the real robot path
+* [src/sandwich_bt_python/sandwich_bt_executor_headless.yaml](/home/bsquitieri-iit.local/lerobot/src/sandwich_bt_python/sandwich_bt_executor_headless.yaml:30) for the headless/test path
+
+In `sandwich_bt_executor.yaml`, the current skill entries are:
+
+* `place_first_toast`
+* `pour`
+* `place_second_toast`
+
+Each of them can have a different `policy.pretrained_path`.
+
+Important:
+
+* the BT XML refers to the skill `name`, not to the checkpoint path directly
+* so if the BT asks for `place_first_toast`, the YAML must contain a `skills` entry with `name: place_first_toast`
+* inside that entry, `policy.pretrained_path` is where you choose which trained policy to load
+
+### How The BT Finds The Real Policy
+
+The BT does not know anything about datasets or checkpoints.
+
+The BT only sends a named command over ROS2:
+
+```xml
+<RunNamedCommand kind="skill" command_name="place_first_toast"/>
+```
+
+The Python skill server receives:
+
+```text
+kind = skill
+name = place_first_toast
+```
+
+Then `src/sandwich_bt_python/sandwich_bt_executor.yaml` maps that name to the
+dataset metadata and policy checkpoint:
+
+```yaml
+skills:
+  - name: place_first_toast
+    dataset_repo_id: "HSP-IIT/toast_pick_and_place"
+    policy:
+      type: act
+      pretrained_path: "HSP-IIT/act_toast_pick_and_place"
+```
+
+Field meanings:
+
+* `skills[].name` is the runtime name the BT asks for.
+* `skills[].dataset_repo_id` is used to load dataset metadata and normalization statistics.
+* `skills[].policy.pretrained_path` is the trained policy checkpoint or Hugging Face model id that will be loaded.
+* `skills[].task` is the task text passed into policy inference when the policy uses a task string.
+
+So, for a real robot run, changing which trained policy is used does not happen
+in the BT XML. It happens in `policy.pretrained_path` for the matching
+`skills[].name`.
+
 Check before running on hardware:
 
 * arm type and robot config;
@@ -591,6 +753,37 @@ Wrong:
 
 Newer BehaviorTree.CPP versions reserve the port `name`.
 
+### BT Command Kinds
+
+The BT controls what the Python server does through the `kind` field on each
+`RunNamedCommand` node.
+
+Existing real execution kinds:
+
+* `kind="skill"` runs a configured learned primitive on the active robot backend.
+* `kind="recovery"` runs a configured scripted recovery on the active robot backend.
+
+Simulation kinds handled by the real Python server:
+
+* `kind="simulated_recovery"` returns `SUCCESS` without moving the robot.
+* `kind="simulated_skill"` returns `SUCCESS`, opens a verification attempt, and immediately marks it as `SUCCESS`.
+* `kind="simulated_skill_pending"` returns `SUCCESS`, opens a verification attempt, and leaves it `PENDING` for a VLM or manual verifier.
+
+This means you can switch a primitive between real and simulated behavior by
+editing only the BT XML.
+
+Example:
+
+```xml
+<RunNamedCommand kind="skill" command_name="place_first_toast"/>
+<RunNamedCommand kind="simulated_skill" command_name="pour"/>
+<RunNamedCommand kind="simulated_skill_pending" command_name="place_second_toast"/>
+```
+
+Use `simulated_skill` when you want the BT to continue without a VLM. Use
+`simulated_skill_pending` when you want to test the future VLM-controlled scene
+verification path.
+
 ---
 
 ## 11. Action Semantics
@@ -607,6 +800,42 @@ Only enable `arm.use_delta_actions` if the checkpoint was trained with compatibl
 
 Wrong action semantics can make a valid checkpoint move the robot incorrectly.
 
+### Skill Success, Failure, Running, And Retry Semantics
+
+There are two different `RUNNING` concepts:
+
+* The C++ `RunNamedCommand` BT node returns BT `RUNNING` while it is waiting for the Python ROS2 service response.
+* The Python skill executor runs its own control loop internally until it decides that the skill finished, failed, or crashed.
+
+The ACT or GR00T policy does not directly tell the BT "SUCCESS" or "FAILURE".
+The Python executor decides that from the skill config in
+`src/sandwich_bt_python/sandwich_bt_executor.yaml`.
+
+The important fields are under each `skills[]` entry:
+
+* `transition.mode`
+* `transition.max_duration_s`
+* `transition.success_conditions`
+* `transition.failure_conditions`
+
+Current behavior:
+
+* `transition.mode: timeout` returns `SUCCESS` when the timeout is reached, unless a configured failure condition fired first.
+* `transition.mode: all_conditions` returns `SUCCESS` only when all success conditions are true before timeout.
+* `transition.mode: all_conditions_or_timeout` can return `SUCCESS` from success conditions or from timeout.
+* `transition.mode: until_success` keeps running until success conditions become true.
+* if policy loading, inference, observation processing, or robot action sending throws an exception, the command returns `ERROR`.
+
+The BT retries when `RunNamedCommand` or `VerifySkillOutcome` returns BT
+`FAILURE`. In the XML files, retry is implemented by `RetryUntilSuccessful`
+around `recovery -> skill -> verification`.
+
+Practical consequence:
+
+* if a real policy physically fails but the configured transition still returns `SUCCESS`, the BT will only retry if `VerifySkillOutcome` later receives `FAILURE` from the VLM/manual verifier
+* if there is no VLM/manual verifier, timeout-based skills can look successful to the BT even when the physical scene is wrong
+* for robust real execution, either configure meaningful `failure_conditions` / `success_conditions`, or rely on VLM/manual scene verification to reject bad rollouts
+
 ---
 
 ## 12. Test The BT In Simulation
@@ -614,6 +843,8 @@ Wrong action semantics can make a valid checkpoint move the robot incorrectly.
 Use this when you want to prove that the BT orchestration works without Panda, Robotiq, cameras, or real checkpoints.
 
 This is the fastest and safest test.
+
+If you are unsure where to start, start here.
 
 ### What this test validates
 
@@ -638,7 +869,45 @@ It does not validate:
 * learned policy quality;
 * real-world motion safety.
 
-### Terminal 1: start the mock ROS2 skill server
+This section is intentionally ordered from the smallest test to the most complete one.
+
+### 12.1 Local simulation without ROS2
+
+Use this when you want to test the mock executor itself before involving ROS2
+or the C++ BT runner.
+
+This does not start any ROS2 service.
+
+```bash
+conda activate lerobot
+cd ~/lerobot
+
+lerobot-bt-skill-sim --command skill:place_first_toast
+```
+
+To test both a recovery and a skill in sequence:
+
+```bash
+lerobot-bt-skill-sim \
+  --command recovery:recover_place_first_toast \
+  --command skill:place_first_toast
+```
+
+Use this level when your question is:
+
+```text
+Does the Python-side mock executor accept the command names and return the expected statuses?
+```
+
+### 12.2 Start the mock ROS2 skill server
+
+Use this when you want to validate the ROS2 service boundary used by the BT.
+
+Important:
+
+* `lerobot-bt-skill-sim --ros2-service` auto-resolves verification as `SUCCESS`
+* this is why BT subtrees can complete without a separate VLM process
+* if you want to simulate a VLM that manually reports `SUCCESS` or `FAILURE`, do not use this mock ROS2 server; use section `14.1` or section `13.3`
 
 ```bash
 conda activate lerobot
@@ -665,9 +934,46 @@ Expected:
 
 ```text
 /sandwich_bt/run_command
+/sandwich_bt/get_skill_verification
+/sandwich_bt/report_skill_verification
 ```
 
-### Terminal 2: test one BT subtree
+### 12.3 Manual ROS2 service calls without BT
+
+Use this when you want to test the service contract directly before starting
+the C++ runner.
+
+Terminal 2:
+
+```bash
+conda activate lerobot
+cd ~/lerobot
+source /opt/ros/jazzy/setup.bash
+source install/setup.bash
+
+ros2 service call /sandwich_bt/run_command \
+  sandwich_bt_interfaces/srv/RunNamedCommand \
+  "{kind: skill, name: place_first_toast, timeout_s: 0.0}"
+```
+
+Then query the verification state:
+
+```bash
+ros2 service call /sandwich_bt/get_skill_verification \
+  sandwich_bt_interfaces/srv/GetSkillVerification \
+  "{skill_name: place_first_toast}"
+```
+
+Because this is the mock ROS2 server, the verification result should already be
+resolved as `SUCCESS`.
+
+Use this level when your question is:
+
+```text
+Do the service names, request fields, and response fields line up before I involve the BT?
+```
+
+### 12.4 Test one BT subtree
 
 ```bash
 conda activate lerobot
@@ -687,7 +993,7 @@ place_first_toast
 Behavior tree completed with SUCCESS.
 ```
 
-### Terminal 2: test the full sandwich BT
+### 12.5 Test the full sandwich BT
 
 ```bash
 ros2 run sandwich_bt_runtime_cpp sandwich_bt_runner
@@ -705,11 +1011,27 @@ place_second_toast
 Behavior tree completed with SUCCESS.
 ```
 
+### 12.6 Automatic sandwich BT tests
+
+Use this when you want the repository test suite to exercise the mock logic,
+verification flow, supervisor contracts, and collaborative runner.
+
+```bash
+uv run pytest tests/sandwich_bt -q
+```
+
 If this succeeds, the correct statement is:
 
 ```text
 The BT works in simulation: BehaviorTree.CPP calls the ROS2 RunNamedCommand service and receives successful mock command results.
 ```
+
+What to do next:
+
+* If you only care about BT orchestration, you are done.
+* If you want to check that the real Python server boots, go to section `14`.
+* If you want collaborative robot-human testing without hardware, go to section `15`.
+* If you want to approach real robot execution, go to section `13`.
 
 ---
 
@@ -717,7 +1039,8 @@ The BT works in simulation: BehaviorTree.CPP calls the ROS2 RunNamedCommand serv
 
 Use this when you want the same BT orchestration to call the real Python skill server instead of the mock server.
 
-This is the first step toward real robot execution.
+This is the first hardware-facing step. Do not start here unless section `12`
+already works.
 
 ### What stays the same compared to simulation
 
@@ -760,7 +1083,7 @@ Before starting the real skill server, verify:
 * robot workspace is clear;
 * the YAML config contains the same skill/recovery names used in the BT XML.
 
-### Terminal 1: start the real skill server
+### 13.1 Terminal 1: start the real skill server
 
 ```bash
 conda activate lerobot
@@ -782,9 +1105,98 @@ Expected output:
 
 ```text
 /sandwich_bt/run_command
+/sandwich_bt/get_skill_verification
+/sandwich_bt/report_skill_verification
 ```
 
-### Terminal 2: start with the smallest safe BT
+### 13.2 Terminal 2: test one skill call before starting the BT
+
+Use this when you want the smallest possible hardware-facing check.
+
+```bash
+conda activate lerobot
+cd ~/lerobot
+source /opt/ros/jazzy/setup.bash
+source install/setup.bash
+
+ros2 service call /sandwich_bt/run_command \
+  sandwich_bt_interfaces/srv/RunNamedCommand \
+  "{kind: skill, name: place_first_toast, timeout_s: 0.0}"
+```
+
+If the skill execution succeeds, the Python server will open a `PENDING`
+verification attempt for `place_first_toast`.
+
+Query it with:
+
+```bash
+ros2 service call /sandwich_bt/get_skill_verification \
+  sandwich_bt_interfaces/srv/GetSkillVerification \
+  "{skill_name: place_first_toast}"
+```
+
+At this point the correct expectation is:
+
+```text
+has_attempt: true
+status: PENDING
+```
+
+### 13.3 Terminal 3: simulate the VLM on the real server
+
+Use this when the robot or the real skill server is running, but you still want
+to fake the external scene verifier.
+
+Start the VLM stub:
+
+```bash
+conda activate lerobot
+cd ~/lerobot
+source /opt/ros/jazzy/setup.bash
+source install/setup.bash
+
+python -m sandwich_bt_python.vlm_stub
+```
+
+Then, from another terminal, publish one fake VLM verdict:
+
+```bash
+conda activate lerobot
+cd ~/lerobot
+source /opt/ros/jazzy/setup.bash
+source install/setup.bash
+
+ros2 topic pub /sandwich_bt/vlm_sim std_msgs/msg/String \
+  "{data: '{\"skill_name\":\"place_first_toast\",\"status\":\"SUCCESS\",\"confidence\":0.95,\"message\":\"scene ok\"}'}" -1
+```
+
+Then query the verification state again:
+
+```bash
+ros2 service call /sandwich_bt/get_skill_verification \
+  sandwich_bt_interfaces/srv/GetSkillVerification \
+  "{skill_name: place_first_toast}"
+```
+
+Now the expected status is `SUCCESS`.
+
+This is the clearest way to simulate "a VLM that controls the scene verdict"
+without having a real VLM implementation.
+
+### 13.4 If you already have a real VLM client
+
+The real VLM does not need to publish on `/sandwich_bt/vlm_sim`. It can call
+`ReportSkillVerification` directly:
+
+```bash
+ros2 service call /sandwich_bt/report_skill_verification \
+  sandwich_bt_interfaces/srv/ReportSkillVerification \
+  "{skill_name: place_first_toast, attempt_id: 0, status: SUCCESS, message: 'vlm ok', confidence: 0.92}"
+```
+
+`attempt_id: 0` means "apply the verdict to the latest pending attempt".
+
+### 13.5 Terminal 2: start with the smallest safe BT
 
 Do not start with the full tree on real hardware.
 
@@ -814,6 +1226,107 @@ ros2 run sandwich_bt_runtime_cpp sandwich_bt_runner --ros-args \
   -p tree_xml_path:="$(pwd)/src/sandwich_bt_runtime_cpp/trees/place_first_toast_subtree.xml"
 ```
 
+### 13.6 Test first primitive real, remaining primitives simulated
+
+Use this when only `place_first_toast` has a trained real policy, but you still
+want the BT to continue through the full sandwich sequence.
+
+This tree runs:
+
+* `recover_place_first_toast` as a real recovery
+* `place_first_toast` as a real learned skill
+* `recover_pour` as a simulated recovery
+* `pour` as a simulated, auto-verified skill
+* `recover_place_second_toast` as a simulated recovery
+* `place_second_toast` as a simulated, auto-verified skill
+
+Terminal 1, real skill server:
+
+```bash
+conda activate lerobot
+cd ~/lerobot
+source /opt/ros/jazzy/setup.bash
+source install/setup.bash
+
+lerobot-bt-skill-server \
+  --config_path "$(pwd)/src/sandwich_bt_python/sandwich_bt_executor.yaml"
+```
+
+Leave this terminal running.
+
+Terminal 2, simulated VLM verifier:
+
+```bash
+conda activate lerobot
+cd ~/lerobot
+source /opt/ros/jazzy/setup.bash
+source install/setup.bash
+
+python -m sandwich_bt_python.vlm_stub
+```
+
+Leave this terminal running too. It listens on `/sandwich_bt/vlm_sim` and
+forwards each JSON verdict to `/sandwich_bt/report_skill_verification`.
+
+Terminal 3, BT runner:
+
+```bash
+conda activate lerobot
+cd ~/lerobot
+source /opt/ros/jazzy/setup.bash
+source install/setup.bash
+
+ros2 run sandwich_bt_runtime_cpp sandwich_bt_runner --ros-args \
+  -p tree_xml_path:="$(pwd)/src/sandwich_bt_runtime_cpp/trees/sandwich_tree_first_real_rest_simulated.xml"
+```
+
+What happens next:
+
+1. the BT runs the real `recover_place_first_toast`
+2. the BT runs the real `place_first_toast`
+3. the Python server opens a `PENDING` verification attempt for `place_first_toast`
+4. the BT waits inside `VerifySkillOutcome`
+5. the simulated `pour` and `place_second_toast` steps will run only after `place_first_toast` is verified
+
+Terminal 4, publish the simulated VLM verdict after checking the scene:
+
+```bash
+conda activate lerobot
+cd ~/lerobot
+source /opt/ros/jazzy/setup.bash
+source install/setup.bash
+
+ros2 topic pub /sandwich_bt/vlm_sim std_msgs/msg/String \
+  "{data: '{\"skill_name\":\"place_first_toast\",\"status\":\"SUCCESS\",\"confidence\":0.95,\"message\":\"first toast ok\"}'}" -1
+```
+
+Use `SUCCESS` only if the first toast is actually correct in the scene.
+
+If the first toast is wrong and you want the BT to retry the first primitive,
+publish `FAILURE` instead:
+
+```bash
+ros2 topic pub /sandwich_bt/vlm_sim std_msgs/msg/String \
+  "{data: '{\"skill_name\":\"place_first_toast\",\"status\":\"FAILURE\",\"confidence\":0.95,\"message\":\"first toast not on plate\"}'}" -1
+```
+
+With `FAILURE`, `VerifySkillOutcome` returns BT `FAILURE`, and the surrounding
+`RetryUntilSuccessful` reruns:
+
+```text
+recover_place_first_toast
+place_first_toast
+VerifySkillOutcome
+```
+
+If later you want the simulated `pour` or `place_second_toast` steps to wait
+for a VLM too, edit only the BT XML and change their command kind from
+`simulated_skill` to `simulated_skill_pending`.
+
+The simulated skill names do not need a trained policy in
+`sandwich_bt_executor.yaml`. The server registers simulated skill names for
+verification at runtime and does not load a checkpoint for them.
+
 Only after single-step tests are safe should you run the full tree:
 
 ```bash
@@ -837,6 +1350,9 @@ A BT-level `SUCCESS` alone is not enough to claim physical task success.
 ## 14. Headless Server Startup Test
 
 Use this to check that the real Python server can start without physical hardware.
+
+Use this after section `12` if your next question is "can the real server boot
+and parse its config?" rather than "can the robot already act safely?".
 
 ```bash
 conda activate lerobot
@@ -864,9 +1380,116 @@ It does not validate:
 
 If you run a BT against the headless server, the headless config must define all command names requested by the BT. Otherwise the BT will correctly fail with `Unknown skill` or `Unknown recovery`.
 
+### 14.1 Simulate the external VLM without hardware
+
+Use this flow when you want to test the full verification handshake:
+
+* `/sandwich_bt/run_command`
+* `/sandwich_bt/get_skill_verification`
+* `/sandwich_bt/report_skill_verification`
+* `vlm_stub.py`
+
+without using Panda hardware.
+
+Important:
+
+* the current `sandwich_bt_executor_headless.yaml` defines `test_skill` and `recover_test`
+* it does not define `place_first_toast`, `pour`, or `place_second_toast`
+* so this flow is for verification-path testing, not for running `sandwich_tree.xml` as-is
+
+Terminal 1, headless server:
+
+```bash
+conda activate lerobot
+cd ~/lerobot
+source /opt/ros/jazzy/setup.bash
+source install/setup.bash
+
+lerobot-bt-skill-server \
+  --config_path "$(pwd)/src/sandwich_bt_python/sandwich_bt_executor_headless.yaml"
+```
+
+Terminal 2, VLM stub:
+
+```bash
+conda activate lerobot
+cd ~/lerobot
+source /opt/ros/jazzy/setup.bash
+source install/setup.bash
+
+python -m sandwich_bt_python.vlm_stub
+```
+
+Terminal 3, trigger one headless skill:
+
+```bash
+conda activate lerobot
+cd ~/lerobot
+source /opt/ros/jazzy/setup.bash
+source install/setup.bash
+
+ros2 service call /sandwich_bt/run_command \
+  sandwich_bt_interfaces/srv/RunNamedCommand \
+  "{kind: skill, name: test_skill, timeout_s: 0.0}"
+```
+
+Before publishing the fake VLM verdict, check that verification is pending:
+
+```bash
+ros2 service call /sandwich_bt/get_skill_verification \
+  sandwich_bt_interfaces/srv/GetSkillVerification \
+  "{skill_name: test_skill}"
+```
+
+Expected state before the VLM verdict:
+
+```text
+has_attempt: true
+status: PENDING
+```
+
+Terminal 4, publish the fake VLM verdict:
+
+```bash
+conda activate lerobot
+cd ~/lerobot
+source /opt/ros/jazzy/setup.bash
+source install/setup.bash
+
+ros2 topic pub /sandwich_bt/vlm_sim std_msgs/msg/String \
+  "{data: '{\"skill_name\":\"test_skill\",\"status\":\"SUCCESS\",\"confidence\":0.95,\"message\":\"scene ok\"}'}" -1
+```
+
+Query the verification state again:
+
+```bash
+ros2 service call /sandwich_bt/get_skill_verification \
+  sandwich_bt_interfaces/srv/GetSkillVerification \
+  "{skill_name: test_skill}"
+```
+
+Expected state after the fake VLM verdict:
+
+```text
+has_attempt: true
+status: SUCCESS
+```
+
+If you want to simulate a failure instead, publish the same message with
+`"status":"FAILURE"`.
+
 ---
 
 ## 15. Collaborative Simulation
+
+Use this section to validate the robot-human supervisor logic without touching
+real hardware.
+
+Important:
+
+* this section does not use `vlm_stub.py`
+* in `--mock-scene` mode, the runner updates a deterministic closed-set scene internally
+* use sections `13.3` or `14.1` if you specifically want to simulate an external VLM verdict
 
 ### 15.1 Supervisor server live
 
@@ -1024,6 +1647,18 @@ If `/sandwich_bt/run_command` is not running, expected:
 ```text
 exit code 2
 ```
+
+What this proves:
+
+* the supervisor can choose the next closed-set sandwich step;
+* the runner can execute the `robot -> human -> robot` flow;
+* the simulated robot backend and service boundaries are wired correctly.
+
+What this does not prove:
+
+* real Panda motion;
+* real camera observations;
+* real learned policy quality.
 
 ---
 
@@ -1353,6 +1988,26 @@ or add the recovery to the active config.
 
 The same applies to unknown skills.
 
+### `vlm_stub.py` says that no verification attempt exists
+
+Cause:
+
+* the skill has not been executed yet;
+* or you are using `lerobot-bt-skill-sim --ros2-service`, which auto-resolves verification and therefore is not the right target for manual VLM simulation.
+
+Fix:
+
+* first call `/sandwich_bt/run_command` for the target skill;
+* then query `/sandwich_bt/get_skill_verification`;
+* if you want a pending attempt that waits for an external verdict, use:
+
+```bash
+lerobot-bt-skill-server \
+  --config_path "$(pwd)/src/sandwich_bt_python/sandwich_bt_executor_headless.yaml"
+```
+
+for headless verification-flow tests, or the real hardware config for robot tests.
+
 ### `draccus` error: choice class for `panda` not found
 
 Error shape:
@@ -1484,6 +2139,40 @@ Expected:
 
 ```text
 Behavior tree completed with SUCCESS.
+```
+
+### Headless verification flow with simulated VLM
+
+Terminal 1:
+
+```bash
+lerobot-bt-skill-server \
+  --config_path "$(pwd)/src/sandwich_bt_python/sandwich_bt_executor_headless.yaml"
+```
+
+Terminal 2:
+
+```bash
+python -m sandwich_bt_python.vlm_stub
+```
+
+Terminal 3:
+
+```bash
+source /opt/ros/jazzy/setup.bash
+source install/setup.bash
+ros2 service call /sandwich_bt/run_command \
+  sandwich_bt_interfaces/srv/RunNamedCommand \
+  "{kind: skill, name: test_skill, timeout_s: 0.0}"
+```
+
+Terminal 4:
+
+```bash
+source /opt/ros/jazzy/setup.bash
+source install/setup.bash
+ros2 topic pub /sandwich_bt/vlm_sim std_msgs/msg/String \
+  "{data: '{\"skill_name\":\"test_skill\",\"status\":\"SUCCESS\",\"confidence\":0.95,\"message\":\"scene ok\"}'}" -1
 ```
 
 ### Real-time BT, first primitive only

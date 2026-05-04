@@ -11,7 +11,6 @@ from __future__ import annotations
 from dataclasses import dataclass
 from threading import Lock
 
-
 PENDING_VERIFICATION_STATUS = "PENDING"
 SUCCESSFUL_VERIFICATION_STATUS = "SUCCESS"
 FAILED_VERIFICATION_STATUS = "FAILURE"
@@ -47,6 +46,13 @@ class SkillVerificationRegistry:
         self._attempt_counters: dict[str, int] = {}
         self._attempts: dict[str, SkillVerificationSnapshot] = {}
         self._lock = Lock()
+
+    def register_skill_name(self, skill_name: str) -> None:
+        """Allow later verification calls for a skill discovered at runtime."""
+        if not skill_name:
+            raise ValueError("skill_name must not be empty.")
+        with self._lock:
+            self._known_skill_names.add(skill_name)
 
     def begin_attempt(self, skill_name: str, *, message: str = "") -> SkillVerificationSnapshot:
         """Create a fresh pending verification state for one skill attempt."""

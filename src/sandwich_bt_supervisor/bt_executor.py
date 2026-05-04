@@ -1,5 +1,3 @@
-"""Minimal BT XML interpreter for contract tests."""
-
 """Execute robot subtasks through BT XML subtrees and RunNamedCommand requests."""
 
 from __future__ import annotations
@@ -39,9 +37,13 @@ class BtXmlRobotExecutor:
         *,
         command_backend: NamedCommandBackend,
         on_step_success: Callable[[str], None] | None = None,
+        max_unbounded_retry_attempts: int = 3,
     ) -> None:
+        if max_unbounded_retry_attempts <= 0:
+            raise ValueError("max_unbounded_retry_attempts must be > 0.")
         self._command_backend = command_backend
         self._on_step_success = on_step_success or (lambda _step_name: None)
+        self._max_unbounded_retry_attempts = max_unbounded_retry_attempts
         self.command_history: list[ExecutedBtCommand] = []
 
     def execute(self, primitive: TaskPrimitive) -> StepExecutionResult:
@@ -110,6 +112,8 @@ class BtXmlRobotExecutor:
             return self._execute_retry(node, tree_xml_path=tree_xml_path)
         if tag == "RunNamedCommand":
             return self._execute_command(node, tree_xml_path=tree_xml_path, attempt_index=attempt_index)
+        if tag == "VerifySkillOutcome":
+            return True, 0.0, f"Mock verification accepted skill '{node.attrib['skill_name']}'."
         raise ValueError(f"Unsupported BT node '{tag}' in '{tree_xml_path}'.")
 
     def _execute_sequence(
@@ -146,7 +150,10 @@ class BtXmlRobotExecutor:
             raise ValueError(f"RetryUntilSuccessful in '{tree_xml_path}' must wrap exactly one child.")
 
         child = child_nodes[0]
-        num_attempts = int(node.attrib["num_attempts"])
+        configured_attempts = int(node.attrib["num_attempts"])
+        num_attempts = (
+            self._max_unbounded_retry_attempts if configured_attempts < 0 else configured_attempts
+        )
         total_elapsed_s = 0.0
         last_message = "Retry subtree did not execute."
 

@@ -16,7 +16,6 @@ Requirements: source your ROS2 workspace so `rclpy` and
 from __future__ import annotations
 
 import json
-import logging
 from typing import Any
 
 import rclpy
@@ -31,6 +30,8 @@ class VLMStubNode(Node):
         # Service clients
         from sandwich_bt_interfaces.srv import GetSkillVerification, ReportSkillVerification  # type: ignore
 
+        self._get_service_type = GetSkillVerification
+        self._report_service_type = ReportSkillVerification
         self._get_client = self.create_client(GetSkillVerification, "/sandwich_bt/get_skill_verification")
         self._report_client = self.create_client(ReportSkillVerification, "/sandwich_bt/report_skill_verification")
 
@@ -58,20 +59,35 @@ class VLMStubNode(Node):
         message = str(payload.get("message", ""))
         confidence = float(payload.get("confidence", 0.0))
 
-        # 1) Query latest attempt for the skill
+        get_req = self._get_service_type.Request()
+        get_req.skill_name = skill_name
+
+        if not self._get_client.wait_for_service(timeout_sec=2.0):
+            self.get_logger().error("GetSkillVerification service not available.")
+            return
+
+        get_future = self._get_client.call_async(get_req)
+        get_future.add_done_callback(
+            lambda future: self._on_get_skill_verification_done(
+                future,
+                skill_name=skill_name,
+                status=status,
+                message=message,
+                confidence=confidence,
+            )
+        )
+
+    def _on_get_skill_verification_done(
+        self,
+        future: Any,
+        *,
+        skill_name: str,
+        status: str,
+        message: str,
+        confidence: float,
+    ) -> None:
         try:
-            from sandwich_bt_interfaces.srv import GetSkillVerification, ReportSkillVerification  # type: ignore
-
-            get_req = GetSkillVerification.Request()
-            get_req.skill_name = skill_name
-
-            if not self._get_client.wait_for_service(timeout_sec=2.0):
-                self.get_logger().error("GetSkillVerification service not available.")
-                return
-
-            get_future = self._get_client.call_async(get_req)
-            rclpy.spin_until_future_complete(self, get_future, timeout_sec=5.0)
-            get_res = get_future.result()
+            get_res = future.result()
         except Exception as exc:  # noqa: BLE001
             self.get_logger().error(f"Failed to call GetSkillVerification: {exc}")
             return
@@ -82,22 +98,23 @@ class VLMStubNode(Node):
 
         attempt_id = int(get_res.attempt_id)
 
-        # 2) Report the verification result using the attempt id
+        report_req = self._report_service_type.Request()
+        report_req.skill_name = skill_name
+        report_req.attempt_id = attempt_id
+        report_req.status = status
+        report_req.message = message
+        report_req.confidence = float(confidence)
+
+        if not self._report_client.wait_for_service(timeout_sec=2.0):
+            self.get_logger().error("ReportSkillVerification service not available.")
+            return
+
+        report_future = self._report_client.call_async(report_req)
+        report_future.add_done_callback(self._on_report_skill_verification_done)
+
+    def _on_report_skill_verification_done(self, future: Any) -> None:
         try:
-            report_req = ReportSkillVerification.Request()
-            report_req.skill_name = skill_name
-            report_req.attempt_id = int(attempt_id)
-            report_req.status = status
-            report_req.message = message
-            report_req.confidence = float(confidence)
-
-            if not self._report_client.wait_for_service(timeout_sec=2.0):
-                self.get_logger().error("ReportSkillVerification service not available.")
-                return
-
-            report_future = self._report_client.call_async(report_req)
-            rclpy.spin_until_future_complete(self, report_future, timeout_sec=5.0)
-            report_res = report_future.result()
+            report_res = future.result()
         except Exception as exc:  # noqa: BLE001
             self.get_logger().error(f"Failed to call ReportSkillVerification: {exc}")
             return

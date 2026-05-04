@@ -1,5 +1,3 @@
-"""Closed-set scene state types and helpers for supervisor decisions."""
-
 """Minimal scene-state estimation for the collaborative sandwich task."""
 
 from __future__ import annotations

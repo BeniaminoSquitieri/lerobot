@@ -43,6 +43,7 @@ Those belong to `sandwich_bt_python`.
 - `include/sandwich_bt_runtime_cpp/verify_skill_outcome_node.hpp`: verification leaf declaration
 - `trees/sandwich_tree.xml`: full sandwich task tree
 - `trees/sandwich_tree_first_primitive_only.xml`: bring-up tree for only `place_first_toast`
+- `trees/sandwich_tree_first_real_rest_simulated.xml`: bring-up tree that runs `place_first_toast` as real and simulates the remaining primitives
 - `trees/place_first_toast_subtree.xml`: retry/recovery subtree for the first toast step
 - `trees/pour_subtree.xml`: retry/recovery subtree for the pouring step
 - `trees/place_second_toast_subtree.xml`: retry/recovery subtree for the second toast step
@@ -126,7 +127,9 @@ Python executor.
 ## BT Ports And Naming
 
 - The leaf expects the port name `command_name`, not `name`.
-- `kind` must currently be `skill` or `recovery`.
+- `kind` is forwarded as an opaque string. The Python server currently handles
+  `skill`, `recovery`, `simulated_skill`, `simulated_skill_pending`, and
+  `simulated_recovery`.
 - `timeout_s` is optional and overrides the Python-side default for that one
   leaf execution.
 - `VerifySkillOutcome` expects the port `skill_name`.

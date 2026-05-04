@@ -1,5 +1,3 @@
-"""Human handoff interface used by the collaborative runner."""
-
 """Human-step execution with explicit confirmation and scene verification."""
 
 from __future__ import annotations

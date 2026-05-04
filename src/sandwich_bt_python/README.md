@@ -51,7 +51,8 @@ One BT leaf request flows through this package in the following order:
 1. `server.py` receives one `RunNamedCommand` request from the C++ BT runtime.
 2. The request is dispatched by `kind`:
    `skill` goes to `SkillCommandExecutor.execute_skill`, `recovery` goes to
-   `SkillCommandExecutor.execute_named_recovery`.
+   `SkillCommandExecutor.execute_named_recovery`. Simulation kinds are handled
+   directly by the server without touching the robot.
 3. For a learned skill, `executor.py` resolves the command `name` against the
    YAML config and lazily builds a `SkillRuntime` bundle:
    dataset metadata, policy, preprocessor, and postprocessor.
@@ -69,6 +70,20 @@ One BT leaf request flows through this package in the following order:
 
 The important boundary is that this package never decides BT ordering. It only
 executes the one named command it was asked to run.
+
+## Command Kinds
+
+The C++ BT forwards the `kind` string from XML to this package.
+
+- `skill`: run a configured learned primitive on the active robot backend
+- `recovery`: run a configured scripted recovery on the active robot backend
+- `simulated_recovery`: return `SUCCESS` without moving the robot
+- `simulated_skill`: return `SUCCESS`, open a verification attempt, and auto-mark it as `SUCCESS`
+- `simulated_skill_pending`: return `SUCCESS`, open a verification attempt, and leave it `PENDING` for a VLM or manual verifier
+
+This lets bring-up trees mix real and simulated primitives by editing only BT
+XML. For example, a tree can run `place_first_toast` with `kind="skill"` while
+running `pour` with `kind="simulated_skill"`.
 
 ## Runtime Model
 

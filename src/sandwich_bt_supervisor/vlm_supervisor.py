@@ -1,5 +1,3 @@
-"""Supervisor policy layer for closed-set sandwich planning/verification."""
-
 """Supervisor that allocates closed-set sandwich subtasks to robot or human."""
 
 from __future__ import annotations

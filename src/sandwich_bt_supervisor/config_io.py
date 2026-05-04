@@ -1,5 +1,3 @@
-"""YAML configuration loader for the supervisor runtime."""
-
 """YAML loader for the closed-set sandwich supervisor config."""
 
 from __future__ import annotations

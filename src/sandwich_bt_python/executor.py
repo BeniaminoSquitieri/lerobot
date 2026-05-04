@@ -1,7 +1,3 @@
-"""Execution backend for learned skills and scripted recoveries."""
-
-from __future__ import annotations
-
 """Execution backend for learned skills and scripted recoveries.
 
 Flow role:
@@ -12,26 +8,33 @@ Flow role:
 5. It returns SUCCESS/FAILURE/ERROR back to the server.
 """
 
+from __future__ import annotations
+
 import logging
 import threading
 import time
 from dataclasses import dataclass
+from typing import TYPE_CHECKING
 
+from lerobot.common.control_utils import predict_action
 from lerobot.policies.factory import make_policy, make_pre_post_processors
 from lerobot.policies.pretrained import PreTrainedPolicy
 from lerobot.policies.utils import make_robot_action
 from lerobot.processor import PolicyAction, PolicyProcessorPipeline, RobotProcessorPipeline
 from lerobot.processor.rename_processor import rename_stats
-from lerobot.common.control_utils import predict_action
+from lerobot.utils.constants import OBS_STR
 from lerobot.utils.device_utils import get_safe_torch_device
 from lerobot.utils.feature_utils import build_dataset_frame
-from lerobot.utils.constants import OBS_STR
 from lerobot.utils.robot_utils import precise_sleep
 from lerobot.utils.visualization_utils import log_rerun_data
 
 from .conditions import evaluate_all, evaluate_any
-from .config import PrimitiveSkillConfig, RecoveryConfig, SkillCommandServerConfig
+from .config import PrimitiveSkillConfig, SkillCommandServerConfig
 from .recoveries import execute_recovery
+
+if TYPE_CHECKING:
+    from lerobot.datasets.lerobot_dataset import LeRobotDatasetMetadata
+    from lerobot.robots.custom_manipulator.custom_manipulator import CustomManipulator
 
 
 @dataclass
@@ -39,7 +42,7 @@ class SkillRuntime:
     # Runtime bundle for one learned primitive:
     # config + dataset metadata + policy + processors.
     cfg: PrimitiveSkillConfig
-    ds_meta: "LeRobotDatasetMetadata"
+    ds_meta: LeRobotDatasetMetadata
     policy: PreTrainedPolicy
     preprocessor: PolicyProcessorPipeline[dict, dict]
     postprocessor: PolicyProcessorPipeline[PolicyAction, PolicyAction]
@@ -66,7 +69,7 @@ def _build_skill_runtime(
     # This is where a skill name becomes:
     # dataset metadata + policy checkpoint + processors.
     from lerobot.datasets.lerobot_dataset import LeRobotDatasetMetadata
-    
+
     ds_meta = LeRobotDatasetMetadata(
         skill_cfg.dataset_repo_id,
         root=skill_cfg.dataset_root,
@@ -92,7 +95,7 @@ def _build_skill_runtime(
 
 
 class SkillCommandExecutor:
-    def __init__(self, cfg: SkillCommandServerConfig, robot: "CustomManipulator") -> None:
+    def __init__(self, cfg: SkillCommandServerConfig, robot: CustomManipulator) -> None:
         self.cfg = cfg
         self.robot = robot
         # Names are the bridge between the BT XML and the policy configs.

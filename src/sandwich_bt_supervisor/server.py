@@ -1,5 +1,3 @@
-"""Thin ROS2 adapter for the collaborative sandwich supervisor."""
-
 #!/usr/bin/env python
 
 """ROS2 service server for the collaborative sandwich supervisor."""
