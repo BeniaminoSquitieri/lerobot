@@ -80,6 +80,7 @@ coverage.xml
 
 ### Logs & Temporary Files ###
 logs/
+log/
 tmp/
 *.log
 pip-log.txt
