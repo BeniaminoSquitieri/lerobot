@@ -6,6 +6,8 @@
 # 3. The corresponding learned skill or recovery is executed on the robot.
 
 service_name: "/sandwich_bt/run_command"
+verification_query_service_name: "/sandwich_bt/get_skill_verification"
+verification_report_service_name: "/sandwich_bt/report_skill_verification"
 
 # Real robot configuration used by the Python server.
 robot:

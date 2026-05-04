@@ -1,24 +1,27 @@
 <root BTCPP_format="4" main_tree_to_execute="MainTree">
   <BehaviorTree ID="MainTree">
     <Sequence name="sandwich_task">
-      <RetryUntilSuccessful num_attempts="3">
+      <RetryUntilSuccessful num_attempts="-1">
         <Sequence name="place_first_toast_with_recovery">
           <RunNamedCommand kind="recovery" command_name="recover_place_first_toast"/>
           <RunNamedCommand kind="skill" command_name="place_first_toast"/>
+          <VerifySkillOutcome skill_name="place_first_toast"/>
         </Sequence>
       </RetryUntilSuccessful>
 
-      <RetryUntilSuccessful num_attempts="2">
+      <RetryUntilSuccessful num_attempts="-1">
         <Sequence name="pour_with_recovery">
           <RunNamedCommand kind="recovery" command_name="recover_pour"/>
           <RunNamedCommand kind="skill" command_name="pour"/>
+          <VerifySkillOutcome skill_name="pour"/>
         </Sequence>
       </RetryUntilSuccessful>
 
-      <RetryUntilSuccessful num_attempts="3">
+      <RetryUntilSuccessful num_attempts="-1">
         <Sequence name="place_second_toast_with_recovery">
           <RunNamedCommand kind="recovery" command_name="recover_place_second_toast"/>
           <RunNamedCommand kind="skill" command_name="place_second_toast"/>
+          <VerifySkillOutcome skill_name="place_second_toast"/>
         </Sequence>
       </RetryUntilSuccessful>
     </Sequence>

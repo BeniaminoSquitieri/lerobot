@@ -63,7 +63,8 @@ BT::NodeStatus RunNamedCommandNode::onStart()
   request->name = name;
   request->timeout_s = static_cast<float>(timeout_s);
 
-  future_ = client_->async_send_request(request);
+  auto future_and_request_id = client_->async_send_request(request);
+  future_ = future_and_request_id.future.share();
   request_pending_ = true;
   RCLCPP_INFO(
     ros_node_->get_logger(),

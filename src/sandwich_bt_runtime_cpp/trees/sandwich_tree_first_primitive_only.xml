@@ -1,10 +1,11 @@
 <root BTCPP_format="4" main_tree_to_execute="MainTree">
   <BehaviorTree ID="MainTree">
     <Sequence name="single_primitive_test">
-      <RetryUntilSuccessful num_attempts="3">
+      <RetryUntilSuccessful num_attempts="-1">
         <Sequence name="place_first_toast_with_recovery">
           <RunNamedCommand kind="recovery" command_name="recover_place_first_toast"/>
           <RunNamedCommand kind="skill" command_name="place_first_toast"/>
+          <VerifySkillOutcome skill_name="place_first_toast"/>
         </Sequence>
       </RetryUntilSuccessful>
     </Sequence>

@@ -12,7 +12,9 @@ find_package(rosidl_default_generators REQUIRED)
 # Single contract used between BT orchestration and robot-facing execution.
 rosidl_generate_interfaces(${PROJECT_NAME}
   "srv/RunNamedCommand.srv"
+  "srv/GetSkillVerification.srv"
   "srv/PlanNextStep.srv"
+  "srv/ReportSkillVerification.srv"
   "srv/VerifyStep.srv"
 )
 

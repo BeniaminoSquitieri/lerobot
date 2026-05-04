@@ -45,6 +45,7 @@ using GrootPublisherT = BT::PublisherZMQ;
 #endif
 
 #include "sandwich_bt_runtime_cpp/run_named_command_node.hpp"
+#include "sandwich_bt_runtime_cpp/verify_skill_outcome_node.hpp"
 
 namespace
 {
@@ -68,11 +69,13 @@ int main(int argc, char** argv)
   auto node = std::make_shared<rclcpp::Node>("sandwich_bt_runner");
   node->declare_parameter<std::string>("tree_xml_path", default_tree_xml_path());
   node->declare_parameter<std::string>("service_name", "/sandwich_bt/run_command");
+  node->declare_parameter<std::string>("verify_service_name", "/sandwich_bt/get_skill_verification");
   node->declare_parameter<int>("tick_ms", 100);
   node->declare_parameter<bool>("enable_groot_publisher", true);
 
   const auto tree_xml_path = node->get_parameter("tree_xml_path").as_string();
   const auto service_name = node->get_parameter("service_name").as_string();
+  const auto verify_service_name = node->get_parameter("verify_service_name").as_string();
   const auto tick_ms = node->get_parameter("tick_ms").as_int();
   const auto enable_groot = node->get_parameter("enable_groot_publisher").as_bool();
 
@@ -86,6 +89,15 @@ int main(int argc, char** argv)
         config,
         node,
         service_name);
+    });
+  factory.registerBuilder<sandwich_bt_runtime_cpp::VerifySkillOutcomeNode>(
+    "VerifySkillOutcome",
+    [node, verify_service_name](const std::string& instance_name, const BT::NodeConfiguration& config) {
+      return std::make_unique<sandwich_bt_runtime_cpp::VerifySkillOutcomeNode>(
+        instance_name,
+        config,
+        node,
+        verify_service_name);
     });
 
   BT::Tree tree = factory.createTreeFromFile(tree_xml_path);

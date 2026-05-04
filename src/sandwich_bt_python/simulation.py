@@ -12,6 +12,11 @@ from dataclasses import dataclass, field
 from threading import Lock
 from typing import Any
 
+from .verification import (
+    UNKNOWN_VERIFICATION_STATUS,
+    SkillVerificationRegistry,
+)
+
 _ACTION_KEYS = (
     "position.x",
     "position.y",
@@ -29,7 +34,7 @@ class MockSkillTransition:
     max_duration_s: float = 0.5
 
     def __post_init__(self) -> None:
-        allowed_modes = {"timeout", "all_conditions", "all_conditions_or_timeout"}
+        allowed_modes = {"timeout", "all_conditions", "all_conditions_or_timeout", "until_success"}
         if self.mode not in allowed_modes:
             raise ValueError(f"Unsupported mode '{self.mode}'. Expected one of {sorted(allowed_modes)}.")
         if self.min_duration_s < 0:
@@ -91,6 +96,8 @@ class MockRecoveryConfig:
 class MockServerConfig:
     fps: int = 10
     service_name: str = "/sandwich_bt/run_command"
+    verification_query_service_name: str = "/sandwich_bt/get_skill_verification"
+    verification_report_service_name: str = "/sandwich_bt/report_skill_verification"
     display_data: bool = False
     play_sounds: bool = False
     rename_map: dict[str, str] = field(default_factory=dict)
@@ -240,6 +247,36 @@ class MockRunNamedCommandResponse:
 
 
 @dataclass
+class MockGetSkillVerificationRequest:
+    skill_name: str
+
+
+@dataclass
+class MockGetSkillVerificationResponse:
+    has_attempt: bool
+    attempt_id: int
+    status: str
+    message: str
+    confidence: float
+
+
+@dataclass
+class MockReportSkillVerificationRequest:
+    skill_name: str
+    status: str
+    attempt_id: int = 0
+    message: str = ""
+    confidence: float = 0.0
+
+
+@dataclass
+class MockReportSkillVerificationResponse:
+    accepted: bool
+    applied_attempt_id: int
+    message: str
+
+
+@dataclass
 class MockSkillRuntime:
     cfg: MockSkillConfig
     step_count: int = 0
@@ -281,8 +318,17 @@ class MockSkillCommandExecutor:
             skill.reset()
 
             target_dt_s = 1.0 / self.cfg.fps
-            timeout_s = timeout_override_s if timeout_override_s > 0 else skill.cfg.transition.max_duration_s
             elapsed_s = skill.cfg.settle_time_s
+
+            if skill.cfg.transition.mode == "until_success":
+                obs = self.robot.get_observation()
+                self._run_skill_step(skill, obs)
+                skill.step_count += 1
+                elapsed_s += target_dt_s
+                message = f"Skill '{skill_name}' completed in {elapsed_s:.2f}s."
+                return CommandResult(True, "SUCCESS", elapsed_s, message)
+
+            timeout_s = timeout_override_s if timeout_override_s > 0 else skill.cfg.transition.max_duration_s
 
             while elapsed_s < timeout_s:
                 obs = self.robot.get_observation()
@@ -393,12 +439,17 @@ class MockRunNamedCommandService:
         self,
         executor: MockSkillCommandExecutor,
         *,
+        auto_verify_status: str | None = None,
         scripted_responses: dict[tuple[str, str], list[MockRunNamedCommandResponse]] | None = None,
     ):
         self.executor = executor
         self.service_name = executor.cfg.service_name
+        self.verification_query_service_name = executor.cfg.verification_query_service_name
+        self.verification_report_service_name = executor.cfg.verification_report_service_name
+        self.auto_verify_status = auto_verify_status
         self.scripted_responses = scripted_responses if scripted_responses is not None else {}
         self.request_log: list[MockRunNamedCommandRequest] = []
+        self.verification_registry = SkillVerificationRegistry(known_skill_names=set(executor.skill_configs))
 
     def handle_request(self, request: MockRunNamedCommandRequest) -> MockRunNamedCommandResponse:
         self.request_log.append(request)
@@ -418,6 +469,22 @@ class MockRunNamedCommandService:
                 f"Unsupported command kind '{request.kind}'.",
             )
 
+        if request.kind == "skill" and result.success:
+            snapshot = self.verification_registry.begin_attempt(request.name)
+            result.message = (
+                f"{result.message} Verification attempt {snapshot.attempt_id} is now pending on "
+                f"'{self.verification_query_service_name}'."
+            )
+            if self.auto_verify_status is not None:
+                auto_update = self.verification_registry.report(
+                    skill_name=request.name,
+                    attempt_id=snapshot.attempt_id,
+                    status=self.auto_verify_status,
+                    message=f"Mock verifier auto-reported {self.auto_verify_status} for skill '{request.name}'.",
+                    confidence=1.0,
+                )
+                result.message = f"{result.message} {auto_update.message}"
+
         return MockRunNamedCommandResponse(
             success=result.success,
             status=result.status,
@@ -425,11 +492,67 @@ class MockRunNamedCommandService:
             message=result.message,
         )
 
+    def handle_verification_query(
+        self,
+        request: MockGetSkillVerificationRequest,
+    ) -> MockGetSkillVerificationResponse:
+        try:
+            snapshot = self.verification_registry.get_latest(request.skill_name)
+        except ValueError as exc:
+            return MockGetSkillVerificationResponse(
+                has_attempt=False,
+                attempt_id=0,
+                status=UNKNOWN_VERIFICATION_STATUS,
+                message=str(exc),
+                confidence=0.0,
+            )
+        if snapshot is None:
+            return MockGetSkillVerificationResponse(
+                has_attempt=False,
+                attempt_id=0,
+                status=UNKNOWN_VERIFICATION_STATUS,
+                message=f"No completed attempt has been recorded yet for skill '{request.skill_name}'.",
+                confidence=0.0,
+            )
+
+        return MockGetSkillVerificationResponse(
+            has_attempt=True,
+            attempt_id=snapshot.attempt_id,
+            status=snapshot.status,
+            message=snapshot.message,
+            confidence=snapshot.confidence,
+        )
+
+    def handle_verification_report(
+        self,
+        request: MockReportSkillVerificationRequest,
+    ) -> MockReportSkillVerificationResponse:
+        try:
+            update = self.verification_registry.report(
+                skill_name=request.skill_name,
+                attempt_id=request.attempt_id,
+                status=request.status,
+                message=request.message,
+                confidence=request.confidence,
+            )
+        except ValueError as exc:
+            return MockReportSkillVerificationResponse(
+                accepted=False,
+                applied_attempt_id=0,
+                message=str(exc),
+            )
+        return MockReportSkillVerificationResponse(
+            accepted=update.accepted,
+            applied_attempt_id=0 if update.snapshot is None else update.snapshot.attempt_id,
+            message=update.message,
+        )
+
 
 def build_demo_stack(
     use_delta_actions: bool = False,
     fps: int = 10,
     service_name: str = "/sandwich_bt/run_command",
+    auto_verify_status: str | None = None,
     scripted_responses: dict[tuple[str, str], list[MockRunNamedCommandResponse]] | None = None,
 ) -> MockRunNamedCommandService:
     robot = MockCustomManipulator(
@@ -488,7 +611,11 @@ def build_demo_stack(
         ],
     )
     executor = MockSkillCommandExecutor(cfg=cfg, robot=robot)
-    return MockRunNamedCommandService(executor, scripted_responses=scripted_responses)
+    return MockRunNamedCommandService(
+        executor,
+        auto_verify_status=auto_verify_status,
+        scripted_responses=scripted_responses,
+    )
 
 
 def build_ros2_demo_stack(
@@ -496,7 +623,12 @@ def build_ros2_demo_stack(
     fps: int = 10,
     service_name: str = "/sandwich_bt/run_command",
 ) -> MockRunNamedCommandService:
-    return build_demo_stack(use_delta_actions=use_delta_actions, fps=fps, service_name=service_name)
+    return build_demo_stack(
+        use_delta_actions=use_delta_actions,
+        fps=fps,
+        service_name=service_name,
+        auto_verify_status="SUCCESS",
+    )
 
 
 def default_command_sequence() -> list[MockRunNamedCommandRequest]:
@@ -551,7 +683,7 @@ def run_ros2_service(
         import rclpy
         from rclpy.node import Node
 
-        from sandwich_bt_interfaces.srv import RunNamedCommand
+        from sandwich_bt_interfaces.srv import GetSkillVerification, ReportSkillVerification, RunNamedCommand
     except ModuleNotFoundError as exc:  # pragma: no cover - depends on ROS2 install
         raise RuntimeError(
             "ROS2 simulation mode requires rclpy and sandwich_bt_interfaces. "
@@ -562,7 +694,17 @@ def run_ros2_service(
         def __init__(self) -> None:
             super().__init__("sandwich_bt_skill_server_sim")
             self._service_impl = service
-            self._service = self.create_service(RunNamedCommand, service.service_name, self._handle_request)
+            self._command_service = self.create_service(RunNamedCommand, service.service_name, self._handle_request)
+            self._verification_query_service = self.create_service(
+                GetSkillVerification,
+                service.verification_query_service_name,
+                self._handle_verification_query,
+            )
+            self._verification_report_service = self.create_service(
+                ReportSkillVerification,
+                service.verification_report_service_name,
+                self._handle_verification_report,
+            )
             self.get_logger().info(f"Serving mock BT commands on '{service.service_name}'.")
 
         def _handle_request(self, request, response):
@@ -576,6 +718,32 @@ def run_ros2_service(
             response.success = result.success
             response.status = result.status
             response.elapsed_s = float(result.elapsed_s)
+            response.message = result.message
+            return response
+
+        def _handle_verification_query(self, request, response):
+            result = self._service_impl.handle_verification_query(
+                MockGetSkillVerificationRequest(skill_name=request.skill_name)
+            )
+            response.has_attempt = bool(result.has_attempt)
+            response.attempt_id = int(result.attempt_id)
+            response.status = result.status
+            response.message = result.message
+            response.confidence = float(result.confidence)
+            return response
+
+        def _handle_verification_report(self, request, response):
+            result = self._service_impl.handle_verification_report(
+                MockReportSkillVerificationRequest(
+                    skill_name=request.skill_name,
+                    status=request.status,
+                    attempt_id=int(request.attempt_id),
+                    message=request.message,
+                    confidence=float(request.confidence),
+                )
+            )
+            response.accepted = bool(result.accepted)
+            response.applied_attempt_id = int(result.applied_attempt_id)
             response.message = result.message
             return response
 

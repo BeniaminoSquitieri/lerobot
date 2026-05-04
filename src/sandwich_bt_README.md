@@ -69,6 +69,8 @@ Does not own:
 Owns the ROS2 service contracts:
 
 * `RunNamedCommand.srv`
+* `GetSkillVerification.srv`
+* `ReportSkillVerification.srv`
 * `PlanNextStep.srv`
 * `VerifyStep.srv`
 
@@ -95,8 +97,12 @@ Robot-only runtime flow:
 2. A `RunNamedCommand` BT leaf sends a ROS2 service request.
 3. The Python skill server receives `kind`, `name`, and optional `timeout_s`.
 4. The Python executor runs either one learned skill or one scripted recovery.
-5. The Python server returns `success`, `status`, `elapsed_s`, and `message`.
-6. The C++ BT converts that reply into BT `SUCCESS` or `FAILURE`.
+5. If the command is a skill and the rollout succeeds, the Python server opens a
+   `PENDING` verification attempt for that skill name.
+6. The Python server returns `success`, `status`, `elapsed_s`, and `message`.
+7. A `VerifySkillOutcome` BT leaf polls `/sandwich_bt/get_skill_verification`
+   until an external verifier reports `SUCCESS` or `FAILURE`.
+8. The C++ BT uses that verdict to continue the tree or trigger another retry.
 
 Collaborative runtime flow:
 
@@ -148,6 +154,9 @@ sandwich_bt_runner
   -> /sandwich_bt/run_command
   -> lerobot-bt-skill-sim --ros2-service
   -> mock success/failure result
+  -> VerifySkillOutcome
+  -> /sandwich_bt/get_skill_verification
+  -> mock verifier verdict
 ```
 
 In real-time robot execution:
@@ -159,6 +168,9 @@ sandwich_bt_runner
   -> lerobot-bt-skill-server
   -> ACT/BC policy or scripted recovery
   -> Panda / gripper / cameras
+  -> VerifySkillOutcome
+  -> /sandwich_bt/get_skill_verification
+  -> external VLM or verifier
 ```
 
 The BT orchestration is the same. The executor behind `/sandwich_bt/run_command` changes.
@@ -220,6 +232,8 @@ Supervisor config:
 ROS2 services:
 
 * `src/sandwich_bt_interfaces/srv/RunNamedCommand.srv`
+* `src/sandwich_bt_interfaces/srv/GetSkillVerification.srv`
+* `src/sandwich_bt_interfaces/srv/ReportSkillVerification.srv`
 * `src/sandwich_bt_interfaces/srv/PlanNextStep.srv`
 * `src/sandwich_bt_interfaces/srv/VerifyStep.srv`
 
@@ -608,7 +622,9 @@ It validates:
 * the C++ `sandwich_bt_runner`;
 * the selected BT XML file;
 * `RunNamedCommand` nodes;
+* `VerifySkillOutcome` nodes;
 * the ROS2 `/sandwich_bt/run_command` service boundary;
+* the ROS2 verification service boundary;
 * command name matching;
 * retry/recovery sequence;
 * propagation of command `SUCCESS` / `FAILURE` back to the BT.

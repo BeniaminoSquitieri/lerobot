@@ -2,6 +2,8 @@
 # Uses dummy arm and gripper for testing without physical hardware
 
 service_name: "/sandwich_bt/run_command"
+verification_query_service_name: "/sandwich_bt/get_skill_verification"
+verification_report_service_name: "/sandwich_bt/report_skill_verification"
 
 # Mock robot configuration for headless/simulator mode
 robot:

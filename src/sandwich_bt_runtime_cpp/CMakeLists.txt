@@ -29,6 +29,7 @@ endif()
 add_executable(sandwich_bt_runner
   src/run_named_command_node.cpp
   src/sandwich_bt_main.cpp
+  src/verify_skill_outcome_node.cpp
 )
 
 target_include_directories(sandwich_bt_runner PRIVATE include)

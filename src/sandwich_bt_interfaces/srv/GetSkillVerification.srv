@@ -1,0 +1,15 @@
+# Query the latest verification state for a named skill attempt.
+#
+# This is the BT runtime -> Python verification relay boundary.
+string skill_name
+---
+# Whether the Python side has seen at least one completed attempt for this skill.
+bool has_attempt
+# Monotonic attempt identifier assigned by the Python server.
+int32 attempt_id
+# One of: UNKNOWN, PENDING, SUCCESS, FAILURE.
+string status
+# Human-readable status detail.
+string message
+# Confidence attached to the latest external verdict, if any.
+float32 confidence

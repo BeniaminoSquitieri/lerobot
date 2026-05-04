@@ -41,6 +41,11 @@ from lerobot.utils.visualization_utils import init_rerun as init_rerun_viz
 
 from .config import SkillCommandServerConfig
 from .executor import SkillCommandExecutor
+from .verification import (
+    PENDING_VERIFICATION_STATUS,
+    UNKNOWN_VERIFICATION_STATUS,
+    SkillVerificationRegistry,
+)
 
 
 DEFAULT_CONFIG_PATH = Path(__file__).resolve().parent / "sandwich_bt_executor.yaml"
@@ -101,7 +106,7 @@ def _prepend_generated_interface_paths() -> None:
                 sys.path.insert(0, site_packages_str)
 
 
-def _load_run_named_command_service():
+def _load_bt_services():
     # The editable repo adds `src/` to `sys.path`, which makes Python see the
     # source-only ROS package as a namespace package before the generated
     # interface package under `install/.../site-packages`.
@@ -111,12 +116,12 @@ def _load_run_named_command_service():
             del sys.modules[module_name]
 
     try:
-        from sandwich_bt_interfaces.srv import RunNamedCommand
+        from sandwich_bt_interfaces.srv import GetSkillVerification, ReportSkillVerification, RunNamedCommand
 
-        return RunNamedCommand
+        return RunNamedCommand, GetSkillVerification, ReportSkillVerification
     except ImportError as import_error:
         raise ImportError(
-            "Could not import sandwich_bt_interfaces.srv.RunNamedCommand. "
+            "Could not import the sandwich_bt_interfaces service bindings. "
             "Source install/local_setup.bash or rebuild sandwich_bt_interfaces."
         ) from import_error
 
@@ -129,6 +134,7 @@ class SkillCommandServer(Node):
         executor_backend: SkillCommandExecutor,
         robot_action_processor: RobotProcessorPipeline,
         robot_observation_processor: RobotProcessorPipeline,
+        verification_registry: SkillVerificationRegistry,
     ) -> None:
         super().__init__("sandwich_bt_skill_server")
         self.cfg = cfg
@@ -136,11 +142,27 @@ class SkillCommandServer(Node):
         self.executor_backend = executor_backend
         self.robot_action_processor = robot_action_processor
         self.robot_observation_processor = robot_observation_processor
+        self.verification_registry = verification_registry
 
-        # Single ROS2 entrypoint used by the BT runtime.
-        RunNamedCommand = _load_run_named_command_service()
-        self._service = self.create_service(RunNamedCommand, cfg.service_name, self._handle_request)
-        self.get_logger().info(f"Serving BT commands on '{cfg.service_name}'.")
+        # ROS2 entrypoints used by the BT runtime and the external verifier.
+        RunNamedCommand, GetSkillVerification, ReportSkillVerification = _load_bt_services()
+        self._command_service = self.create_service(RunNamedCommand, cfg.service_name, self._handle_request)
+        self._verification_query_service = self.create_service(
+            GetSkillVerification,
+            cfg.verification_query_service_name,
+            self._handle_get_skill_verification,
+        )
+        self._verification_report_service = self.create_service(
+            ReportSkillVerification,
+            cfg.verification_report_service_name,
+            self._handle_report_skill_verification,
+        )
+        self.get_logger().info(
+            "Serving BT commands on "
+            f"'{cfg.service_name}', verification queries on "
+            f"'{cfg.verification_query_service_name}', and verification reports on "
+            f"'{cfg.verification_report_service_name}'."
+        )
 
     def _handle_request(self, request, response):
         # This is the handoff point between C++ BT orchestration and Python execution.
@@ -177,6 +199,14 @@ class SkillCommandServer(Node):
             self.get_logger().error(response.message)
             return response
 
+        if request.kind == "skill" and result.success:
+            verification_snapshot = self.verification_registry.begin_attempt(request.name)
+            result.message = (
+                f"{result.message} "
+                f"Verification attempt {verification_snapshot.attempt_id} is now pending on "
+                f"'{self.cfg.verification_query_service_name}'."
+            )
+
         response.success = bool(result.success)
         response.status = result.status
         response.elapsed_s = float(result.elapsed_s)
@@ -185,6 +215,61 @@ class SkillCommandServer(Node):
             self.get_logger().info(result.message)
         else:
             self.get_logger().error(result.message)
+        return response
+
+    def _handle_get_skill_verification(self, request, response):
+        try:
+            snapshot = self.verification_registry.get_latest(request.skill_name)
+        except ValueError as exc:
+            response.has_attempt = False
+            response.attempt_id = 0
+            response.status = UNKNOWN_VERIFICATION_STATUS
+            response.message = str(exc)
+            response.confidence = 0.0
+            self.get_logger().error(response.message)
+            return response
+
+        if snapshot is None:
+            response.has_attempt = False
+            response.attempt_id = 0
+            response.status = UNKNOWN_VERIFICATION_STATUS
+            response.message = f"No completed attempt has been recorded yet for skill '{request.skill_name}'."
+            response.confidence = 0.0
+            self.get_logger().warning(response.message)
+            return response
+
+        response.has_attempt = True
+        response.attempt_id = int(snapshot.attempt_id)
+        response.status = snapshot.status
+        response.message = snapshot.message
+        response.confidence = float(snapshot.confidence)
+        if snapshot.status == PENDING_VERIFICATION_STATUS:
+            self.get_logger().debug(
+                f"Verification for skill '{snapshot.skill_name}' attempt {snapshot.attempt_id} is still pending."
+            )
+        return response
+
+    def _handle_report_skill_verification(self, request, response):
+        try:
+            update = self.verification_registry.report(
+                skill_name=request.skill_name,
+                attempt_id=int(request.attempt_id),
+                status=request.status,
+                message=request.message,
+                confidence=float(request.confidence),
+            )
+        except ValueError as exc:
+            response.accepted = False
+            response.applied_attempt_id = 0
+            response.message = str(exc)
+            self.get_logger().error(response.message)
+            return response
+
+        response.accepted = bool(update.accepted)
+        response.applied_attempt_id = 0 if update.snapshot is None else int(update.snapshot.attempt_id)
+        response.message = update.message
+        log_fn = self.get_logger().info if update.accepted else self.get_logger().warning
+        log_fn(response.message)
         return response
 
 
@@ -229,6 +314,8 @@ def run(cfg: SkillCommandServerConfig) -> None:
     logging.info("Constructing skill command executor.")
     executor_backend = SkillCommandExecutor(cfg=cfg, robot=robot)
     logging.info("Skill command executor ready.")
+    verification_registry = SkillVerificationRegistry(known_skill_names=set(executor_backend.skill_configs))
+    logging.info("Skill verification registry ready.")
 
     logging.info("Creating ROS2 skill command service node.")
     server_node = SkillCommandServer(
@@ -237,6 +324,7 @@ def run(cfg: SkillCommandServerConfig) -> None:
         executor_backend=executor_backend,
         robot_action_processor=robot_action_processor,
         robot_observation_processor=robot_observation_processor,
+        verification_registry=verification_registry,
     )
     logging.info("ROS2 skill command service node is ready.")
 

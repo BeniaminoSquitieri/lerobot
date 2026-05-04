@@ -127,7 +127,11 @@ class SkillCommandExecutor:
                     time.sleep(skill.cfg.settle_time_s)
 
                 target_dt_s = 1 / self.cfg.fps
-                timeout_s = timeout_override_s if timeout_override_s > 0 else skill.cfg.transition.max_duration_s
+                timeout_s = (
+                    None
+                    if skill.cfg.transition.mode == "until_success"
+                    else timeout_override_s if timeout_override_s > 0 else skill.cfg.transition.max_duration_s
+                )
 
                 while True:
                     loop_t = time.perf_counter()
@@ -199,7 +203,7 @@ class SkillCommandExecutor:
         skill: SkillRuntime,
         obs_processed: dict,
         elapsed_s: float,
-        timeout_s: float,
+        timeout_s: float | None,
     ) -> str:
         # Decides whether the current rollout is still running or should terminate.
         transition = skill.cfg.transition
@@ -213,6 +217,10 @@ class SkillCommandExecutor:
         if elapsed_s >= transition.min_duration_s and evaluate_all(transition.success_conditions, obs_processed):
             return "SUCCESS"
 
+        if transition.mode == "until_success":
+            return "RUNNING"
+
+        assert timeout_s is not None
         if elapsed_s >= timeout_s:
             return "SUCCESS" if transition.mode == "all_conditions_or_timeout" else "FAILURE"
 
