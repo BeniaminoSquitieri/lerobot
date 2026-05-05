@@ -38,6 +38,10 @@ def _tip_features(prefix: str = "") -> dict[str, type[float]]:
     return {f"{prefix}{tip}.position.{axis}": float for tip in TIPS for axis in "xyz"}
 
 
+def _wrist_features(prefix: str = "") -> dict[str, type[float]]:
+    return {f"{prefix}wrist.position.{axis}": float for axis in "xyz"}
+
+
 class _CtrlClutch:
     def __init__(self):
         self.pressed = False
@@ -85,6 +89,8 @@ class MetaReaderTeleoperator(Teleoperator):
             "is_engaged": float,
             "exit_episode": float,
             "discard_episode": float,
+            "hand_tracking_valid": float,
+            **_wrist_features(),
             **_tip_features(),
         }
 
@@ -139,7 +145,7 @@ class MetaReaderTeleoperator(Teleoperator):
             raise DeviceNotConnectedError(f"{self} is not connected.")
         frame = self._reader.read_latest(timeout=self.config.read_timeout_s)
         if frame is None:
-            return {**self._last_action, "is_engaged": 0.0}
+            return {**self._last_action, "is_engaged": 0.0, "hand_tracking_valid": 0.0}
         self._last_action = self._frame_to_action(frame)
         return dict(self._last_action)
 
@@ -164,13 +170,15 @@ class MetaReaderTeleoperator(Teleoperator):
             "is_engaged": engaged,
             "exit_episode": 0.0,
             "discard_episode": 0.0,
+            "hand_tracking_valid": 0.0,
+            **{key: 0.0 for key in _wrist_features()},
             **{key: 0.0 for key in _tip_features()},
         }
 
     def _frame_to_action(self, frame: Any) -> dict[str, float]:
         hand = frame.right_hand
         palm = getattr(hand.palm, "pose", None)
-        engaged = 1.0#float((hand.tracked or not self.config.require_tracked_right_hand) and self._clutch.pressed)
+        engaged = 1.0
         if engaged == 0.0 or palm is None or not palm.valid:
             return self._neutral_action(engaged)
 
@@ -179,6 +187,7 @@ class MetaReaderTeleoperator(Teleoperator):
         palm_position = METAREADER_TRANSFORM @ np.asarray(palm.position, dtype=float)
         palm_inverse = R.from_matrix(palm_rotation).inv()
         action = self._neutral_action(engaged)
+        hand_tracking_valid = bool(hand.wrist.tracked)
         action.update(
             {
                 "position.x": float(palm_position[0]),
@@ -190,14 +199,26 @@ class MetaReaderTeleoperator(Teleoperator):
             }
         )
 
+        wrist_pose = getattr(hand.wrist, "pose", None)
+        if wrist_pose is not None and wrist_pose.valid:
+            wrist_position = METAREADER_TRANSFORM @ np.asarray(wrist_pose.position, dtype=float)
+            wrist_relative = palm_inverse.apply(wrist_position - palm_position)
+            for axis, value in zip("xyz", wrist_relative, strict=True):
+                action[f"wrist.position.{axis}"] = float(value)
+
         for tip in TIPS:
             fingertip = hand.fingertips.get(f"{tip}_tip")
             pose = getattr(fingertip, "pose", None)
             if pose is None or not pose.valid:
+                if tip != "little":
+                    hand_tracking_valid = False
                 continue
             tip_position = METAREADER_TRANSFORM @ np.asarray(pose.position, dtype=float)
             relative = palm_inverse.apply(tip_position - palm_position)
             action[f"{tip}.position.x"] = float(relative[0])
             action[f"{tip}.position.y"] = float(relative[1])
             action[f"{tip}.position.z"] = float(relative[2])
+        action["hand_tracking_valid"] = float(
+            hand_tracking_valid and wrist_pose is not None and wrist_pose.valid
+        )
         return action

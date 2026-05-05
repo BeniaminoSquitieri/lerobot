@@ -5,8 +5,7 @@ robot:
     # use_delta_actions: true
     # visualize: true
   gripper:
-    type: dummy
-    # use_delta_actions: true
+    type: leap_hand
     # enable_tip_scale_tuner: true
     # visualize: true
   # cameras:
@@ -45,7 +44,7 @@ dataset:
   rename_map: {}
 
 teleop_action_processor:
-  steps: [clutch_processor]  #, arm_absolute_to_delta, hand_absolute_to_delta]
+  steps: [clutch_processor, metareader_leap_dexpilot]
 
 robot_action_processor:
   steps: []

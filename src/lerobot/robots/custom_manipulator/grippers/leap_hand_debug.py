@@ -15,12 +15,12 @@ class LeapHandDebugTools:
         root_frame,
         palm_center_offset: np.ndarray,
         tips,
-        palm_to_target_rot: np.ndarray,
         entity_path: str = "leap_hand",
     ):
         self.tip_names = tip_names
         self.tip_scale_factors = tip_scale_factors
         self._step = 0
+        self._step_active = False
         self._tip_scale_root = None
         self._enable_rerun_visualization = enable_rerun_visualization
         self._rr = None
@@ -29,7 +29,6 @@ class LeapHandDebugTools:
         self.palm_center_offset = np.asarray(palm_center_offset, dtype=float)
         self.tips = tips
         self.urdf_tree = None
-        self.palm_to_target_rot = np.array(palm_to_target_rot, dtype=float, copy=True)
         self._entity_path = entity_path
         self._root_frame_id = f"tf#/{entity_path}/palm_center"
         self._root_link_frame_id = f"{self._root_frame_id}/{root_frame.getName()}"
@@ -55,7 +54,7 @@ class LeapHandDebugTools:
             self._log_root_link_offset()
             send_custom_manipulator_blueprint(
                 hand_view_name="Leap Hand",
-                hand_contents=[f"/{entity_path}/**", "/tips/**", "/targets/**", "/forces/**"],
+                hand_contents=[f"/{entity_path}/**", "/tips/**", "/targets/**", "/dexpilot_points/**", "/forces/**"],
                 hand_target_frame=self._root_frame_id,
             )
 
@@ -99,8 +98,7 @@ class LeapHandDebugTools:
         if not self._enable_rerun_visualization or self.urdf_tree is None or self._rr is None:
             return
 
-        self._step += 1
-        self._rr.set_time("step", sequence=self._step)
+        self.begin_step()
         self._log_root_link_offset()
 
         for i, joint in enumerate(self.urdf_tree.joints()):
@@ -113,31 +111,64 @@ class LeapHandDebugTools:
             self._rr.log(f"{self._entity_path}/transforms", joint.compute_transform(value))
             self._rr.log(f"/{self._entity_path}/joints/{i}", self._rr.Scalars([value]))
 
-        root_tip_positions = {
-            tip: [
-                float(v)
-                for v in (
-                    self.palm_to_target_rot
-                    @ (
-                        np.array(
-                            [fingertip_values[f"{tip}.position.{axis}"] for axis in "xyz"],
-                            dtype=float,
-                        )
-                        * self.tip_scale_factors[tip]
+        world_tip_positions = {
+            tip: self._palm_center_position_to_world(
+                (
+                    np.array(
+                        [fingertip_values[f"{tip}.position.{axis}"] for axis in "xyz"],
+                        dtype=float,
                     )
-                ).tolist()
-            ]
+                    * self.tip_scale_factors[tip]
+                )
+            ).tolist()
             for tip in self.tip_names
             if all(f"{tip}.position.{axis}" in fingertip_values for axis in "xyz")
         }
-        self._log_points("/tips", root_tip_positions, "tip", [80, 170, 255], 0.004)
+        self._log_points("/tips", world_tip_positions, "tip", [80, 170, 255], 0.004)
+        self.end_step()
 
     def log_targets(self, target_positions: dict[str, list[float]] | None):
         if not self._enable_rerun_visualization or self.urdf_tree is None or self._rr is None or not target_positions:
             return
 
+        self.begin_step()
         self._log_root_link_offset()
-        self._log_points("/targets", target_positions, "target", [255, 80, 80], 0.005)
+        world_target_positions = {
+            tip: self._palm_center_position_to_world(np.asarray(position, dtype=float)).tolist()
+            for tip, position in target_positions.items()
+        }
+        self._log_points("/targets", world_target_positions, "target", [255, 80, 80], 0.005)
+
+    def log_dexpilot_points(self, fingertip_values: dict[str, float] | None):
+        if not self._enable_rerun_visualization or self.urdf_tree is None or self._rr is None or not fingertip_values:
+            return
+
+        self.begin_step()
+        self._log_root_link_offset()
+        world_point_positions = {
+            tip: self._palm_center_position_to_world(
+                (
+                    np.array(
+                        [fingertip_values[f"{tip}.position.{axis}"] for axis in "xyz"],
+                        dtype=float,
+                    )
+                    * self.tip_scale_factors[tip]
+                )
+            ).tolist()
+            for tip in self.tip_names
+            if all(f"{tip}.position.{axis}" in fingertip_values for axis in "xyz")
+        }
+        self._log_points("/dexpilot_points", world_point_positions, "dexpilot", [255, 200, 80], 0.0045)
+
+    def begin_step(self):
+        if self._rr is None or self._step_active:
+            return
+        self._step += 1
+        self._rr.set_time("step", sequence=self._step)
+        self._step_active = True
+
+    def end_step(self):
+        self._step_active = False
 
     def _log_points(
         self,
@@ -159,14 +190,41 @@ class LeapHandDebugTools:
                 radii=radius,
                 colors=color,
             ),
-            self._rr.CoordinateFrame(self._root_frame_id),
         )
 
     def _log_root_link_offset(self):
         if self._rr is None:
             return
 
+        root_rotation, root_translation = self._get_root_frame_pose_in_palm_center()
         self._rr.log(
             self._root_link_frame_id,
-            self._rr.Transform3D(translation=(-self.palm_center_offset).tolist()),
+            self._rr.Transform3D(
+                translation=root_translation.tolist(),
+                mat3x3=root_rotation.tolist(),
+            ),
+        )
+
+    def _get_root_frame_pose_in_palm_center(self) -> tuple[np.ndarray, np.ndarray]:
+        palm_rotation, palm_translation = self._frame_transform_as_arrays(self.palm_frame)
+        root_rotation, root_translation = self._frame_transform_as_arrays(self.root_frame)
+
+        palm_rotation_inv = palm_rotation.T
+        root_rotation_in_palm = palm_rotation_inv @ root_rotation
+        root_translation_in_palm = palm_rotation_inv @ (root_translation - palm_translation)
+        root_translation_in_palm_center = root_translation_in_palm - self.palm_center_offset
+        return root_rotation_in_palm, root_translation_in_palm_center
+
+    def _palm_center_position_to_world(self, point_in_palm_center: np.ndarray) -> np.ndarray:
+        palm_rotation, palm_translation = self._frame_transform_as_arrays(self.palm_frame)
+        return palm_rotation @ (np.asarray(point_in_palm_center, dtype=float) + self.palm_center_offset) + palm_translation
+
+    @staticmethod
+    def _frame_transform_as_arrays(frame) -> tuple[np.ndarray, np.ndarray]:
+        rotation, translation = frame.getTransform()
+        return (
+            # Klampt's so3 flat representation corresponds to the transpose of the
+            # row-major 3x3 matrix we want for NumPy multiplication.
+            np.asarray(rotation, dtype=float).reshape(3, 3).T,
+            np.asarray(translation, dtype=float),
         )
