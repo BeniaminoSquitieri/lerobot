@@ -1,4 +1,5 @@
-"""Hardware-free simulation harness for the sandwich BT stack.
+"""@file simulation.py
+@brief Hardware-free simulation harness for the sandwich BT stack.
 
 This module keeps the BT command contract intact without importing ROS2 or any
 robot drivers. It is intended for local smoke tests of the named-command flow.
@@ -38,11 +39,19 @@ _ACTION_KEYS = (
 
 @dataclass
 class MockSkillTransition:
+    """@brief Minimal transition config used by the mock skill executor."""
+
     mode: str = "timeout"
+    """Termination mode mirrored from the real `SkillTransitionConfig`."""
+
     min_duration_s: float = 0.0
+    """Minimum simulated rollout duration before predicate-based success."""
+
     max_duration_s: float = 0.5
+    """Maximum simulated rollout duration for timeout-based modes."""
 
     def __post_init__(self) -> None:
+        """@brief Validate the transition shape at construction time."""
         allowed_modes = {"timeout", "all_conditions", "all_conditions_or_timeout", "until_success"}
         if self.mode not in allowed_modes:
             raise ValueError(f"Unsupported mode '{self.mode}'. Expected one of {sorted(allowed_modes)}.")
@@ -54,11 +63,19 @@ class MockSkillTransition:
 
 @dataclass
 class MockSkillConfig:
+    """@brief Named mock skill entry accepted by the simulation service."""
+
     name: str
+    """Runtime name matched against `RunNamedCommand.name`."""
+
     transition: MockSkillTransition = field(default_factory=MockSkillTransition)
+    """Termination behavior used by the mock executor."""
+
     settle_time_s: float = 0.0
+    """Simulated pre-rollout settle time in seconds."""
 
     def __post_init__(self) -> None:
+        """@brief Reject empty names and negative settle times."""
         if not self.name:
             raise ValueError("Skill name must not be empty.")
         if self.settle_time_s < 0:
@@ -67,17 +84,29 @@ class MockSkillConfig:
 
 @dataclass
 class MockRecoveryStep:
+    """@brief One scripted recovery step for the mock robot."""
+
     kind: str
+    """Recovery primitive kind: pause, robot_reset, cartesian_delta, or set_gripper."""
+
     duration_s: float = 0.0
+    """Simulated duration added to command elapsed time."""
+
     dx: float = 0.0
     dy: float = 0.0
     dz: float = 0.0
+    """Cartesian translation deltas used by `cartesian_delta`."""
+
     droll: float = 0.0
     dpitch: float = 0.0
     dyaw: float = 0.0
+    """Orientation deltas used by `cartesian_delta`."""
+
     gripper_value: float | None = None
+    """Optional gripper target used by `set_gripper` and cartesian recovery."""
 
     def __post_init__(self) -> None:
+        """@brief Validate the mock recovery step contract."""
         allowed_kinds = {"pause", "robot_reset", "cartesian_delta", "set_gripper"}
         if self.kind not in allowed_kinds:
             raise ValueError(
@@ -91,10 +120,16 @@ class MockRecoveryStep:
 
 @dataclass
 class MockRecoveryConfig:
+    """@brief Named sequence of mock recovery steps."""
+
     name: str
+    """Runtime recovery name matched against `RunNamedCommand.name`."""
+
     steps: list[MockRecoveryStep] = field(default_factory=list)
+    """Ordered steps executed when this recovery is requested."""
 
     def __post_init__(self) -> None:
+        """@brief Ensure the recovery has a name and executable body."""
         if not self.name:
             raise ValueError("Recovery name must not be empty.")
         if not self.steps:
@@ -103,17 +138,31 @@ class MockRecoveryConfig:
 
 @dataclass
 class MockServerConfig:
+    """@brief Top-level config for the in-process mock command service."""
+
     fps: int = 10
+    """Virtual control frequency used to accumulate elapsed time."""
+
     service_name: str = "/sandwich_bt/run_command"
+    """ROS2 service name used when exposing the mock as a live node."""
+
     verification_query_service_name: str = "/sandwich_bt/get_skill_verification"
+    """Mock verification query service name."""
+
     verification_report_service_name: str = "/sandwich_bt/report_skill_verification"
+    """Mock verification report service name."""
+
     display_data: bool = False
     play_sounds: bool = False
     rename_map: dict[str, str] = field(default_factory=dict)
     skills: list[MockSkillConfig] = field(default_factory=list)
+    """Configured skill names accepted by the mock executor."""
+
     recoveries: list[MockRecoveryConfig] = field(default_factory=list)
+    """Configured recovery names accepted by the mock executor."""
 
     def __post_init__(self) -> None:
+        """@brief Validate basic service/runtime invariants."""
         if self.fps <= 0:
             raise ValueError("fps must be > 0.")
         if not self.skills:
@@ -122,27 +171,42 @@ class MockServerConfig:
 
 @dataclass
 class MockRobotArmConfig:
+    """@brief Arm-specific behavior for the in-memory robot."""
+
     use_delta_actions: bool = False
+    """When true, actions are interpreted as deltas instead of absolute targets."""
+
     step_size: float = 0.01
+    """Per-step mock policy displacement."""
+
     initial_position: tuple[float, float, float] = (0.0, 0.0, 0.0)
     initial_orientation: tuple[float, float, float] = (0.0, 0.0, 0.0)
+    """Initial Cartesian pose used by `reset()`."""
 
     def __post_init__(self) -> None:
+        """@brief Reject non-positive motion increments."""
         if self.step_size <= 0:
             raise ValueError("step_size must be > 0.")
 
 
 @dataclass
 class MockRobotConfig:
+    """@brief Full mock robot config used by `MockCustomManipulator`."""
+
     arm: MockRobotArmConfig = field(default_factory=MockRobotArmConfig)
     initial_gripper: float = 0.0
+    """Initial gripper value restored by `reset()`."""
 
 
 class MockGripperInterface:
+    """@brief Tiny adapter with the same call shape as the real gripper driver."""
+
     def __init__(self, robot: MockCustomManipulator):
+        """@brief Store the parent mock robot whose state will be mutated."""
         self.robot = robot
 
     def apply_commands(self, commands: dict[str, Any] | float) -> None:
+        """@brief Apply either dict-based or scalar gripper commands."""
         if isinstance(commands, dict):
             if "gripper" in commands:
                 self.robot._state["gripper"] = float(commands["gripper"])
@@ -151,11 +215,12 @@ class MockGripperInterface:
 
 
 class MockCustomManipulator:
-    """Small in-memory stand-in for the real custom manipulator."""
+    """@brief Small in-memory stand-in for the real custom manipulator."""
 
     robot_type = "mock_custom_manipulator"
 
     def __init__(self, config: MockRobotConfig | None = None):
+        """@brief Initialize connection flag, state dict, and gripper adapter."""
         self.config = config if config is not None else MockRobotConfig()
         self._is_connected = False
         self._state = self._make_initial_state()
@@ -164,6 +229,7 @@ class MockCustomManipulator:
         self.gripper_interface = MockGripperInterface(self)
 
     def _make_initial_state(self) -> dict[str, float]:
+        """@brief Build the reset state from the mock robot config."""
         return {
             "position.x": float(self.config.arm.initial_position[0]),
             "position.y": float(self.config.arm.initial_position[1]),
@@ -176,42 +242,53 @@ class MockCustomManipulator:
 
     @property
     def observation_features(self) -> dict[str, type]:
+        """@brief Return observation feature names with scalar float types."""
         return dict.fromkeys(self._state, float)
 
     @property
     def action_features(self) -> dict[str, type]:
+        """@brief Return action feature names with scalar float types."""
         return dict.fromkeys(self._state, float)
 
     @property
     def is_connected(self) -> bool:
+        """@brief Report whether `connect()` has been called."""
         return self._is_connected
 
     @property
     def is_calibrated(self) -> bool:
+        """@brief The mock is always considered calibrated."""
         return True
 
     def connect(self, calibrate: bool = True) -> None:
+        """@brief Mark the mock robot as connected."""
         self._is_connected = True
 
     def calibrate(self) -> None:
+        """@brief No-op calibration hook matching the real robot API."""
         return None
 
     def configure(self) -> None:
+        """@brief No-op configuration hook matching the real robot API."""
         return None
 
     def disconnect(self) -> None:
+        """@brief Mark the mock robot as disconnected."""
         self._is_connected = False
 
     def reset(self) -> None:
+        """@brief Restore the initial state and count the reset."""
         self._state = self._make_initial_state()
         self.reset_count += 1
 
     def get_observation(self) -> dict[str, float]:
+        """@brief Return a copy of the current mock state."""
         if not self._is_connected:
             raise RuntimeError("MockCustomManipulator is not connected.")
         return dict(self._state)
 
     def send_action(self, action: dict[str, Any]) -> dict[str, Any]:
+        """@brief Apply an action to the mock state and record it."""
         if not self._is_connected:
             raise RuntimeError("MockCustomManipulator is not connected.")
 
@@ -234,6 +311,8 @@ class MockCustomManipulator:
 
 @dataclass
 class CommandResult:
+    """@brief Mock executor result with the same shape as the real executor."""
+
     success: bool
     status: str
     elapsed_s: float
@@ -242,6 +321,8 @@ class CommandResult:
 
 @dataclass
 class MockRunNamedCommandRequest:
+    """@brief In-process representation of a `RunNamedCommand` request."""
+
     kind: str
     name: str
     timeout_s: float = 0.0
@@ -249,6 +330,8 @@ class MockRunNamedCommandRequest:
 
 @dataclass
 class MockRunNamedCommandResponse:
+    """@brief In-process representation of a `RunNamedCommand` response."""
+
     success: bool
     status: str
     elapsed_s: float
@@ -257,11 +340,15 @@ class MockRunNamedCommandResponse:
 
 @dataclass
 class MockGetSkillVerificationRequest:
+    """@brief In-process representation of a verification query request."""
+
     skill_name: str
 
 
 @dataclass
 class MockGetSkillVerificationResponse:
+    """@brief In-process representation of a verification query response."""
+
     has_attempt: bool
     attempt_id: int
     status: str
@@ -271,6 +358,8 @@ class MockGetSkillVerificationResponse:
 
 @dataclass
 class MockReportSkillVerificationRequest:
+    """@brief In-process representation of a verifier report request."""
+
     skill_name: str
     status: str
     attempt_id: int = 0
@@ -280,6 +369,8 @@ class MockReportSkillVerificationRequest:
 
 @dataclass
 class MockReportSkillVerificationResponse:
+    """@brief In-process representation of a verifier report response."""
+
     accepted: bool
     applied_attempt_id: int
     message: str
@@ -287,17 +378,21 @@ class MockReportSkillVerificationResponse:
 
 @dataclass
 class MockSkillRuntime:
+    """@brief Cached runtime state for one mock skill."""
+
     cfg: MockSkillConfig
     step_count: int = 0
 
     def reset(self) -> None:
+        """@brief Clear per-attempt mock step count."""
         self.step_count = 0
 
 
 class MockSkillCommandExecutor:
-    """In-process command executor used by the simulation harness."""
+    """@brief In-process command executor used by the simulation harness."""
 
     def __init__(self, cfg: MockServerConfig, robot: MockCustomManipulator):
+        """@brief Index skill/recovery configs and keep the mock robot."""
         self.cfg = cfg
         self.robot = robot
         self.skill_configs = {skill.name: skill for skill in cfg.skills}
@@ -306,6 +401,7 @@ class MockSkillCommandExecutor:
         self._command_lock = Lock()
 
     def _get_skill_runtime(self, skill_name: str) -> MockSkillRuntime:
+        """@brief Return cached mock runtime state for a skill."""
         if skill_name not in self._skills:
             self._skills[skill_name] = MockSkillRuntime(cfg=self.skill_configs[skill_name])
         return self._skills[skill_name]
@@ -317,6 +413,7 @@ class MockSkillCommandExecutor:
         robot_observation_processor: Any | None = None,
         timeout_override_s: float = 0.0,
     ) -> CommandResult:
+        """@brief Simulate executing one learned skill."""
         del robot_action_processor, robot_observation_processor
 
         if skill_name not in self.skill_configs:
@@ -353,6 +450,7 @@ class MockSkillCommandExecutor:
             return CommandResult(True, "SUCCESS", elapsed_s, message)
 
     def execute_named_recovery(self, recovery_name: str, timeout_override_s: float = 0.0) -> CommandResult:
+        """@brief Simulate executing one named recovery."""
         if recovery_name not in self.recoveries:
             return CommandResult(False, "ERROR", 0.0, f"Unknown recovery '{recovery_name}'.")
 
@@ -416,6 +514,7 @@ class MockSkillCommandExecutor:
             return CommandResult(True, "SUCCESS", elapsed_s, message)
 
     def _run_skill_step(self, skill: MockSkillRuntime, obs: dict[str, float]) -> None:
+        """@brief Mutate the mock robot as though one policy step ran."""
         step_size = self.robot.config.arm.step_size
         if self.robot.config.arm.use_delta_actions:
             action = {
@@ -442,7 +541,7 @@ class MockSkillCommandExecutor:
 
 
 class MockRunNamedCommandService:
-    """Tiny stand-in for the ROS2 `RunNamedCommand` service."""
+    """@brief Tiny stand-in for the ROS2 `RunNamedCommand` service."""
 
     def __init__(
         self,
@@ -451,6 +550,7 @@ class MockRunNamedCommandService:
         auto_verify_status: str | None = None,
         scripted_responses: dict[tuple[str, str], list[MockRunNamedCommandResponse]] | None = None,
     ):
+        """@brief Store executor, service names, scripts, and verification registry."""
         self.executor = executor
         self.service_name = executor.cfg.service_name
         self.verification_query_service_name = executor.cfg.verification_query_service_name
@@ -461,6 +561,7 @@ class MockRunNamedCommandService:
         self.verification_registry = SkillVerificationRegistry(known_skill_names=set(executor.skill_configs))
 
     def handle_request(self, request: MockRunNamedCommandRequest) -> MockRunNamedCommandResponse:
+        """@brief Execute or script one mock named-command request."""
         self.request_log.append(request)
         scripted_queue = self.scripted_responses.get((request.kind, request.name))
         if scripted_queue:
@@ -505,6 +606,7 @@ class MockRunNamedCommandService:
         self,
         request: MockGetSkillVerificationRequest,
     ) -> MockGetSkillVerificationResponse:
+        """@brief Return mock verification state for a skill."""
         try:
             snapshot = self.verification_registry.get_latest(request.skill_name)
         except ValueError as exc:
@@ -536,6 +638,7 @@ class MockRunNamedCommandService:
         self,
         request: MockReportSkillVerificationRequest,
     ) -> MockReportSkillVerificationResponse:
+        """@brief Apply a mock external verifier verdict."""
         try:
             update = self.verification_registry.report(
                 skill_name=request.skill_name,
@@ -564,6 +667,7 @@ def build_demo_stack(
     auto_verify_status: str | None = None,
     scripted_responses: dict[tuple[str, str], list[MockRunNamedCommandResponse]] | None = None,
 ) -> MockRunNamedCommandService:
+    """@brief Build the default in-process mock sandwich command stack."""
     robot = MockCustomManipulator(
         MockRobotConfig(
             arm=MockRobotArmConfig(use_delta_actions=use_delta_actions, step_size=0.01),
@@ -632,6 +736,7 @@ def build_ros2_demo_stack(
     fps: int = 10,
     service_name: str = "/sandwich_bt/run_command",
 ) -> MockRunNamedCommandService:
+    """@brief Build a mock stack configured for ROS2 service smoke tests."""
     return build_demo_stack(
         use_delta_actions=use_delta_actions,
         fps=fps,
@@ -641,6 +746,7 @@ def build_ros2_demo_stack(
 
 
 def default_command_sequence() -> list[MockRunNamedCommandRequest]:
+    """@brief Return the default recovery/skill sequence for a full sandwich."""
     return [
         MockRunNamedCommandRequest(kind="recovery", name="recover_place_first_toast"),
         MockRunNamedCommandRequest(kind="skill", name="place_first_toast"),
@@ -652,6 +758,7 @@ def default_command_sequence() -> list[MockRunNamedCommandRequest]:
 
 
 def parse_command_spec(spec: str) -> MockRunNamedCommandRequest:
+    """@brief Parse CLI text of the form `kind:name[:timeout_s]`."""
     parts = spec.split(":")
     if len(parts) not in {2, 3}:
         raise argparse.ArgumentTypeError("Commands must use the form kind:name or kind:name:timeout_s.")
@@ -673,6 +780,7 @@ def run_requests(
     service: MockRunNamedCommandService,
     requests: Sequence[MockRunNamedCommandRequest],
 ) -> list[MockRunNamedCommandResponse]:
+    """@brief Run a list of in-process requests against the mock service."""
     responses: list[MockRunNamedCommandResponse] = []
     for request in requests:
         responses.append(service.handle_request(request))
@@ -680,6 +788,7 @@ def run_requests(
 
 
 def _format_response(request: MockRunNamedCommandRequest, response: MockRunNamedCommandResponse) -> str:
+    """@brief Format one request/response pair for the CLI."""
     return (
         f"{request.kind}:{request.name} -> {response.status} ({response.elapsed_s:.2f}s) {response.message}"
     )
@@ -688,6 +797,7 @@ def _format_response(request: MockRunNamedCommandRequest, response: MockRunNamed
 def run_ros2_service(
     service: MockRunNamedCommandService,
 ) -> int:
+    """@brief Expose the mock command service as live ROS2 services."""
     try:
         import rclpy
         from rclpy.executors import ExternalShutdownException
@@ -707,7 +817,10 @@ def run_ros2_service(
         ) from exc
 
     class MockRunNamedCommandNode(Node):
+        """@brief ROS2 adapter that forwards generated service calls to the mock."""
+
         def __init__(self) -> None:
+            """@brief Register command and verification services."""
             super().__init__("sandwich_bt_skill_server_sim")
             self._service_impl = service
             self._command_service = self.create_service(RunNamedCommand, service.service_name, self._handle_request)
@@ -724,6 +837,7 @@ def run_ros2_service(
             self.get_logger().info(f"Serving mock BT commands on '{service.service_name}'.")
 
         def _handle_request(self, request, response):
+            """@brief Convert generated ROS request/response objects to mock objects."""
             result = self._service_impl.handle_request(
                 MockRunNamedCommandRequest(
                     kind=request.kind,
@@ -738,6 +852,7 @@ def run_ros2_service(
             return response
 
         def _handle_verification_query(self, request, response):
+            """@brief Convert a generated verification query into a mock query."""
             result = self._service_impl.handle_verification_query(
                 MockGetSkillVerificationRequest(skill_name=request.skill_name)
             )
@@ -749,6 +864,7 @@ def run_ros2_service(
             return response
 
         def _handle_verification_report(self, request, response):
+            """@brief Convert a generated verifier report into a mock report."""
             result = self._service_impl.handle_verification_report(
                 MockReportSkillVerificationRequest(
                     skill_name=request.skill_name,
@@ -782,6 +898,7 @@ def run_ros2_service(
 
 
 def main(argv: Sequence[str] | None = None) -> int:
+    """@brief CLI entry point for in-process or ROS2 mock execution."""
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--command",

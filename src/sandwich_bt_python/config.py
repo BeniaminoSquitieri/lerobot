@@ -1,4 +1,5 @@
-"""Configuration dataclasses for the sandwich BT Python execution layer.
+"""@file config.py
+@brief Configuration dataclasses for the sandwich BT Python execution layer.
 
 Each dataclass mirrors the YAML schema used by `server.py` to load the
 runtime configuration. The server reads one root config (see
@@ -67,6 +68,7 @@ class SkillTransitionConfig:
     failure_conditions: list[ObservationConditionConfig] = field(default_factory=list)
 
     def __post_init__(self) -> None:
+        """@brief Validate transition semantics immediately after YAML parsing."""
         # Validate that the mode is one of the supported enumerations.
         allowed_modes = {"timeout", "all_conditions", "all_conditions_or_timeout", "until_success"}
         if self.mode not in allowed_modes:
@@ -109,6 +111,7 @@ class PrimitiveSkillConfig:
     settle_time_s: float = 0.0
 
     def __post_init__(self) -> None:
+        """@brief Validate policy metadata and checkpoint requirements."""
         if self.metadata_source not in {"dataset", "robot"}:
             raise ValueError(
                 f"Skill '{self.name}' has unsupported metadata_source={self.metadata_source!r}. "
@@ -147,6 +150,7 @@ class RecoveryStepConfig:
     gripper_value: float | None = None
 
     def __post_init__(self) -> None:
+        """@brief Validate recovery step kind and required fields."""
         # Validate allowed kinds to catch typos in YAML configs early.
         allowed_kinds = {"pause", "robot_reset", "cartesian_delta", "set_gripper"}
         if self.kind not in allowed_kinds:
@@ -173,6 +177,7 @@ class RecoveryConfig:
     steps: list[RecoveryStepConfig] = field(default_factory=list)
 
     def __post_init__(self) -> None:
+        """@brief Ensure a named recovery has at least one concrete step."""
         if not self.steps:
             raise ValueError(f"Recovery '{self.name}' must define at least one step.")
 
@@ -219,6 +224,7 @@ class SkillCommandServerConfig:
     robot_observation_processor: dict = field(default_factory=lambda: {"steps": []})
 
     def __post_init__(self) -> None:
+        """@brief Validate top-level server invariants after config loading."""
         # Ensure at least one skill is configured to avoid running an empty server.
         if not self.skills:
             raise ValueError("At least one skill must be configured.")

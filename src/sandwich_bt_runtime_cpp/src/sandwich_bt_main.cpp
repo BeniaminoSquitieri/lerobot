@@ -9,14 +9,6 @@
 #include <memory>
 #include <string>
 
-// Main BehaviorTree.CPP runtime.
-//
-// Flow role:
-// 1. Load the XML tree.
-// 2. Register the custom node that talks to the Python server.
-// 3. Tick the tree until the sandwich task succeeds or fails.
-// 4. Optionally publish the tree state to Groot.
-
 #include <ament_index_cpp/get_package_share_directory.hpp>
 #include <rclcpp/rclcpp.hpp>
 
@@ -50,6 +42,9 @@ using GrootPublisherT = BT::PublisherZMQ;
 namespace
 {
 
+/**
+ * @brief Returns the installed default sandwich behavior-tree XML path.
+ */
 std::string default_tree_xml_path()
 {
   return ament_index_cpp::get_package_share_directory("sandwich_bt_runtime_cpp") + "/trees/sandwich_tree.xml";
@@ -57,6 +52,13 @@ std::string default_tree_xml_path()
 
 }  // namespace
 
+/**
+ * @brief Runs the ROS2 node that loads, registers, and ticks the sandwich BT.
+ *
+ * @param argc Process argument count forwarded to rclcpp.
+ * @param argv Process argument vector forwarded to rclcpp.
+ * @return 0 when the tree finishes with SUCCESS, 1 for FAILURE.
+ */
 int main(int argc, char** argv)
 {
   rclcpp::init(argc, argv);
@@ -79,8 +81,9 @@ int main(int argc, char** argv)
   const auto tick_ms = node->get_parameter("tick_ms").as_int();
   const auto enable_groot = node->get_parameter("enable_groot_publisher").as_bool();
 
+  // Register each custom XML tag with a lambda that injects the already-created
+  // ROS2 node and service name into the BT node constructor.
   BT::BehaviorTreeFactory factory;
-  // Register the custom leaf that calls the Python skill server.
   factory.registerBuilder<sandwich_bt_runtime_cpp::RunNamedCommandNode>(
     "RunNamedCommand",
     [node, service_name](const std::string& instance_name, const BT::NodeConfiguration& config) {
@@ -100,6 +103,8 @@ int main(int argc, char** argv)
         verify_service_name);
     });
 
+  // Loading from file keeps the BT topology editable without recompiling this
+  // executable; malformed XML or missing node tags will fail at this point.
   BT::Tree tree = factory.createTreeFromFile(tree_xml_path);
 
 #if SANDWICH_BT_HAS_GROOT

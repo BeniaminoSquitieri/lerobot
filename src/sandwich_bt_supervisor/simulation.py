@@ -1,4 +1,5 @@
-"""Hardware-free simulation harness for the collaborative supervisor."""
+"""@file simulation.py
+@brief Hardware-free simulation harness for the collaborative supervisor."""
 
 from __future__ import annotations
 
@@ -23,12 +24,15 @@ from .vlm_supervisor import CollaborativeSandwichSupervisor
 
 @dataclass
 class MockSandwichScene:
+    """@brief Mutable closed-set scene used by collaborative simulations."""
+
     first_toast_on_plate: bool = False
     ingredient_on_first_toast: bool = False
     second_toast_on_top: bool = False
     events: list[str] = field(default_factory=list)
 
     def observe(self) -> SandwichSceneObservation:
+        """@brief Convert mock booleans into the supervisor observation type."""
         return SandwichSceneObservation(
             first_toast_on_plate=self.first_toast_on_plate,
             ingredient_on_first_toast=self.ingredient_on_first_toast,
@@ -37,16 +41,21 @@ class MockSandwichScene:
 
 
 class MockHumanParticipant:
+    """@brief Mock human that can confirm or deny requested handoffs."""
+
     def __init__(self, scene: MockSandwichScene, *, auto_confirm: bool = True) -> None:
+        """@brief Store scene and confirmation behavior."""
         self.scene = scene
         self.auto_confirm = auto_confirm
         self.instructions: list[str] = []
 
     def send_instruction(self, instruction: str) -> None:
+        """@brief Record an instruction that would be presented to a human."""
         self.instructions.append(instruction)
         self.scene.events.append(f"instruction:{instruction}")
 
     def confirm(self, primitive: TaskPrimitive, timeout_s: float) -> bool:
+        """@brief Simulate human confirmation and scene update."""
         del timeout_s
         if not self.auto_confirm:
             self.scene.events.append(f"human_rejected:{primitive.name}")
@@ -59,10 +68,14 @@ class MockHumanParticipant:
 
 
 class MockRobotSceneEffects:
+    """@brief Scene-effect callback invoked after successful robot subtrees."""
+
     def __init__(self, scene: MockSandwichScene) -> None:
+        """@brief Store the scene to mutate."""
         self.scene = scene
 
     def mark_completed(self, primitive_name: str) -> None:
+        """@brief Mark the expected boolean for a completed robot primitive."""
         if primitive_name == "place_first_toast":
             self.scene.first_toast_on_plate = True
         elif primitive_name == "place_second_toast":
@@ -72,6 +85,8 @@ class MockRobotSceneEffects:
 
 @dataclass
 class MockCollaborativeSupervisorStack:
+    """@brief Bundle returned by `build_demo_supervisor_stack`."""
+
     cfg: SupervisorConfig
     scene: MockSandwichScene
     human: MockHumanParticipant
@@ -82,6 +97,7 @@ class MockCollaborativeSupervisorStack:
 
 
 def make_demo_supervisor_config() -> SupervisorConfig:
+    """@brief Create the default robot-human-robot sandwich supervisor config."""
     return SupervisorConfig(
         goal="make_sandwich",
         current_task="sandwich_collaborative",
@@ -95,7 +111,6 @@ def make_demo_supervisor_config() -> SupervisorConfig:
                 actor="robot",
                 robot_skill="place_first_toast",
                 bt_xml_path=str(default_subtree_path("place_first_toast_subtree.xml")),
-                recovery="recover_place_first_toast",
                 difficulty="easy",
                 success_condition="first toast is on plate",
                 expected_state="NEED_POURING",
@@ -115,7 +130,6 @@ def make_demo_supervisor_config() -> SupervisorConfig:
                 actor="robot",
                 robot_skill="place_second_toast",
                 bt_xml_path=str(default_subtree_path("place_second_toast_subtree.xml")),
-                recovery="recover_place_second_toast",
                 difficulty="easy",
                 success_condition="second toast is on top",
                 expected_state="DONE",
@@ -131,6 +145,7 @@ def build_demo_supervisor_stack(
     use_delta_actions: bool = False,
     scripted_responses: dict[tuple[str, str], list[MockRunNamedCommandResponse]] | None = None,
 ) -> MockCollaborativeSupervisorStack:
+    """@brief Build all in-process pieces for collaborative supervisor tests."""
     supervisor_cfg = cfg if cfg is not None else make_demo_supervisor_config()
     service = build_demo_stack(
         use_delta_actions=use_delta_actions,
@@ -171,6 +186,7 @@ def build_demo_supervisor_stack(
 
 
 def main() -> None:
+    """@brief CLI entry point for the collaborative supervisor demo."""
     parser = argparse.ArgumentParser(description="Run the collaborative sandwich supervisor demo.")
     parser.add_argument(
         "--deny-human-confirmation",

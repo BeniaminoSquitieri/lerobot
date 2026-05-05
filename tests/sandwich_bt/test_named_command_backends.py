@@ -95,7 +95,7 @@ def test_runner_custom_command_backend_success_path_reaches_done() -> None:
     assert result.final_actor == "done"
     assert backend.request_log == [
         ("recovery", "recover_place_first_toast", 0.0),
-        ("skill", "place_first_toast", 0.0),
+        ("skill", "place_first_toast", 30.0),
         ("recovery", "recover_place_second_toast", 0.0),
         ("skill", "place_second_toast", 0.0),
     ]

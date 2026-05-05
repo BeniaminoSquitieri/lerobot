@@ -1,4 +1,10 @@
-"""Execution backend for learned skills and scripted recoveries.
+"""@file executor.py
+@brief Execution backend for learned skills and scripted recoveries.
+
+@details
+This module is the only layer that turns a BT command name into real robot work.
+It loads policy runtimes lazily, keeps the control loop serialized with a lock,
+and returns compact command results to the ROS2 server.
 
 Flow role:
 1. The Python ROS2 server receives a named command from the BT.
@@ -40,15 +46,30 @@ if TYPE_CHECKING:
 
 @dataclass
 class SkillRuntime:
-    # Runtime bundle for one learned primitive:
-    # config + dataset metadata + policy + processors.
+    """@brief Runtime bundle for one configured learned primitive.
+
+    The bundle is cached per skill name so repeated BT retries do not reload the
+    checkpoint. `reset()` still clears policy and processor state before every
+    execution attempt.
+    """
+
     cfg: PrimitiveSkillConfig
+    """Skill YAML entry that owns names, policy config, task text, and transitions."""
+
     ds_meta: Any
+    """Dataset metadata or live robot metadata used to build policy features."""
+
     policy: PreTrainedPolicy
+    """Loaded LeRobot policy object used for inference."""
+
     preprocessor: PolicyProcessorPipeline[dict, dict]
+    """Policy observation preprocessor applied before inference."""
+
     postprocessor: PolicyProcessorPipeline[PolicyAction, PolicyAction]
+    """Policy action postprocessor applied after inference."""
 
     def reset(self) -> None:
+        """@brief Reset stateful policy/preprocessor/postprocessor queues."""
         self.policy.reset()
         self.preprocessor.reset()
         self.postprocessor.reset()
@@ -56,20 +77,38 @@ class SkillRuntime:
 
 @dataclass
 class LiveRobotDatasetMetadata:
-    # Minimal metadata object with the attributes used by make_policy and the
-    # inference loop. This mirrors record.py's rollout metadata without creating
-    # or writing a LeRobotDataset on disk.
+    """@brief Minimal metadata object for live robot rollouts.
+
+    `make_policy` expects dataset-like metadata. When `metadata_source="robot"`,
+    this small object provides the required attributes without creating a
+    `LeRobotDataset` on disk.
+    """
+
     repo_id: str
+    """Logical dataset repository id used by policy loading code."""
+
     features: dict[str, dict]
+    """Feature schema assembled from robot action and observation pipelines."""
+
     stats: dict | None = None
+    """Optional dataset statistics; live metadata leaves this absent by default."""
 
 
 @dataclass
 class CommandResult:
+    """@brief Normalized command result returned to the ROS2 server."""
+
     success: bool
+    """True when the BT leaf should receive SUCCESS."""
+
     status: str
+    """Machine-readable command status, usually SUCCESS, FAILURE, or ERROR."""
+
     elapsed_s: float
+    """Command duration in seconds."""
+
     message: str
+    """Human-readable operator/debug message."""
 
 
 def _build_skill_runtime(
@@ -79,9 +118,18 @@ def _build_skill_runtime(
     robot_action_processor: RobotProcessorPipeline,
     robot_observation_processor: RobotProcessorPipeline,
 ) -> SkillRuntime:
-    # Prepares everything needed to execute one named skill at runtime.
-    # This is where a skill name becomes:
-    # dataset metadata + policy checkpoint + processors.
+    """@brief Create the cached runtime bundle for one skill.
+
+    @param skill_cfg YAML config for the primitive.
+    @param rename_map Feature-name mapping between dataset and live robot.
+    @param robot Robot instance used to infer live feature schemas when needed.
+    @param robot_action_processor Runtime action processor pipeline.
+    @param robot_observation_processor Runtime observation processor pipeline.
+    @return A fully loaded `SkillRuntime`.
+
+    This is where a skill name becomes dataset metadata, a policy checkpoint, and
+    processor pipelines that can run inside the control loop.
+    """
     if skill_cfg.metadata_source == "robot":
         features = combine_feature_dicts(
             aggregate_pipeline_dataset_features(
@@ -130,7 +178,19 @@ def _build_skill_runtime(
 
 
 class SkillCommandExecutor:
+    """@brief Serialized executor for real learned skills and recoveries.
+
+    The executor owns the robot-side critical section. Every skill and recovery
+    goes through `_command_lock`, because two BT leaves must never command the
+    same Panda/Robotiq stack concurrently.
+    """
+
     def __init__(self, cfg: SkillCommandServerConfig, robot: CustomManipulator) -> None:
+        """@brief Index configured commands and keep the robot handle.
+
+        @param cfg Server config containing skills, recoveries, FPS, and flags.
+        @param robot Connected or connectable `CustomManipulator` instance.
+        """
         self.cfg = cfg
         self.robot = robot
         # Names are the bridge between the BT XML and the policy configs.
@@ -146,6 +206,13 @@ class SkillCommandExecutor:
         robot_action_processor: RobotProcessorPipeline,
         robot_observation_processor: RobotProcessorPipeline,
     ) -> SkillRuntime:
+        """@brief Return the loaded runtime for a skill, loading it on first use.
+
+        @param skill_name Name requested by the BT XML.
+        @param robot_action_processor Action processor used to build live features.
+        @param robot_observation_processor Observation processor used to build live features.
+        @return Cached `SkillRuntime` for `skill_name`.
+        """
         if skill_name not in self.skills:
             self.skills[skill_name] = _build_skill_runtime(
                 self.skill_configs[skill_name],
@@ -163,7 +230,14 @@ class SkillCommandExecutor:
         robot_observation_processor: RobotProcessorPipeline,
         timeout_override_s: float = 0.0,
     ) -> CommandResult:
-        # Called when the BT asks to run one learned primitive.
+        """@brief Execute one learned primitive requested by the BT.
+
+        @param skill_name Runtime skill name from the BT leaf.
+        @param robot_action_processor Converts policy actions to robot commands.
+        @param robot_observation_processor Converts robot observations to policy inputs.
+        @param timeout_override_s Optional BT-side timeout override.
+        @return Normalized command result for the ROS2 response.
+        """
         if skill_name not in self.skill_configs:
             return CommandResult(False, "ERROR", 0.0, f"Unknown skill '{skill_name}'.")
 
@@ -171,6 +245,7 @@ class SkillCommandExecutor:
             start_t = time.perf_counter()
             try:
                 if self.cfg.reset_robot_before_skill:
+                    # Optional safety posture before each rollout.
                     logging.info("Resetting robot before skill '%s'.", skill_name)
                     self.robot.reset()
                     logging.info("Robot reset before skill '%s' complete.", skill_name)
@@ -179,6 +254,7 @@ class SkillCommandExecutor:
                 skill = self._get_skill_runtime(skill_name, robot_action_processor, robot_observation_processor)
                 skill.reset()
                 if skill.cfg.settle_time_s > 0:
+                    # Give robot/camera state time to settle before inference starts.
                     time.sleep(skill.cfg.settle_time_s)
 
                 target_dt_s = 1 / self.cfg.fps
@@ -227,7 +303,12 @@ class SkillCommandExecutor:
                 return CommandResult(False, "ERROR", elapsed_s, message)
 
     def execute_named_recovery(self, recovery_name: str, timeout_override_s: float = 0.0) -> CommandResult:
-        # Called when the BT asks to run one named recovery instead of a learned skill.
+        """@brief Execute one scripted recovery requested by the BT.
+
+        @param recovery_name Runtime recovery name from the BT leaf.
+        @param timeout_override_s Optional BT-side duration override.
+        @return Normalized command result for the ROS2 response.
+        """
         if recovery_name not in self.recoveries:
             return CommandResult(False, "ERROR", 0.0, f"Unknown recovery '{recovery_name}'.")
 
@@ -259,7 +340,14 @@ class SkillCommandExecutor:
         elapsed_s: float,
         timeout_s: float | None,
     ) -> str:
-        # Decides whether the current rollout is still running or should terminate.
+        """@brief Evaluate whether the current skill rollout should stop.
+
+        @param skill Runtime bundle whose transition config defines semantics.
+        @param obs_processed Processed observation dictionary.
+        @param elapsed_s Seconds since the command started.
+        @param timeout_s Effective timeout, or `None` for `until_success`.
+        @return `RUNNING`, `SUCCESS`, or `FAILURE`.
+        """
         transition = skill.cfg.transition
 
         if evaluate_any(transition.failure_conditions, obs_processed):
@@ -289,8 +377,14 @@ class SkillCommandExecutor:
         *,
         step_idx: int,
     ) -> None:
-        # One control step of the learned primitive:
-        # processed observation -> ACT prediction -> robot action -> send to robot.
+        """@brief Run one policy inference step and send the resulting action.
+
+        @param skill Runtime bundle for the active primitive.
+        @param obs Raw robot observation used for robot-action conversion.
+        @param obs_processed Processed observation used for policy inference.
+        @param robot_action_processor Pipeline that prepares robot commands.
+        @param step_idx Zero-based control step index for debug logging.
+        """
         observation_frame = build_dataset_frame(skill.ds_meta.features, obs_processed, prefix=OBS_STR)
         action_values = predict_action(
             observation=observation_frame,

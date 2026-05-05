@@ -1,4 +1,5 @@
-"""Helpers to evaluate observation-based termination conditions.
+"""@file conditions.py
+@brief Helpers to evaluate observation-based termination conditions.
 
 The executor consults these functions at every control loop iteration to
 decide whether a rollout should continue, succeed, or fail. The functions are

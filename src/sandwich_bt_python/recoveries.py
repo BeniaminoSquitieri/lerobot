@@ -1,4 +1,5 @@
-"""Deterministic recovery actions executed between BT attempts.
+"""@file recoveries.py
+@brief Deterministic recovery actions executed between BT attempts.
 
 Flow role:
 1. A learned primitive fails.
@@ -20,7 +21,11 @@ from .config import RecoveryConfig, RecoveryStepConfig
 
 
 def _current_robot_state(robot: "CustomManipulator") -> tuple[np.ndarray, np.ndarray, float]:
-    # Reads the minimum robot state needed to build recovery commands.
+    """@brief Read the pose and gripper state required by recovery commands.
+
+    @param robot Robot backend exposing `get_observation()`.
+    @return `(position_xyz, orientation_rotvec, gripper_value)`.
+    """
     obs = robot.get_observation()
     position = np.array([obs["position.x"], obs["position.y"], obs["position.z"]], dtype=float)
     rotation = np.array([obs["orientation.x"], obs["orientation.y"], obs["orientation.z"]], dtype=float)
@@ -29,7 +34,7 @@ def _current_robot_state(robot: "CustomManipulator") -> tuple[np.ndarray, np.nda
 
 
 def _set_gripper(robot: "CustomManipulator", gripper_value: float) -> None:
-    # Supports both dict-based and scalar-based gripper driver APIs.
+    """@brief Command the gripper while supporting both driver API shapes."""
     try:
         robot.gripper_interface.apply_commands({"gripper": float(gripper_value)})
     except TypeError:
@@ -42,9 +47,17 @@ def _run_cartesian_delta(
     fps: int,
     timeout_override_s: float,
 ) -> None:
-    # Runs a short scripted Cartesian motion.
-    # If the arm is configured for delta actions, we send per-step deltas.
-    # Otherwise we interpolate toward an absolute target pose.
+    """@brief Execute one Cartesian recovery step.
+
+    @param robot Robot backend used to send actions.
+    @param step_cfg Cartesian recovery step from YAML.
+    @param fps Control frequency used to split the motion.
+    @param timeout_override_s Optional duration override from the BT leaf.
+
+    If the arm is configured for delta actions, each loop sends a small delta.
+    Otherwise the function interpolates from the current absolute pose toward
+    the target absolute pose.
+    """
     duration_s = timeout_override_s if timeout_override_s > 0 else step_cfg.duration_s
     steps = max(1, int(round(duration_s * fps)))
     start_pos, start_rotvec, current_gripper = _current_robot_state(robot)
@@ -100,7 +113,13 @@ def execute_recovery(
     fps: int,
     timeout_override_s: float = 0.0,
 ) -> None:
-    # Entry point called by the Python server when the BT asks for a recovery.
+    """@brief Execute every step in one named recovery sequence.
+
+    @param robot Robot backend affected by the recovery.
+    @param recovery_cfg Named recovery configuration.
+    @param fps Control frequency for motion-like steps.
+    @param timeout_override_s Optional duration override from the BT leaf.
+    """
     for step in recovery_cfg.steps:
         if step.kind == "pause":
             duration_s = timeout_override_s if timeout_override_s > 0 else step.duration_s

@@ -1,4 +1,5 @@
-"""Closed-set schemas for collaborative sandwich supervision."""
+"""@file planner_schema.py
+@brief Closed-set schemas for collaborative sandwich supervision."""
 
 from __future__ import annotations
 
@@ -15,18 +16,35 @@ _VALID_PRIMITIVE_ACTORS = {"robot", "human"}
 
 @dataclass
 class TaskPrimitive:
+    """@brief One closed-set sandwich subtask known by the supervisor."""
+
     name: str
+    """Stable primitive id used in configs, decisions, and verification."""
+
     required_state: ScenePhase
+    """Scene phase in which this primitive becomes the next valid step."""
+
     actor: Literal["robot", "human"]
+    """Default owner of this primitive."""
+
     expected_state: ScenePhase
+    """Scene phase expected after successful execution."""
+
     success_condition: str
+    """Human-readable description of the expected scene effect."""
+
     difficulty: str = "unspecified"
     robot_skill: str | None = None
+    """Robot capability name required when `actor == "robot"`."""
+
     bt_xml_path: str | None = None
-    recovery: str | None = None
+    """BT subtree path used to execute robot-owned primitives."""
+
     human_instruction: str | None = None
+    """Instruction presented to the human when `actor == "human"`."""
 
     def __post_init__(self) -> None:
+        """@brief Normalize defaults and reject invalid primitive ownership."""
         if self.required_state not in _ACTIVE_SCENE_PHASES:
             raise ValueError(
                 f"Primitive '{self.name}' must target one of {sorted(_ACTIVE_SCENE_PHASES)}, "
@@ -56,12 +74,16 @@ class TaskPrimitive:
 
 @dataclass
 class SupervisorServiceConfig:
+    """@brief ROS2 service names exposed by the supervisor server."""
+
     plan_service_name: str = "/sandwich_supervisor/next_action"
     verify_service_name: str = "/sandwich_supervisor/verify_step"
 
 
 @dataclass
 class SupervisorConfig:
+    """@brief Root config for the closed-set collaborative supervisor."""
+
     goal: str = "make_sandwich"
     current_task: str = "sandwich_collaborative"
     task_primitives: list[TaskPrimitive] = field(default_factory=list)
@@ -71,6 +93,7 @@ class SupervisorConfig:
     service: SupervisorServiceConfig = field(default_factory=SupervisorServiceConfig)
 
     def __post_init__(self) -> None:
+        """@brief Validate closed-set graph invariants."""
         if not self.goal:
             raise ValueError("goal must not be empty.")
         if not self.current_task:
@@ -97,6 +120,8 @@ class SupervisorConfig:
 
 @dataclass(frozen=True)
 class SceneEstimate:
+    """@brief Result of estimating the current scene phase."""
+
     phase: ScenePhase
     observed_state: str
     confidence: float = 1.0
@@ -104,6 +129,8 @@ class SceneEstimate:
 
 @dataclass(frozen=True)
 class PlanStepDecision:
+    """@brief Supervisor decision for the next actor/step pair."""
+
     step_name: str
     actor: DecisionActor
     reason: str
@@ -113,6 +140,8 @@ class PlanStepDecision:
 
 @dataclass(frozen=True)
 class StepVerification:
+    """@brief Scene verification result after an attempted step."""
+
     success: bool
     observed_state: str
     failure_reason: str
@@ -121,6 +150,8 @@ class StepVerification:
 
 @dataclass(frozen=True)
 class StepExecutionResult:
+    """@brief Execution result returned by robot or human executors."""
+
     step_name: str
     actor: Literal["robot", "human"]
     success: bool
@@ -132,11 +163,15 @@ class StepExecutionResult:
 
 @dataclass(frozen=True)
 class ExecutedSupervisorStep:
+    """@brief One supervisor loop iteration with decision and result."""
+
     decision: PlanStepDecision
     result: StepExecutionResult
 
 
 @dataclass(frozen=True)
 class SupervisorRunResult:
+    """@brief Final result of running the domain supervisor loop."""
+
     steps: list[ExecutedSupervisorStep]
     final_decision: PlanStepDecision

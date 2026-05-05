@@ -11,6 +11,9 @@
 namespace sandwich_bt_runtime_cpp
 {
 
+/**
+ * @brief Stores the BT and ROS2 dependencies required by the verification leaf.
+ */
 VerifySkillOutcomeNode::VerifySkillOutcomeNode(
   const std::string& name,
   const BT::NodeConfiguration& config,
@@ -23,6 +26,9 @@ VerifySkillOutcomeNode::VerifySkillOutcomeNode(
 {
 }
 
+/**
+ * @brief Defines the skill_name input port read from XML.
+ */
 BT::PortsList VerifySkillOutcomeNode::providedPorts()
 {
   return {
@@ -30,6 +36,9 @@ BT::PortsList VerifySkillOutcomeNode::providedPorts()
   };
 }
 
+/**
+ * @brief Dispatches one asynchronous verification lookup for the current skill.
+ */
 void VerifySkillOutcomeNode::startRequest()
 {
   auto request = std::make_shared<ServiceT::Request>();
@@ -39,6 +48,9 @@ void VerifySkillOutcomeNode::startRequest()
   request_pending_ = true;
 }
 
+/**
+ * @brief Reads the skill name and starts polling the verification service.
+ */
 BT::NodeStatus VerifySkillOutcomeNode::onStart()
 {
   if (!getInput("skill_name", skill_name_)) {
@@ -58,12 +70,17 @@ BT::NodeStatus VerifySkillOutcomeNode::onStart()
   return BT::NodeStatus::RUNNING;
 }
 
+/**
+ * @brief Interprets verification responses and keeps polling while pending.
+ */
 BT::NodeStatus VerifySkillOutcomeNode::onRunning()
 {
   if (!request_pending_) {
     return BT::NodeStatus::FAILURE;
   }
 
+  // Poll without blocking so the BT executor can keep spinning ROS callbacks
+  // and ticking other tree state while verification is still pending.
   if (future_.wait_for(std::chrono::milliseconds(0)) != std::future_status::ready) {
     return BT::NodeStatus::RUNNING;
   }
@@ -102,6 +119,8 @@ BT::NodeStatus VerifySkillOutcomeNode::onRunning()
     }
 
     if (response->status == "PENDING") {
+      // The verifier has seen the attempt but has not produced a final verdict
+      // yet, so issue a fresh lookup and keep the BT leaf RUNNING.
       startRequest();
       return BT::NodeStatus::RUNNING;
     }
@@ -120,6 +139,9 @@ BT::NodeStatus VerifySkillOutcomeNode::onRunning()
   }
 }
 
+/**
+ * @brief Stops local polling when BehaviorTree.CPP halts this verification leaf.
+ */
 void VerifySkillOutcomeNode::onHalted()
 {
   request_pending_ = false;

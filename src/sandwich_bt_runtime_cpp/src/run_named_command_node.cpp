@@ -4,18 +4,18 @@
  */
 #include "sandwich_bt_runtime_cpp/run_named_command_node.hpp"
 
-// BT leaf node implementation.
-//
-// This file is the direct bridge between:
-// - BehaviorTree.CPP ticking logic
-// - the Python ROS2 skill server
-
 #include <exception>
 #include <future>
 
 namespace sandwich_bt_runtime_cpp
 {
 
+/**
+ * @brief Stores the BT and ROS2 dependencies required by the command leaf.
+ *
+ * The constructor does not send traffic. It only creates a typed service client
+ * so that the first BT tick can dispatch the request with XML-provided inputs.
+ */
 RunNamedCommandNode::RunNamedCommandNode(
   const std::string& name,
   const BT::NodeConfiguration& config,
@@ -28,6 +28,9 @@ RunNamedCommandNode::RunNamedCommandNode(
 {
 }
 
+/**
+ * @brief Defines the input ports read from each RunNamedCommand XML element.
+ */
 BT::PortsList RunNamedCommandNode::providedPorts()
 {
   return {
@@ -37,10 +40,13 @@ BT::PortsList RunNamedCommandNode::providedPorts()
   };
 }
 
+/**
+ * @brief Validates inputs, waits briefly for the server, and starts the call.
+ */
 BT::NodeStatus RunNamedCommandNode::onStart()
 {
-  // First BT tick for this node:
-  // build the service request and start the asynchronous call.
+  // These variables mirror the XML attributes; missing required inputs mean
+  // the tree definition is invalid and should fail loudly during execution.
   std::string kind;
   std::string name;
   double timeout_s = 0.0;
@@ -58,11 +64,15 @@ BT::NodeStatus RunNamedCommandNode::onStart()
     return BT::NodeStatus::FAILURE;
   }
 
+  // The request object is shared because rclcpp keeps it alive until the
+  // asynchronous send has been accepted by the middleware.
   auto request = std::make_shared<ServiceT::Request>();
   request->kind = kind;
   request->name = name;
   request->timeout_s = static_cast<float>(timeout_s);
 
+  // Store the shared future so later ticks can poll without blocking the BT
+  // thread; blocking here would freeze the whole control tree.
   auto future_and_request_id = client_->async_send_request(request);
   future_ = future_and_request_id.future.share();
   request_pending_ = true;
@@ -75,14 +85,17 @@ BT::NodeStatus RunNamedCommandNode::onStart()
   return BT::NodeStatus::RUNNING;
 }
 
+/**
+ * @brief Converts the completed ROS2 future into a BehaviorTree.CPP status.
+ */
 BT::NodeStatus RunNamedCommandNode::onRunning()
 {
-  // Subsequent BT ticks:
-  // keep returning RUNNING until the Python server replies.
   if (!request_pending_) {
     return BT::NodeStatus::FAILURE;
   }
 
+  // A zero-duration wait is a non-blocking readiness check; this keeps the BT
+  // tick loop responsive while the Python side executes the skill.
   if (future_.wait_for(std::chrono::milliseconds(0)) != std::future_status::ready) {
     return BT::NodeStatus::RUNNING;
   }
@@ -114,6 +127,9 @@ BT::NodeStatus RunNamedCommandNode::onRunning()
   }
 }
 
+/**
+ * @brief Clears local pending state when BehaviorTree.CPP aborts this action.
+ */
 void RunNamedCommandNode::onHalted()
 {
   // The BT can halt this node, but the server-side command may already be running.

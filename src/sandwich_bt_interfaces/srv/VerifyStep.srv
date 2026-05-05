@@ -1,14 +1,22 @@
-# Verify whether a previously executed step produced expected scene state.
+# @file VerifyStep.srv
+# @brief Collaborative runner to supervisor step-verification boundary.
 #
-# This is the runner -> supervisor verification boundary.
-# Request sent by the collaborative supervisor client.
+# Request fields:
+# step_name is the primitive that was just executed.
 string step_name
+# first_toast_on_plate mirrors the current scene estimate for the base toast.
 bool first_toast_on_plate
+# ingredient_on_first_toast mirrors the current scene estimate for filling.
 bool ingredient_on_first_toast
+# second_toast_on_top mirrors the current scene estimate for closure.
 bool second_toast_on_top
 ---
-# Response returned after checking the current scene.
+# Response fields:
+# success tells the runner whether the observed state matches the selected step.
 bool success
+# observed_state summarizes the current scene in human-readable form.
 string observed_state
+# failure_reason explains the mismatch when success is false.
 string failure_reason
+# confidence records verifier certainty.
 float32 confidence

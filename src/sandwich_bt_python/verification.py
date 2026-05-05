@@ -1,4 +1,5 @@
-"""Stateful relay for external post-skill verification.
+"""@file verification.py
+@brief Stateful relay for external post-skill verification.
 
 The BT runtime only knows that a learned skill finished executing. The final
 decision about whether the scene looks correct can arrive later from an
@@ -24,38 +25,57 @@ _ALLOWED_REPORTED_STATUSES = {
 
 @dataclass(frozen=True)
 class SkillVerificationSnapshot:
+    """@brief Immutable state for the latest verification attempt of one skill."""
+
     skill_name: str
+    """Skill name used by the BT XML and Python server."""
+
     attempt_id: int
+    """Monotonic attempt id for this skill; increments on each successful rollout."""
+
     status: str
+    """Verification state: PENDING, SUCCESS, FAILURE, or UNKNOWN."""
+
     message: str
+    """Human-readable explanation for logs and operators."""
+
     confidence: float = 0.0
+    """Verifier confidence score when available."""
 
 
 @dataclass(frozen=True)
 class SkillVerificationUpdateResult:
+    """@brief Result returned after trying to apply a verifier report."""
+
     accepted: bool
+    """True when the report was applied to the active pending attempt."""
+
     message: str
+    """Explanation of why the report was accepted or rejected."""
+
     snapshot: SkillVerificationSnapshot | None
+    """Updated or current snapshot; absent when no attempt exists."""
 
 
 class SkillVerificationRegistry:
-    """In-memory verification state keyed by BT skill name."""
+    """@brief In-memory verification state keyed by BT skill name."""
 
     def __init__(self, *, known_skill_names: set[str] | None = None) -> None:
+        """@brief Create an empty registry constrained to optional known names."""
         self._known_skill_names = set(known_skill_names or set())
         self._attempt_counters: dict[str, int] = {}
         self._attempts: dict[str, SkillVerificationSnapshot] = {}
         self._lock = Lock()
 
     def register_skill_name(self, skill_name: str) -> None:
-        """Allow later verification calls for a skill discovered at runtime."""
+        """@brief Allow later verification calls for a skill discovered at runtime."""
         if not skill_name:
             raise ValueError("skill_name must not be empty.")
         with self._lock:
             self._known_skill_names.add(skill_name)
 
     def begin_attempt(self, skill_name: str, *, message: str = "") -> SkillVerificationSnapshot:
-        """Create a fresh pending verification state for one skill attempt."""
+        """@brief Create a fresh pending verification state for one skill attempt."""
         default_message = f"Awaiting external verification for skill '{skill_name}'."
         with self._lock:
             self._validate_skill_name(skill_name)
@@ -72,6 +92,7 @@ class SkillVerificationRegistry:
             return snapshot
 
     def get_latest(self, skill_name: str) -> SkillVerificationSnapshot | None:
+        """@brief Return the latest attempt snapshot for `skill_name`, if any."""
         with self._lock:
             self._validate_skill_name(skill_name)
             return self._attempts.get(skill_name)
@@ -85,7 +106,7 @@ class SkillVerificationRegistry:
         confidence: float = 0.0,
         attempt_id: int = 0,
     ) -> SkillVerificationUpdateResult:
-        """Apply an external verification verdict to the latest pending attempt."""
+        """@brief Apply an external verification verdict to the latest pending attempt."""
         if status not in _ALLOWED_REPORTED_STATUSES:
             raise ValueError(
                 f"Unsupported verification status '{status}'. Expected one of {sorted(_ALLOWED_REPORTED_STATUSES)}."
@@ -139,6 +160,7 @@ class SkillVerificationRegistry:
             )
 
     def _validate_skill_name(self, skill_name: str) -> None:
+        """@brief Reject empty or unknown skill names before state mutation."""
         if not skill_name:
             raise ValueError("skill_name must not be empty.")
         if self._known_skill_names and skill_name not in self._known_skill_names:

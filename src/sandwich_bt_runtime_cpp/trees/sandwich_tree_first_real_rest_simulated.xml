@@ -1,13 +1,26 @@
+<!--
+  @file sandwich_tree_first_real_rest_simulated.xml
+  @brief Hybrid tree: first toast is real, later stages use simulated commands.
+
+  The first primitive uses kind="skill"/"recovery" so it reaches the real
+  executor path. The following primitives use kind="simulated_*" so developers
+  can test the full BT control flow without executing all robot motions.
+-->
 <root BTCPP_format="4" main_tree_to_execute="MainTree">
+  <!-- MainTree is the entry point loaded by sandwich_bt_runner. -->
   <BehaviorTree ID="MainTree">
+    <!-- Execute the real first stage, then simulated pour and closure stages. -->
     <Sequence name="sandwich_first_real_rest_simulated">
+      <!-- Real stage: recover/pre-position, execute first-toast policy, verify. -->
       <RetryUntilSuccessful num_attempts="-1">
         <Sequence name="place_first_toast_with_real_skill">
+          <RunNamedCommand kind="recovery" command_name="recover_place_first_toast"/>
           <RunNamedCommand kind="skill" command_name="place_first_toast" timeout_s="30.0"/>
           <VerifySkillOutcome skill_name="place_first_toast"/>
         </Sequence>
       </RetryUntilSuccessful>
 
+      <!-- Simulated stage: exercise pour BT control flow without robot motion. -->
       <RetryUntilSuccessful num_attempts="-1">
         <Sequence name="pour_with_simulated_skill">
           <RunNamedCommand kind="simulated_recovery" command_name="recover_pour"/>
@@ -16,6 +29,7 @@
         </Sequence>
       </RetryUntilSuccessful>
 
+      <!-- Simulated stage: exercise top-toast BT control flow without robot motion. -->
       <RetryUntilSuccessful num_attempts="-1">
         <Sequence name="place_second_toast_with_simulated_skill">
           <RunNamedCommand kind="simulated_recovery" command_name="recover_place_second_toast"/>

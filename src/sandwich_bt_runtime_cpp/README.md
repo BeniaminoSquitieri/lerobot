@@ -51,7 +51,7 @@ Those belong to `sandwich_bt_python`.
 ## Execution Model
 
 `sandwich_bt_main.cpp` is intentionally small. Its job is to host a normal
-BehaviorTree.CPP tick loop and register one custom leaf node.
+BehaviorTree.CPP tick loop and register the custom service-backed leaf nodes.
 
 At startup it:
 

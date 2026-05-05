@@ -1,6 +1,13 @@
 #!/usr/bin/env python
 
-"""ROS2 service server for the Python execution layer.
+"""@file server.py
+@brief ROS2 service server for the Python execution layer.
+
+@details
+This module is the runtime boundary between the C++ BehaviorTree.CPP process and
+the Python robot execution process. The C++ side never imports policy or robot
+code directly: it sends a `RunNamedCommand` request, waits for this server to
+finish the command, and then polls the verification services managed here.
 
 Flow role:
 1. Wait for the C++ BT to send a named command.
@@ -44,13 +51,19 @@ from .verification import (
 )
 
 DEFAULT_CONFIG_PATH = Path(__file__).resolve().parent / "sandwich_bt_executor.yaml"
+"""Default draccus YAML loaded when the entry point is started without flags."""
 
 if TYPE_CHECKING:
     from lerobot.robots.custom_manipulator.custom_manipulator import CustomManipulator
 
 SIMULATED_RECOVERY_KIND = "simulated_recovery"
+"""Command kind that acknowledges a recovery without touching the robot."""
+
 SIMULATED_SKILL_KIND = "simulated_skill"
+"""Command kind that acknowledges a skill and auto-resolves verification."""
+
 SIMULATED_SKILL_PENDING_KIND = "simulated_skill_pending"
+"""Command kind that acknowledges a skill but leaves verification pending."""
 
 _KINDS_THAT_OPEN_VERIFICATION = {
     "skill",
@@ -63,14 +76,28 @@ _KINDS_THAT_AUTO_VERIFY = {
 
 
 def _instantiate_processor_step(step_spec: Any):
+    """@brief Build one configured robot/policy processor step.
+
+    @param step_spec Either a registry name, or a mapping containing
+        `registry_name`/`class` and an optional `config` dictionary.
+    @return A configured processor step instance.
+
+    The server allows processor steps to be configured without importing every
+    possible class at module import time. A string uses LeRobot's processor
+    registry; a mapping can either name a registry entry or import a class by
+    dotted Python path.
+    """
     if isinstance(step_spec, str):
+        # Registry form: the YAML only stores a stable processor name.
         step_class = ProcessorStepRegistry.get(step_spec)
         return step_class()
 
     if isinstance(step_spec, dict):
         if "registry_name" in step_spec:
+            # Explicit registry mapping, useful when a config block is needed.
             step_class = ProcessorStepRegistry.get(step_spec["registry_name"])
         elif "class" in step_spec:
+            # Dynamic class path for processors that are not registered globally.
             module_path, class_name = step_spec["class"].rsplit(".", 1)
             module = importlib.import_module(module_path)
             step_class = getattr(module, class_name)
@@ -90,6 +117,13 @@ def _build_robot_processor_pipeline(
     to_transition,
     to_output,
 ) -> RobotProcessorPipeline:
+    """@brief Convert a YAML processor list into a LeRobot pipeline.
+
+    @param processor_cfg Mapping with a `steps` list.
+    @param to_transition Converter from robot-native objects to transition data.
+    @param to_output Converter from transition data back to robot-native output.
+    @return A `RobotProcessorPipeline` that wraps every configured step.
+    """
     steps = [_instantiate_processor_step(step_spec) for step_spec in processor_cfg.get("steps", [])]
     return RobotProcessorPipeline(
         steps=steps,
@@ -99,6 +133,14 @@ def _build_robot_processor_pipeline(
 
 
 def _prepend_generated_interface_paths() -> None:
+    """@brief Put generated ROS2 interface packages before source packages.
+
+    The repository contains `src/sandwich_bt_interfaces`, while ROS2 generation
+    creates importable Python bindings under `install/.../site-packages`. When
+    the editable repo has already placed `src/` on `sys.path`, Python may see the
+    source package first and miss the generated `.srv` modules. This helper adds
+    the generated package directories at the front of `sys.path`.
+    """
     python_dir = f"python{sys.version_info.major}.{sys.version_info.minor}"
     repo_root = Path(__file__).resolve().parents[2]
     prefixes = [Path(path) for path in os.environ.get("COLCON_PREFIX_PATH", "").split(os.pathsep) if path]
@@ -118,9 +160,15 @@ def _prepend_generated_interface_paths() -> None:
 
 
 def _load_bt_services():
-    # The editable repo adds `src/` to `sys.path`, which makes Python see the
-    # source-only ROS package as a namespace package before the generated
-    # interface package under `install/.../site-packages`.
+    """@brief Import generated sandwich BT ROS2 service classes.
+
+    @return `(RunNamedCommand, GetSkillVerification, ReportSkillVerification)`.
+    @throws ImportError if the workspace has not been built or sourced.
+
+    The editable repo adds `src/` to `sys.path`, which makes Python see the
+    source-only ROS package as a namespace package before the generated
+    interface package under `install/.../site-packages`.
+    """
     _prepend_generated_interface_paths()
     for module_name in list(sys.modules):
         if module_name == "sandwich_bt_interfaces" or module_name.startswith("sandwich_bt_interfaces."):
@@ -138,6 +186,14 @@ def _load_bt_services():
 
 
 class SkillCommandServer(Node):
+    """@brief ROS2 node that executes BT commands and stores verification state.
+
+    The node owns three services:
+    - `RunNamedCommand`: command execution requested by BT XML leaf nodes.
+    - `GetSkillVerification`: polling endpoint used by `VerifySkillOutcome`.
+    - `ReportSkillVerification`: endpoint used by a VLM/manual verifier.
+    """
+
     def __init__(
         self,
         cfg: SkillCommandServerConfig,
@@ -147,6 +203,15 @@ class SkillCommandServer(Node):
         robot_observation_processor: RobotProcessorPipeline,
         verification_registry: SkillVerificationRegistry,
     ) -> None:
+        """@brief Construct the service node and register every ROS2 service.
+
+        @param cfg Runtime configuration loaded from YAML.
+        @param robot Connected robot object used by the executor backend.
+        @param executor_backend Object that actually runs skills/recoveries.
+        @param robot_action_processor Pipeline that converts policy actions.
+        @param robot_observation_processor Pipeline that converts observations.
+        @param verification_registry In-memory state machine for skill attempts.
+        """
         super().__init__("sandwich_bt_skill_server")
         self.cfg = cfg
         self.robot = robot
@@ -176,11 +241,22 @@ class SkillCommandServer(Node):
         )
 
     def _handle_request(self, request, response):
+        """@brief Handle one `RunNamedCommand` service request.
+
+        @param request ROS2 request with `kind`, `name`, and `timeout_s`.
+        @param response Mutable ROS2 response filled before returning.
+        @return The filled ROS2 response object.
+
+        This method deliberately separates command execution from post-skill
+        scene verification. A successful skill opens a verification attempt; the
+        BT can only advance after `VerifySkillOutcome` sees that attempt resolve.
+        """
         # This is the handoff point between C++ BT orchestration and Python execution.
         log_say(f"Executing {request.kind} {request.name}", self.cfg.play_sounds)
 
         try:
             if request.kind == "skill":
+                # Real learned primitive: delegate to the robot/policy executor.
                 result = self.executor_backend.execute_skill(
                     skill_name=request.name,
                     robot_action_processor=self.robot_action_processor,
@@ -188,11 +264,13 @@ class SkillCommandServer(Node):
                     timeout_override_s=request.timeout_s,
                 )
             elif request.kind == "recovery":
+                # Real scripted recovery: delegate to deterministic recovery code.
                 result = self.executor_backend.execute_named_recovery(
                     recovery_name=request.name,
                     timeout_override_s=request.timeout_s,
                 )
             elif request.kind == SIMULATED_SKILL_KIND:
+                # Bring-up path: act as though a skill ran and verification passed.
                 result = CommandResult(
                     True,
                     "SUCCESS",
@@ -200,6 +278,7 @@ class SkillCommandServer(Node):
                     f"Simulated skill '{request.name}' completed without robot execution.",
                 )
             elif request.kind == SIMULATED_SKILL_PENDING_KIND:
+                # Verification-flow test path: open an attempt but do not resolve it.
                 result = CommandResult(
                     True,
                     "SUCCESS",
@@ -207,6 +286,7 @@ class SkillCommandServer(Node):
                     f"Simulated skill '{request.name}' completed and is awaiting external verification.",
                 )
             elif request.kind == SIMULATED_RECOVERY_KIND:
+                # Bring-up path: recovery is treated as a no-op success.
                 result = CommandResult(
                     True,
                     "SUCCESS",
@@ -234,6 +314,7 @@ class SkillCommandServer(Node):
         if request.kind in _KINDS_THAT_OPEN_VERIFICATION and result.success:
             try:
                 if request.kind in {SIMULATED_SKILL_KIND, SIMULATED_SKILL_PENDING_KIND}:
+                    # Simulated skill names may not exist in the real skill config.
                     self.verification_registry.register_skill_name(request.name)
                 verification_snapshot = self.verification_registry.begin_attempt(request.name)
                 should_auto_verify = request.kind in _KINDS_THAT_AUTO_VERIFY or (
@@ -276,6 +357,12 @@ class SkillCommandServer(Node):
         return response
 
     def _handle_get_skill_verification(self, request, response):
+        """@brief Return the latest verification attempt for one skill.
+
+        @param request ROS2 request containing `skill_name`.
+        @param response Mutable ROS2 response with attempt metadata.
+        @return The filled ROS2 response object.
+        """
         try:
             snapshot = self.verification_registry.get_latest(request.skill_name)
         except ValueError as exc:
@@ -308,6 +395,14 @@ class SkillCommandServer(Node):
         return response
 
     def _handle_report_skill_verification(self, request, response):
+        """@brief Accept a verifier verdict for a pending skill attempt.
+
+        @param request ROS2 request containing skill name, attempt id, status,
+            message, and confidence.
+        @param response Mutable ROS2 response that reports whether the verdict
+            was applied.
+        @return The filled ROS2 response object.
+        """
         try:
             update = self.verification_registry.report(
                 skill_name=request.skill_name,
@@ -333,8 +428,14 @@ class SkillCommandServer(Node):
 
 @parser.wrap(config_path=DEFAULT_CONFIG_PATH)
 def run(cfg: SkillCommandServerConfig) -> None:
-    # Server startup phase:
-    # load config -> build robot -> expose ROS2 service.
+    """@brief Start the real ROS2 skill command server.
+
+    @param cfg Parsed draccus config. When invoked from the entry point this is
+        loaded from `sandwich_bt_executor.yaml` unless another config is passed.
+
+    Startup order matters: the robot and processors are created before the node
+    spins so the BT never reaches a half-initialized command server.
+    """
     init_logging()
     logging.info(pformat(asdict(cfg)))
 
@@ -411,6 +512,7 @@ def run(cfg: SkillCommandServerConfig) -> None:
 
 
 def main() -> None:
+    """@brief Console entry point used by `lerobot-bt-skill-server`."""
     run()
 
 

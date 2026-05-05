@@ -1,4 +1,5 @@
-"""Lightweight VLM simulator: subscribe to a topic and report verification.
+"""@file vlm_stub.py
+@brief Lightweight VLM simulator that reports verification verdicts.
 
 This node allows manual testing of the sandwich BT verification flow without
 running a full VLM verifier. Publish a small JSON string on
@@ -24,7 +25,10 @@ from std_msgs.msg import String
 
 
 class VLMStubNode(Node):
+    """@brief ROS2 node that turns JSON topic messages into verification reports."""
+
     def __init__(self, *, topic: str = "/sandwich_bt/vlm_sim") -> None:
+        """@brief Create service clients and subscribe to the fake VLM topic."""
         super().__init__("vlm_stub")
         self._topic = topic
         # Service clients
@@ -40,6 +44,7 @@ class VLMStubNode(Node):
         self.get_logger().info(f"VLM stub listening on '{self._topic}' and forwarding to verification services.")
 
     def _on_msg(self, msg: String) -> None:
+        """@brief Parse one JSON message and request the latest attempt id."""
         try:
             payload = json.loads(msg.data)
         except Exception as exc:  # noqa: BLE001
@@ -86,6 +91,7 @@ class VLMStubNode(Node):
         message: str,
         confidence: float,
     ) -> None:
+        """@brief Continue the async flow after `GetSkillVerification` returns."""
         try:
             get_res = future.result()
         except Exception as exc:  # noqa: BLE001
@@ -113,6 +119,7 @@ class VLMStubNode(Node):
         report_future.add_done_callback(self._on_report_skill_verification_done)
 
     def _on_report_skill_verification_done(self, future: Any) -> None:
+        """@brief Log the final result of the `ReportSkillVerification` call."""
         try:
             report_res = future.result()
         except Exception as exc:  # noqa: BLE001
@@ -125,6 +132,7 @@ class VLMStubNode(Node):
 
 
 def main(argv: list[str] | None = None) -> int:
+    """@brief Start the VLM stub node until interrupted."""
     rclpy.init(args=argv)
     node = VLMStubNode()
     try:

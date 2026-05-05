@@ -1,4 +1,5 @@
-"""Package entry for the Python execution layer of the sandwich BT stack.
+"""@file __init__.py
+@brief Package entry for the Python execution layer of the sandwich BT stack.
 
 This module exposes the configuration dataclasses from `config.py` at the
 package top-level so callers can import them from
@@ -6,11 +7,10 @@ package top-level so callers can import them from
 lazy `__getattr__` so importing the package does not immediately deserialize
 or import heavy policy modules.
 
-Design notes:
-- `__all__` lists the exported symbols supported by the package surface.
-- `__getattr__` lazily imports the actual dataclasses from `config.py` when
-  they are requested. This reduces import-time overhead and avoids importing
-  optional heavy dependencies unless the caller actually needs the types.
+@details `__all__` lists the exported symbols supported by the package surface.
+`__getattr__` lazily imports the actual dataclasses from `config.py` when they
+are requested. This reduces import-time overhead and avoids importing optional
+heavy dependencies unless the caller actually needs the types.
 """
 
 from __future__ import annotations
@@ -30,7 +30,7 @@ __all__ = [
 
 
 def __getattr__(name: str) -> Any:
-    """Lazily resolve exported dataclasses from `config.py`.
+    """@brief Lazily resolve exported dataclasses from `config.py`.
 
     When a caller does `from sandwich_bt_python import PrimitiveSkillConfig`,
     Python will request the attribute from this module. We intercept that

@@ -1,4 +1,5 @@
-"""Supervisor that allocates closed-set sandwich subtasks to robot or human."""
+"""@file vlm_supervisor.py
+@brief Supervisor that allocates closed-set sandwich subtasks to robot or human."""
 
 from __future__ import annotations
 
@@ -20,10 +21,16 @@ from .task_allocator import SandwichTaskAllocator
 
 
 class RobotStepExecutor(Protocol):
-    def execute(self, primitive: TaskPrimitive) -> StepExecutionResult: ...
+    """@brief Interface for executors that can run robot-owned primitives."""
+
+    def execute(self, primitive: TaskPrimitive) -> StepExecutionResult:
+        """@brief Execute one robot-owned primitive."""
+        ...
 
 
 class CollaborativeSandwichSupervisor:
+    """@brief Pure domain supervisor independent from ROS2 wire formats."""
+
     def __init__(
         self,
         *,
@@ -34,6 +41,7 @@ class CollaborativeSandwichSupervisor:
         robot_executor: RobotStepExecutor,
         human_executor: HumanCommandExecutor,
     ) -> None:
+        """@brief Inject scene, planning, robot, and human dependencies."""
         self.cfg = cfg
         self._observe_scene = observe_scene
         self._scene_estimator = scene_estimator
@@ -49,6 +57,7 @@ class CollaborativeSandwichSupervisor:
         available_robot_skills: Sequence[str] | None = None,
         available_human_skills: Sequence[str] | None = None,
     ) -> PlanStepDecision:
+        """@brief Observe the scene and allocate the next step."""
         scene_estimate = self._scene_estimator.estimate(self._observe_scene())
         return self._task_allocator.plan_next_step(
             scene_estimate,
@@ -63,9 +72,11 @@ class CollaborativeSandwichSupervisor:
         )
 
     def verify_step(self, step_name: str):
+        """@brief Verify a named step against the latest observed scene."""
         return self._scene_estimator.verify_step(step_name, self._observe_scene())
 
     def dispatch_step(self, decision: PlanStepDecision) -> StepExecutionResult:
+        """@brief Execute a robot or human decision and verify robot effects."""
         primitive = self._task_allocator.primitive_for_step(decision.step_name)
 
         if decision.actor == "robot":
@@ -104,6 +115,7 @@ class CollaborativeSandwichSupervisor:
         available_human_skills: Sequence[str] | None = None,
         max_steps: int = 8,
     ) -> SupervisorRunResult:
+        """@brief Run the domain loop until `done`, `abort`, or max steps."""
         steps: list[ExecutedSupervisorStep] = []
 
         for _ in range(max_steps):

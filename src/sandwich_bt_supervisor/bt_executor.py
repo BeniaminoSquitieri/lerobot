@@ -1,4 +1,11 @@
-"""Execute robot subtasks through BT XML subtrees and RunNamedCommand requests."""
+"""@file bt_executor.py
+@brief Execute robot subtasks through BT XML subtrees and RunNamedCommand requests.
+
+@details
+This module is a deliberately tiny BT interpreter used by hardware-free
+supervisor tests. It does not replace BehaviorTree.CPP; it only supports the XML
+constructs needed to validate collaborative robot-owned subtrees in-process.
+"""
 
 from __future__ import annotations
 
@@ -12,15 +19,25 @@ from .planner_schema import StepExecutionResult, TaskPrimitive
 
 
 def default_subtree_path(filename: str) -> Path:
+    """@brief Return the repository path for a runtime C++ subtree XML file."""
     return Path(__file__).resolve().parents[1] / "sandwich_bt_runtime_cpp" / "trees" / filename
 
 
 @dataclass(frozen=True)
 class ExecutedBtCommand:
+    """@brief Audit record for one `RunNamedCommand` executed from XML."""
+
     tree_xml_path: str
+    """Path of the XML file that produced the command."""
+
     attempt_index: int
+    """Retry attempt number active when the command was sent."""
+
     request: NamedCommandRequest
+    """Named-command request generated from the XML leaf."""
+
     result: NamedCommandResult
+    """Backend result returned for that request."""
 
 
 class BtXmlRobotExecutor:
@@ -39,6 +56,7 @@ class BtXmlRobotExecutor:
         on_step_success: Callable[[str], None] | None = None,
         max_unbounded_retry_attempts: int = 3,
     ) -> None:
+        """@brief Store backend and retry settings for subtree execution."""
         if max_unbounded_retry_attempts <= 0:
             raise ValueError("max_unbounded_retry_attempts must be > 0.")
         self._command_backend = command_backend
@@ -47,6 +65,11 @@ class BtXmlRobotExecutor:
         self.command_history: list[ExecutedBtCommand] = []
 
     def execute(self, primitive: TaskPrimitive) -> StepExecutionResult:
+        """@brief Execute the BT subtree configured on a robot primitive.
+
+        @param primitive Supervisor primitive containing `bt_xml_path`.
+        @return Robot step result consumed by the collaborative supervisor.
+        """
         if primitive.bt_xml_path is None:
             raise ValueError(f"Robot primitive '{primitive.name}' does not define bt_xml_path.")
 
@@ -80,6 +103,7 @@ class BtXmlRobotExecutor:
         )
 
     def _main_tree_root(self, root: ElementTree.Element) -> ElementTree.Element:
+        """@brief Select the executable root child from a BT XML document."""
         main_tree_id = root.attrib.get("main_tree_to_execute")
         behavior_trees = [child for child in root if self._tag(child) == "BehaviorTree"]
         if not behavior_trees:
@@ -105,6 +129,7 @@ class BtXmlRobotExecutor:
         tree_xml_path: Path,
         attempt_index: int,
     ) -> tuple[bool, float, str]:
+        """@brief Dispatch one supported XML node by tag name."""
         tag = self._tag(node)
         if tag == "Sequence":
             return self._execute_sequence(node, tree_xml_path=tree_xml_path, attempt_index=attempt_index)
@@ -123,6 +148,7 @@ class BtXmlRobotExecutor:
         tree_xml_path: Path,
         attempt_index: int,
     ) -> tuple[bool, float, str]:
+        """@brief Execute a `Sequence` until a child fails or all children pass."""
         elapsed_s = 0.0
         last_message = f"Sequence '{node.attrib.get('name', '')}' completed."
         for child in node:
@@ -145,6 +171,7 @@ class BtXmlRobotExecutor:
         *,
         tree_xml_path: Path,
     ) -> tuple[bool, float, str]:
+        """@brief Execute a `RetryUntilSuccessful` decorator."""
         child_nodes = [child for child in node if isinstance(child.tag, str)]
         if len(child_nodes) != 1:
             raise ValueError(f"RetryUntilSuccessful in '{tree_xml_path}' must wrap exactly one child.")
@@ -181,6 +208,7 @@ class BtXmlRobotExecutor:
         tree_xml_path: Path,
         attempt_index: int,
     ) -> tuple[bool, float, str]:
+        """@brief Convert one `RunNamedCommand` XML leaf into a backend call."""
         request = NamedCommandRequest(
             kind=node.attrib["kind"],
             name=node.attrib["command_name"],
@@ -203,4 +231,5 @@ class BtXmlRobotExecutor:
 
     @staticmethod
     def _tag(node: ElementTree.Element) -> str:
+        """@brief Strip optional XML namespace from an ElementTree tag."""
         return node.tag.rsplit("}", 1)[-1]

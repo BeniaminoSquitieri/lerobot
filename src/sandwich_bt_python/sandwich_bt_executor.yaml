@@ -1,21 +1,28 @@
-# Python execution layer configuration.
+# @file sandwich_bt_executor.yaml
+# @brief Real-robot Python execution layer configuration.
 #
 # Flow role:
 # 1. The C++ BT sends a named command.
 # 2. The Python server resolves the name using this file.
 # 3. The corresponding learned skill or recovery is executed on the robot.
 
+# ROS2 service used by RunNamedCommand BT leaves.
 service_name: "/sandwich_bt/run_command"
+# ROS2 service used by VerifySkillOutcome BT leaves.
 verification_query_service_name: "/sandwich_bt/get_skill_verification"
+# ROS2 service used by external VLM/operator verdict publishers.
 verification_report_service_name: "/sandwich_bt/report_skill_verification"
 
-# Real robot configuration used by the Python server.
+# Real robot hardware configuration used by the Python server.
 robot:
+  # Franka Panda arm backend configured through LeRobot.
   arm:
     type: panda
     visualize: true
+  # Robotiq gripper backend configured through LeRobot.
   gripper:
     type: robotiq
+  # Camera names become observation keys available to learned policies.
   cameras:
     wrist:
       type: intelrealsense
@@ -32,12 +39,17 @@ robot:
       height: 480
       fps: 30
 
+# Control-loop frame rate used while rolling out learned policies.
 fps: 10
+# Display/logging toggles used by LeRobot rollout helpers.
 display_data: true
 play_sounds: true
+# Robot reset behavior before server startup and before individual skills.
 reset_robot_on_startup: false
 reset_robot_before_skill: true
+# In real mode, immediately resolves successful skills as verified.
 auto_verify_real_skills: true
+# Optional mapping from policy feature names to connected robot feature names.
 rename_map: {}
 
 # Robot-side processors used before sending actions / after reading observations.
@@ -67,6 +79,7 @@ skills:
     settle_time_s: 0.0
 
   - name: pour
+    # Placeholder dataset/policy path for a future pouring primitive.
     dataset_repo_id: "<hf_user>/pour_skill_dataset"
     task: "Pour the ingredient on top of the first toast."
     policy:
@@ -79,6 +92,7 @@ skills:
     settle_time_s: 0.5
 
   - name: place_second_toast
+    # Placeholder dataset/policy path for a future top-toast placement primitive.
     dataset_repo_id: "<hf_user>/toast_skill_2_dataset"
     task: "Pick the second toast and place it on top of the prepared sandwich."
     policy:
@@ -93,6 +107,7 @@ skills:
 # Scripted recoveries used by the BT between failed attempts.
 recoveries:
   - name: recover_place_first_toast
+    # Open the gripper, lift away from the scene, then pause before retrying.
     steps:
       - kind: set_gripper
         gripper_value: 1.0
@@ -104,6 +119,7 @@ recoveries:
         duration_s: 0.2
 
   - name: recover_pour
+    # Move slightly up and pause before retrying the pour skill.
     steps:
       - kind: cartesian_delta
         dz: 0.03
@@ -112,6 +128,7 @@ recoveries:
         duration_s: 0.2
 
   - name: recover_place_second_toast
+    # Open the gripper, lift away from the scene, then pause before retrying.
     steps:
       - kind: set_gripper
         gripper_value: 1.0

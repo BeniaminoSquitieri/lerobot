@@ -1,4 +1,5 @@
-"""Human-step execution with explicit confirmation and scene verification."""
+"""@file human_interface.py
+@brief Human-step execution with explicit confirmation and scene verification."""
 
 from __future__ import annotations
 
@@ -9,6 +10,8 @@ from .scene_state import SandwichSceneObservation
 
 
 class HumanCommandExecutor:
+    """@brief Executor for human-owned primitives in collaborative mode."""
+
     def __init__(
         self,
         *,
@@ -17,12 +20,14 @@ class HumanCommandExecutor:
         send_instruction: Callable[[str], None] | None = None,
         wait_for_confirmation: Callable[[TaskPrimitive, float], bool] | None = None,
     ) -> None:
+        """@brief Store callbacks for instruction, confirmation, and verification."""
         self._observe_scene = observe_scene
         self._verify_step = verify_step
         self._send_instruction = send_instruction or (lambda _instruction: None)
         self._wait_for_confirmation = wait_for_confirmation or (lambda _primitive, _timeout_s: True)
 
     def execute(self, primitive: TaskPrimitive, timeout_s: float) -> StepExecutionResult:
+        """@brief Ask the human to perform one primitive and verify the result."""
         assert primitive.human_instruction is not None
         self._send_instruction(primitive.human_instruction)
 

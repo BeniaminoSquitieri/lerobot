@@ -1,4 +1,5 @@
-"""YAML loader for the closed-set sandwich supervisor config."""
+"""@file config_io.py
+@brief YAML loader for the closed-set sandwich supervisor config."""
 
 from __future__ import annotations
 
@@ -10,6 +11,12 @@ from .planner_schema import SupervisorConfig, SupervisorServiceConfig, TaskPrimi
 
 
 def load_supervisor_config(config_path: str | Path) -> SupervisorConfig:
+    """@brief Load YAML from disk and instantiate `SupervisorConfig`.
+
+    @param config_path Path to `sandwich_bt_supervisor.yaml`.
+    @return Validated supervisor config object.
+    @throws ValueError when the file is missing, malformed, or has invalid fields.
+    """
     path = Path(config_path)
     try:
         with path.open() as config_file:

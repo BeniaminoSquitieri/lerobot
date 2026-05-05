@@ -58,6 +58,7 @@ def _make_server(*, known_skill_names: set[str] | None = None):
     server = SimpleNamespace(
         cfg=SimpleNamespace(
             play_sounds=False,
+            auto_verify_real_skills=False,
             verification_query_service_name="/sandwich_bt/get_skill_verification",
         ),
         executor_backend=executor,

@@ -1,15 +1,18 @@
-# Query the latest verification state for a named skill attempt.
+# @file GetSkillVerification.srv
+# @brief BT runtime to Python verification-registry query boundary.
 #
-# This is the BT runtime -> Python verification relay boundary.
+# Request fields:
+# skill_name identifies the primitive whose latest attempt should be inspected.
 string skill_name
 ---
-# Whether the Python side has seen at least one completed attempt for this skill.
+# Response fields:
+# has_attempt tells the BT whether the Python side has recorded this skill.
 bool has_attempt
-# Monotonic attempt identifier assigned by the Python server.
+# attempt_id is the monotonic identifier assigned by the Python server.
 int32 attempt_id
-# One of: UNKNOWN, PENDING, SUCCESS, FAILURE.
+# status is one of UNKNOWN, PENDING, SUCCESS, or FAILURE.
 string status
-# Human-readable status detail.
+# message provides human-readable status detail.
 string message
-# Confidence attached to the latest external verdict, if any.
+# confidence is attached to the latest external verdict, when available.
 float32 confidence

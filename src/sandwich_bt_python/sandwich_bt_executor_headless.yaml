@@ -1,11 +1,17 @@
-# Python execution layer configuration - HEADLESS/MOCK MODE
-# Uses dummy arm and gripper for testing without physical hardware
+# @file sandwich_bt_executor_headless.yaml
+# @brief Headless/mock Python execution layer configuration.
+#
+# This profile uses dummy arm and gripper backends so tests can exercise the
+# service boundary without physical hardware.
 
+# ROS2 service used by RunNamedCommand BT leaves.
 service_name: "/sandwich_bt/run_command"
+# ROS2 service used by VerifySkillOutcome BT leaves.
 verification_query_service_name: "/sandwich_bt/get_skill_verification"
+# ROS2 service used by external VLM/operator verdict publishers.
 verification_report_service_name: "/sandwich_bt/report_skill_verification"
 
-# Mock robot configuration for headless/simulator mode
+# Mock robot configuration for headless/simulator mode.
 robot:
   arm:
     type: dummy
@@ -13,6 +19,7 @@ robot:
     type: dummy
   cameras: {}
 
+# Lightweight runtime toggles for non-interactive test execution.
 fps: 10
 display_data: false
 play_sounds: false
@@ -25,8 +32,7 @@ robot_action_processor:
 robot_observation_processor:
   steps: []
 
-# Learned primitives - minimal test config
-# Note: These are placeholders; actual skills would require real checkpoints
+# Minimal learned-primitive placeholder for service and config tests.
 skills:
   - name: test_skill
     dataset_repo_id: "HSP-IIT/toast_pick_and_place"
@@ -45,6 +51,7 @@ skills:
 # Scripted recoveries used by the BT between failed attempts.
 recoveries:
   - name: recover_test
+    # A tiny pause is enough to exercise the recovery execution path in tests.
     steps:
       - kind: pause
         duration_s: 0.1

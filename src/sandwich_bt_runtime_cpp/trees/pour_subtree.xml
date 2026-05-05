@@ -1,5 +1,14 @@
+<!--
+  @file pour_subtree.xml
+  @brief Standalone subtree for the ingredient pouring primitive.
+
+  This subtree keeps the pour stage reusable from the collaborative supervisor
+  while preserving the same recovery and verification pattern as the full tree.
+-->
 <root BTCPP_format="4" main_tree_to_execute="MainTree">
+  <!-- MainTree contains one retrying recovery+skill+verification sequence. -->
   <BehaviorTree ID="MainTree">
+    <!-- Retry forever until verification confirms the ingredient was poured. -->
     <RetryUntilSuccessful num_attempts="-1">
       <Sequence name="pour_with_recovery">
         <RunNamedCommand kind="recovery" command_name="recover_pour"/>

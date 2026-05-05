@@ -1,37 +1,45 @@
-# Closed-set collaborative supervisor reference config.
+# @file sandwich_bt_supervisor.yaml
+# @brief Closed-set collaborative supervisor reference configuration.
 #
 # This file is intentionally narrower than the robot skill config. It documents
 # the primitives that the supervisor may allocate. The robot still executes
 # learned skills and recoveries through sandwich_bt_python.
 
+# High-level objective and default task label used by the runner.
 goal: "make_sandwich"
 current_task: "sandwich_collaborative"
 
+# ROS2 services exposed by the supervisor server.
 service:
   plan_service_name: "/sandwich_supervisor/next_action"
   verify_service_name: "/sandwich_supervisor/verify_step"
 
+# Robot primitives the allocator is allowed to select.
 available_robot_skills:
   - "place_first_toast"
   - "place_second_toast"
 
+# Human primitives the allocator is allowed to assign to the participant.
 available_human_skills:
   - "pour_ingredient"
 
+# Maximum time to wait for a simulated or real human confirmation.
 human_confirmation_timeout_s: 15.0
 
+# Closed-set task model ordered by required scene state.
 task_primitives:
   - name: "place_first_toast"
+    # When the scene needs the first toast, allocate the robot pick/place skill.
     required_state: "NEED_FIRST_TOAST"
     actor: "robot"
     difficulty: "easy"
     robot_skill: "place_first_toast"
     bt_xml_path: "src/sandwich_bt_runtime_cpp/trees/place_first_toast_subtree.xml"
-    recovery: "recover_place_first_toast"
     success_condition: "first toast is on plate"
     expected_state: "NEED_POURING"
 
   - name: "pour_ingredient"
+    # Pouring remains a human step because it is configured as hard for robot use.
     required_state: "NEED_POURING"
     actor: "human"
     difficulty: "hard"
@@ -40,11 +48,11 @@ task_primitives:
     expected_state: "NEED_SECOND_TOAST"
 
   - name: "place_second_toast"
+    # Once the ingredient is present, allocate the robot top-toast placement skill.
     required_state: "NEED_SECOND_TOAST"
     actor: "robot"
     difficulty: "easy"
     robot_skill: "place_second_toast"
     bt_xml_path: "src/sandwich_bt_runtime_cpp/trees/place_second_toast_subtree.xml"
-    recovery: "recover_place_second_toast"
     success_condition: "second toast is on top"
     expected_state: "DONE"

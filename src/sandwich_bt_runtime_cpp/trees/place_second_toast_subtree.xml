@@ -1,5 +1,14 @@
+<!--
+  @file place_second_toast_subtree.xml
+  @brief Standalone subtree for second-toast placement.
+
+  The supervisor can point directly at this file when it wants to execute only
+  the robot stage that closes the sandwich.
+-->
 <root BTCPP_format="4" main_tree_to_execute="MainTree">
+  <!-- MainTree contains one retrying recovery+skill+verification sequence. -->
   <BehaviorTree ID="MainTree">
+    <!-- Retry forever until verification confirms the sandwich is closed. -->
     <RetryUntilSuccessful num_attempts="-1">
       <Sequence name="place_second_toast_with_recovery">
         <RunNamedCommand kind="recovery" command_name="recover_place_second_toast"/>

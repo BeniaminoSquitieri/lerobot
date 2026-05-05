@@ -1,4 +1,5 @@
-"""Minimal scene-state estimation for the collaborative sandwich task."""
+"""@file scene_state.py
+@brief Minimal scene-state estimation for the collaborative sandwich task."""
 
 from __future__ import annotations
 
@@ -9,6 +10,8 @@ from .planner_schema import SceneEstimate, StepVerification
 
 @dataclass
 class SandwichSceneObservation:
+    """@brief Closed-set boolean observation consumed by the supervisor."""
+
     first_toast_on_plate: bool = False
     ingredient_on_first_toast: bool = False
     second_toast_on_top: bool = False
@@ -22,6 +25,7 @@ class SandwichSceneEstimator:
     """
 
     def estimate(self, observation: SandwichSceneObservation) -> SceneEstimate:
+        """@brief Map scene booleans to the next closed-set task phase."""
         if observation.second_toast_on_top:
             return SceneEstimate(
                 phase="DONE",
@@ -47,6 +51,7 @@ class SandwichSceneEstimator:
         )
 
     def verify_step(self, step_name: str, observation: SandwichSceneObservation) -> StepVerification:
+        """@brief Check whether one step produced its expected scene effect."""
         scene_estimate = self.estimate(observation)
 
         if step_name == "place_first_toast":

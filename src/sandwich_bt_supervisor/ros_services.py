@@ -1,4 +1,5 @@
-"""Helpers for loading generated ROS2 service interfaces for the supervisor."""
+"""@file ros_services.py
+@brief Helpers for loading generated ROS2 service interfaces for the supervisor."""
 
 from __future__ import annotations
 
@@ -52,6 +53,7 @@ class GeneratedInterfaceError(RuntimeError):
 
 
 def _build_rebuild_message(details: str) -> str:
+    """@brief Build a consistent error message for stale generated interfaces."""
     return (
         "sandwich_bt_interfaces are not built or are stale. "
         f"{details} "
@@ -61,6 +63,7 @@ def _build_rebuild_message(details: str) -> str:
 
 
 def _get_message_fields(message_type) -> set[str]:
+    """@brief Return generated ROS2 message field names or raise a clear error."""
     field_getter = getattr(message_type, "get_fields_and_field_types", None)
     if field_getter is None:
         raise GeneratedInterfaceError(
@@ -78,6 +81,7 @@ def _validate_message_fields(
     message_type,
     required_fields: set[str],
 ) -> None:
+    """@brief Ensure a generated request/response exposes required fields."""
     actual_fields = _get_message_fields(message_type)
     missing_fields = sorted(required_fields - actual_fields)
     if missing_fields:
@@ -89,6 +93,7 @@ def _validate_message_fields(
 
 
 def validate_supervisor_services(plan_service, verify_service) -> None:
+    """@brief Validate generated supervisor service schemas."""
     _validate_message_fields(
         service_name="PlanNextStep",
         message_name="Request",
@@ -116,6 +121,7 @@ def validate_supervisor_services(plan_service, verify_service) -> None:
 
 
 def validate_run_named_command_service(run_named_command_service) -> None:
+    """@brief Validate the generated `RunNamedCommand` schema."""
     _validate_message_fields(
         service_name="RunNamedCommand",
         message_name="Request",
@@ -131,6 +137,7 @@ def validate_run_named_command_service(run_named_command_service) -> None:
 
 
 def prepend_generated_interface_paths() -> None:
+    """@brief Put generated ROS2 Python bindings before source packages."""
     python_dir = f"python{sys.version_info.major}.{sys.version_info.minor}"
     repo_root = Path(__file__).resolve().parents[2]
     prefixes = [Path(path) for path in os.environ.get("COLCON_PREFIX_PATH", "").split(os.pathsep) if path]
@@ -150,6 +157,7 @@ def prepend_generated_interface_paths() -> None:
 
 
 def load_supervisor_services():
+    """@brief Import and validate `PlanNextStep` and `VerifyStep` services."""
     prepend_generated_interface_paths()
     for module_name in list(sys.modules):
         if module_name == "sandwich_bt_interfaces" or module_name.startswith("sandwich_bt_interfaces."):
@@ -169,6 +177,7 @@ def load_supervisor_services():
 
 
 def load_run_named_command_service():
+    """@brief Import and validate the `RunNamedCommand` service."""
     prepend_generated_interface_paths()
     for module_name in list(sys.modules):
         if module_name == "sandwich_bt_interfaces" or module_name.startswith("sandwich_bt_interfaces."):

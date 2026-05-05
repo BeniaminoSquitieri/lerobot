@@ -353,15 +353,17 @@ Recommended for this project:
 
 This avoids the common mismatch where `uv run` executes from `.venv`, while your dependencies are installed in conda.
 
-Runtime rule:
+Runtime shell used by the examples below:
 
 ```bash
+cd ~/lerobot
 conda activate lerobot
 source /opt/ros/jazzy/setup.bash
 source install/setup.bash
 ```
 
-Then run entry points directly:
+Run that once in each terminal unless a section explicitly gives a different
+hardware-specific bootstrap. Then run entry points directly:
 
 ```bash
 lerobot-bt-skill-server
@@ -643,8 +645,8 @@ skills:
 
 For the current repository, edit:
 
-* [src/sandwich_bt_python/sandwich_bt_executor.yaml](/home/bsquitieri-iit.local/lerobot/src/sandwich_bt_python/sandwich_bt_executor.yaml:54) for the real robot path
-* [src/sandwich_bt_python/sandwich_bt_executor_headless.yaml](/home/bsquitieri-iit.local/lerobot/src/sandwich_bt_python/sandwich_bt_executor_headless.yaml:30) for the headless/test path
+* `src/sandwich_bt_python/sandwich_bt_executor.yaml` for the real robot path
+* `src/sandwich_bt_python/sandwich_bt_executor_headless.yaml` for the headless/test path
 
 In `sandwich_bt_executor.yaml`, the current skill entries are:
 
@@ -845,6 +847,8 @@ Use this when you want to prove that the BT orchestration works without Panda, R
 This is the fastest and safest test.
 
 If you are unsure where to start, start here.
+Commands in this section assume the runtime shell from section `5`, except for
+the pure local simulation in `12.1`, which only needs the `lerobot` conda env.
 
 ### What this test validates
 
@@ -879,9 +883,6 @@ or the C++ BT runner.
 This does not start any ROS2 service.
 
 ```bash
-conda activate lerobot
-cd ~/lerobot
-
 lerobot-bt-skill-sim --command skill:place_first_toast
 ```
 
@@ -910,11 +911,6 @@ Important:
 * if you want to simulate a VLM that manually reports `SUCCESS` or `FAILURE`, do not use this mock ROS2 server; use section `14.1` or section `13.3`
 
 ```bash
-conda activate lerobot
-cd ~/lerobot
-source /opt/ros/jazzy/setup.bash
-source install/setup.bash
-
 lerobot-bt-skill-sim --ros2-service
 ```
 
@@ -946,11 +942,6 @@ the C++ runner.
 Terminal 2:
 
 ```bash
-conda activate lerobot
-cd ~/lerobot
-source /opt/ros/jazzy/setup.bash
-source install/setup.bash
-
 ros2 service call /sandwich_bt/run_command \
   sandwich_bt_interfaces/srv/RunNamedCommand \
   "{kind: skill, name: place_first_toast, timeout_s: 0.0}"
@@ -976,11 +967,6 @@ Do the service names, request fields, and response fields line up before I invol
 ### 12.4 Test one BT subtree
 
 ```bash
-conda activate lerobot
-cd ~/lerobot
-source /opt/ros/jazzy/setup.bash
-source install/setup.bash
-
 ros2 run sandwich_bt_runtime_cpp sandwich_bt_runner --ros-args \
   -p tree_xml_path:="$(pwd)/src/sandwich_bt_runtime_cpp/trees/place_first_toast_subtree.xml"
 ```
@@ -1041,6 +1027,9 @@ Use this when you want the same BT orchestration to call the real Python skill s
 
 This is the first hardware-facing step. Do not start here unless section `12`
 already works.
+Commands in sections `13.1` through `13.5` assume the runtime shell from
+section `5`. Section `13.6` keeps its explicit hardware bootstrap because it
+uses the conda ROS setup from the robot workstation.
 
 ### What stays the same compared to simulation
 
@@ -1086,11 +1075,6 @@ Before starting the real skill server, verify:
 ### 13.1 Terminal 1: start the real skill server
 
 ```bash
-conda activate lerobot
-cd ~/lerobot
-source /opt/ros/jazzy/setup.bash
-source install/setup.bash
-
 lerobot-bt-skill-server \
   --config_path "$(pwd)/src/sandwich_bt_python/sandwich_bt_executor.yaml"
 ```
@@ -1114,11 +1098,6 @@ Expected output:
 Use this when you want the smallest possible hardware-facing check.
 
 ```bash
-conda activate lerobot
-cd ~/lerobot
-source /opt/ros/jazzy/setup.bash
-source install/setup.bash
-
 ros2 service call /sandwich_bt/run_command \
   sandwich_bt_interfaces/srv/RunNamedCommand \
   "{kind: skill, name: place_first_toast, timeout_s: 0.0}"
@@ -1150,22 +1129,12 @@ to fake the external scene verifier.
 Start the VLM stub:
 
 ```bash
-conda activate lerobot
-cd ~/lerobot
-source /opt/ros/jazzy/setup.bash
-source install/setup.bash
-
 python -m sandwich_bt_python.vlm_stub
 ```
 
 Then, from another terminal, publish one fake VLM verdict:
 
 ```bash
-conda activate lerobot
-cd ~/lerobot
-source /opt/ros/jazzy/setup.bash
-source install/setup.bash
-
 ros2 topic pub /sandwich_bt/vlm_sim std_msgs/msg/String \
   "{data: '{\"skill_name\":\"place_first_toast\",\"status\":\"SUCCESS\",\"confidence\":0.95,\"message\":\"scene ok\"}'}" -1
 ```
@@ -1203,11 +1172,6 @@ Do not start with the full tree on real hardware.
 Start with the first primitive tree:
 
 ```bash
-conda activate lerobot
-cd ~/lerobot
-source /opt/ros/jazzy/setup.bash
-source install/setup.bash
-
 ros2 run sandwich_bt_runtime_cpp sandwich_bt_runner --ros-args \
   -p tree_xml_path:="$(pwd)/src/sandwich_bt_runtime_cpp/trees/sandwich_tree_first_primitive_only.xml"
 ```
@@ -1329,13 +1293,9 @@ Use this to check that the real Python server can start without physical hardwar
 
 Use this after section `12` if your next question is "can the real server boot
 and parse its config?" rather than "can the robot already act safely?".
+Commands in this section assume the runtime shell from section `5`.
 
 ```bash
-conda activate lerobot
-cd ~/lerobot
-source /opt/ros/jazzy/setup.bash
-source install/setup.bash
-
 lerobot-bt-skill-server \
   --config_path "$(pwd)/src/sandwich_bt_python/sandwich_bt_executor_headless.yaml"
 ```
@@ -1376,11 +1336,6 @@ Important:
 Terminal 1, headless server:
 
 ```bash
-conda activate lerobot
-cd ~/lerobot
-source /opt/ros/jazzy/setup.bash
-source install/setup.bash
-
 lerobot-bt-skill-server \
   --config_path "$(pwd)/src/sandwich_bt_python/sandwich_bt_executor_headless.yaml"
 ```
@@ -1388,22 +1343,12 @@ lerobot-bt-skill-server \
 Terminal 2, VLM stub:
 
 ```bash
-conda activate lerobot
-cd ~/lerobot
-source /opt/ros/jazzy/setup.bash
-source install/setup.bash
-
 python -m sandwich_bt_python.vlm_stub
 ```
 
 Terminal 3, trigger one headless skill:
 
 ```bash
-conda activate lerobot
-cd ~/lerobot
-source /opt/ros/jazzy/setup.bash
-source install/setup.bash
-
 ros2 service call /sandwich_bt/run_command \
   sandwich_bt_interfaces/srv/RunNamedCommand \
   "{kind: skill, name: test_skill, timeout_s: 0.0}"
@@ -1427,11 +1372,6 @@ status: PENDING
 Terminal 4, publish the fake VLM verdict:
 
 ```bash
-conda activate lerobot
-cd ~/lerobot
-source /opt/ros/jazzy/setup.bash
-source install/setup.bash
-
 ros2 topic pub /sandwich_bt/vlm_sim std_msgs/msg/String \
   "{data: '{\"skill_name\":\"test_skill\",\"status\":\"SUCCESS\",\"confidence\":0.95,\"message\":\"scene ok\"}'}" -1
 ```
@@ -1466,17 +1406,13 @@ Important:
 * this section does not use `vlm_stub.py`
 * in `--mock-scene` mode, the runner updates a deterministic closed-set scene internally
 * use sections `13.3` or `14.1` if you specifically want to simulate an external VLM verdict
+* commands in this section assume the runtime shell from section `5`
 
 ### 15.1 Supervisor server live
 
 Terminal 1:
 
 ```bash
-conda activate lerobot
-cd ~/lerobot
-source /opt/ros/jazzy/setup.bash
-source install/setup.bash
-
 lerobot-bt-supervisor-server \
   --config_path "$(pwd)/src/sandwich_bt_supervisor/sandwich_bt_supervisor.yaml"
 ```
@@ -1484,8 +1420,6 @@ lerobot-bt-supervisor-server \
 Terminal 2:
 
 ```bash
-source /opt/ros/jazzy/setup.bash
-source install/setup.bash
 ros2 service list | grep sandwich_supervisor
 ```
 
@@ -1499,11 +1433,6 @@ Expected:
 ### 15.2 Probe supervisor services
 
 ```bash
-conda activate lerobot
-cd ~/lerobot
-source /opt/ros/jazzy/setup.bash
-source install/setup.bash
-
 lerobot-bt-supervisor-probe
 ```
 
@@ -1519,11 +1448,6 @@ actor=robot
 Terminal 1:
 
 ```bash
-conda activate lerobot
-cd ~/lerobot
-source /opt/ros/jazzy/setup.bash
-source install/setup.bash
-
 lerobot-bt-supervisor-server \
   --config_path "$(pwd)/src/sandwich_bt_supervisor/sandwich_bt_supervisor.yaml"
 ```
@@ -1531,11 +1455,6 @@ lerobot-bt-supervisor-server \
 Terminal 2:
 
 ```bash
-conda activate lerobot
-cd ~/lerobot
-source /opt/ros/jazzy/setup.bash
-source install/setup.bash
-
 lerobot-bt-collaborative-runner --mock-scene
 ```
 
@@ -1564,11 +1483,6 @@ exit code 1
 Terminal 1, supervisor:
 
 ```bash
-conda activate lerobot
-cd ~/lerobot
-source /opt/ros/jazzy/setup.bash
-source install/setup.bash
-
 lerobot-bt-supervisor-server \
   --config_path "$(pwd)/src/sandwich_bt_supervisor/sandwich_bt_supervisor.yaml"
 ```
@@ -1576,22 +1490,12 @@ lerobot-bt-supervisor-server \
 Terminal 2, mock skill server:
 
 ```bash
-conda activate lerobot
-cd ~/lerobot
-source /opt/ros/jazzy/setup.bash
-source install/setup.bash
-
 lerobot-bt-skill-sim --ros2-service
 ```
 
 Terminal 3, collaborative runner:
 
 ```bash
-conda activate lerobot
-cd ~/lerobot
-source /opt/ros/jazzy/setup.bash
-source install/setup.bash
-
 lerobot-bt-collaborative-runner --mock-scene --robot-backend ros2
 ```
 
@@ -2073,152 +1977,40 @@ Check:
 
 ## 20. Minimal Validation Checklist
 
-Run these in order.
+Run these in order, using the detailed commands from the referenced sections:
 
-### Python imports and entry points
+1. Python imports and entry points: section `6.3`.
+2. ROS2 build: section `8`.
+3. Simulated BT over ROS2: section `12.2`, then section `12.5`.
+4. Headless verification flow with simulated VLM: section `14.1`.
+5. Collaborative runner with ROS2 robot backend: section `15.4`.
+6. Real-time first primitive only: section `13.5`.
 
-```bash
-conda activate lerobot
-cd ~/lerobot
-python -m pip install -e .
-which lerobot-bt-skill-server
-python -c "import scipy; import catkin_pkg; import lark; print('python deps ok')"
-```
-
-### ROS2 build
-
-```bash
-source /opt/ros/jazzy/setup.bash
-colcon build --base-paths src \
-  --packages-select sandwich_bt_interfaces sandwich_bt_runtime_cpp \
-  --cmake-args -DPython3_EXECUTABLE=/usr/bin/python3
-source install/setup.bash
-```
-
-### Simulated BT
-
-Terminal 1:
-
-```bash
-lerobot-bt-skill-sim --ros2-service
-```
-
-Terminal 2:
-
-```bash
-source /opt/ros/jazzy/setup.bash
-source install/setup.bash
-ros2 run sandwich_bt_runtime_cpp sandwich_bt_runner
-```
-
-Expected:
-
-```text
-Behavior tree completed with SUCCESS.
-```
-
-### Headless verification flow with simulated VLM
-
-Terminal 1:
-
-```bash
-lerobot-bt-skill-server \
-  --config_path "$(pwd)/src/sandwich_bt_python/sandwich_bt_executor_headless.yaml"
-```
-
-Terminal 2:
-
-```bash
-python -m sandwich_bt_python.vlm_stub
-```
-
-Terminal 3:
-
-```bash
-source /opt/ros/jazzy/setup.bash
-source install/setup.bash
-ros2 service call /sandwich_bt/run_command \
-  sandwich_bt_interfaces/srv/RunNamedCommand \
-  "{kind: skill, name: test_skill, timeout_s: 0.0}"
-```
-
-Terminal 4:
-
-```bash
-source /opt/ros/jazzy/setup.bash
-source install/setup.bash
-ros2 topic pub /sandwich_bt/vlm_sim std_msgs/msg/String \
-  "{data: '{\"skill_name\":\"test_skill\",\"status\":\"SUCCESS\",\"confidence\":0.95,\"message\":\"scene ok\"}'}" -1
-```
-
-### Real-time BT, first primitive only
-
-Terminal 1:
-
-```bash
-lerobot-bt-skill-server \
-  --config_path "$(pwd)/src/sandwich_bt_python/sandwich_bt_executor.yaml"
-```
-
-Terminal 2:
-
-```bash
-source /opt/ros/jazzy/setup.bash
-source install/setup.bash
-ros2 run sandwich_bt_runtime_cpp sandwich_bt_runner --ros-args \
-  -p tree_xml_path:="$(pwd)/src/sandwich_bt_runtime_cpp/trees/sandwich_tree_first_primitive_only.xml"
-```
-
-Only after this is safe should you run the full real-time tree.
-
-### Supervisor live
-
-```bash
-lerobot-bt-supervisor-server \
-  --config_path "$(pwd)/src/sandwich_bt_supervisor/sandwich_bt_supervisor.yaml"
-```
-
-### Collaborative runner
-
-```bash
-lerobot-bt-collaborative-runner --mock-scene --robot-backend ros2
-```
-
-If all simulated tests pass, the simulated orchestration stack is working.
-
-If real-time first-primitive tests pass safely, you can proceed toward real robot integration one primitive at a time.
+If all simulated tests pass, the orchestration stack is working. If the real-time
+first-primitive test is safe, proceed toward robot integration one primitive at a
+time.
 
 ---
 
 ## 21. What Is Proven And What Is Not
 
-Proven by the current simulated setup:
+Simulation proves the orchestration contracts listed in sections `3` and `12`:
+BT XML structure, BehaviorTree.CPP execution, ROS2 service boundaries,
+mock command execution, verification propagation, and collaborative supervisor
+logic.
 
-* BT XML structure is valid.
-* BehaviorTree.CPP runner can tick the sandwich tree.
-* `RunNamedCommand` calls the ROS2 skill service.
-* Mock skill server returns expected command results.
-* Supervisor server exposes live ROS2 planning and verification services.
-* Collaborative runner can execute robot/human/robot flow.
-* Failure paths are visible through exit codes.
+Simulation still does not prove Panda motion, Robotiq gripper behavior, real
+camera processing, ACT/BC primitive quality, VLM scene estimation, or physical
+task robustness.
 
-Not proven yet:
-
-* Panda real hardware execution.
-* Robotiq real gripper execution.
-* Real camera observation processing.
-* Real ACT/BC primitive performance inside the full sandwich loop.
-* VLM scene estimation.
-* Physical robustness of the sandwich task.
-
-Correct claim:
+Correct claim after simulated validation:
 
 ```text
 The simulated BT orchestration stack works end-to-end over ROS2 contracts.
 The next step is replacing mock skills with real BC primitives, starting from the first ACT primitive.
 ```
 
-Incorrect claim:
+Incorrect claim after simulated validation:
 
 ```text
 The robot can make a sandwich autonomously.

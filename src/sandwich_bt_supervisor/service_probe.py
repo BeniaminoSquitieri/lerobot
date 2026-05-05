@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 
-"""Probe the live sandwich supervisor ROS2 services."""
+"""@file service_probe.py
+@brief Probe the live sandwich supervisor ROS2 services."""
 
 from __future__ import annotations
 
@@ -23,6 +24,7 @@ from .scene_state import SandwichSceneObservation
 
 
 def main(argv: list[str] | None = None) -> int:
+    """@brief CLI entry point for a one-shot supervisor service probe."""
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--config-path",

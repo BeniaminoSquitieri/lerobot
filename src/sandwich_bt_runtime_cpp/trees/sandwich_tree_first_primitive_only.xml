@@ -1,8 +1,19 @@
+<!--
+  @file sandwich_tree_first_primitive_only.xml
+  @brief Minimal tree that exercises only the first toast placement primitive.
+
+  This tree is useful for real-robot smoke tests because it avoids running the
+  later sandwich stages while preserving recovery and verification behavior.
+-->
 <root BTCPP_format="4" main_tree_to_execute="MainTree">
+  <!-- MainTree is the entry point loaded by sandwich_bt_runner. -->
   <BehaviorTree ID="MainTree">
+    <!-- A single sequence keeps the shape consistent with the full tree. -->
     <Sequence name="single_primitive_test">
+      <!-- Retry until the verifier confirms the first toast is on the plate. -->
       <RetryUntilSuccessful num_attempts="-1">
         <Sequence name="place_first_toast_policy_rollout">
+          <RunNamedCommand kind="recovery" command_name="recover_place_first_toast"/>
           <RunNamedCommand kind="skill" command_name="place_first_toast" timeout_s="30.0"/>
           <VerifySkillOutcome skill_name="place_first_toast"/>
         </Sequence>

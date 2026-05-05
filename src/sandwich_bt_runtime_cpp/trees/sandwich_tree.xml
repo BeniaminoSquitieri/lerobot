@@ -1,13 +1,26 @@
+<!--
+  @file sandwich_tree.xml
+  @brief Full autonomous sandwich behavior tree.
+
+  Each sandwich stage is wrapped in RetryUntilSuccessful so a failed
+  VerifySkillOutcome returns control to the recovery+skill sequence until the
+  Python verifier reports success.
+-->
 <root BTCPP_format="4" main_tree_to_execute="MainTree">
+  <!-- MainTree is the entry point loaded by sandwich_bt_runner. -->
   <BehaviorTree ID="MainTree">
+    <!-- Execute the three sandwich stages in order. -->
     <Sequence name="sandwich_task">
+      <!-- Stage 1: recover/pre-position, place the first toast, then verify it. -->
       <RetryUntilSuccessful num_attempts="-1">
         <Sequence name="place_first_toast_policy_rollout">
+          <RunNamedCommand kind="recovery" command_name="recover_place_first_toast"/>
           <RunNamedCommand kind="skill" command_name="place_first_toast"/>
           <VerifySkillOutcome skill_name="place_first_toast"/>
         </Sequence>
       </RetryUntilSuccessful>
 
+      <!-- Stage 2: recover/pre-position, pour the ingredient, then verify it. -->
       <RetryUntilSuccessful num_attempts="-1">
         <Sequence name="pour_with_recovery">
           <RunNamedCommand kind="recovery" command_name="recover_pour"/>
@@ -16,6 +29,7 @@
         </Sequence>
       </RetryUntilSuccessful>
 
+      <!-- Stage 3: recover/pre-position, place the second toast, then verify it. -->
       <RetryUntilSuccessful num_attempts="-1">
         <Sequence name="place_second_toast_with_recovery">
           <RunNamedCommand kind="recovery" command_name="recover_place_second_toast"/>

@@ -1,6 +1,14 @@
 #!/usr/bin/env python
 
-"""ROS2 service server for the collaborative sandwich supervisor."""
+"""@file server.py
+@brief ROS2 service server for the collaborative sandwich supervisor.
+
+@details
+This node exposes planning and scene-verification services only. It deliberately
+does not execute robot or human work; execution belongs to
+`collaborative_runner.py`, which keeps motion side effects out of a planning
+service process.
+"""
 
 from __future__ import annotations
 
@@ -27,7 +35,10 @@ DEFAULT_CONFIG_PATH = Path(__file__).resolve().parent / "sandwich_bt_supervisor.
 
 
 class _UnavailableRobotExecutor:
+    """@brief Guard rail that prevents the supervisor server from moving robots."""
+
     def execute(self, primitive: TaskPrimitive):  # pragma: no cover - guard rail only
+        """@brief Always raise because this process is planning-only."""
         raise RuntimeError(
             f"Robot execution for '{primitive.name}' is not available in sandwich_bt_supervisor.server. "
             "Use a separate collaborative runner to execute robot subtrees."
@@ -35,7 +46,10 @@ class _UnavailableRobotExecutor:
 
 
 class _UnavailableHumanExecutor(HumanCommandExecutor):
+    """@brief Guard rail that prevents the supervisor server from owning humans."""
+
     def __init__(self) -> None:
+        """@brief Build a parent executor with inert callbacks."""
         super().__init__(
             observe_scene=lambda: SandwichSceneObservation(),
             verify_step=lambda _step_name, _observation: StepVerification(
@@ -47,6 +61,7 @@ class _UnavailableHumanExecutor(HumanCommandExecutor):
         )
 
     def execute(self, primitive: TaskPrimitive, timeout_s: float):
+        """@brief Always raise because this process is planning-only."""
         del timeout_s
         raise RuntimeError(
             f"Human execution for '{primitive.name}' is not available in sandwich_bt_supervisor.server. "
@@ -55,6 +70,7 @@ class _UnavailableHumanExecutor(HumanCommandExecutor):
 
 
 def _request_to_scene_observation(request) -> SandwichSceneObservation:
+    """@brief Convert generated ROS2 request fields into a domain observation."""
     return SandwichSceneObservation(
         first_toast_on_plate=bool(request.first_toast_on_plate),
         ingredient_on_first_toast=bool(request.ingredient_on_first_toast),
@@ -66,6 +82,7 @@ class SupervisorServiceBackend:
     """Thin request-to-domain adapter used by the ROS2 node and unit tests."""
 
     def __init__(self, cfg: SupervisorConfig) -> None:
+        """@brief Build the pure-Python supervisor used behind the ROS2 adapter."""
         self.cfg = cfg
         self._current_observation = SandwichSceneObservation()
         self._supervisor = CollaborativeSandwichSupervisor(
@@ -78,6 +95,7 @@ class SupervisorServiceBackend:
         )
 
     def plan_next_action(self, request) -> PlanStepDecision:
+        """@brief Convert a ROS2 planning request into a domain decision."""
         self._current_observation = _request_to_scene_observation(request)
         return self._supervisor.plan_next_step(
             goal=request.goal or None,
@@ -87,19 +105,24 @@ class SupervisorServiceBackend:
         )
 
     def verify_step(self, request) -> StepVerification:
+        """@brief Convert a ROS2 verification request into a domain verdict."""
         self._current_observation = _request_to_scene_observation(request)
         return self._supervisor.verify_step(request.step_name)
 
     def _observe_scene(self) -> SandwichSceneObservation:
+        """@brief Return the most recent observation supplied by a request."""
         return self._current_observation
 
 
 class SandwichSupervisorServer(Node):
+    """@brief ROS2 node exposing supervisor planning and verification services."""
+
     def __init__(
         self,
         cfg: SupervisorConfig,
         backend: SupervisorServiceBackend | None = None,
     ) -> None:
+        """@brief Register supervisor service handlers."""
         super().__init__(
             "sandwich_bt_supervisor_server",
             start_parameter_services=False,
@@ -125,6 +148,7 @@ class SandwichSupervisorServer(Node):
         )
 
     def _handle_next_action(self, request, response):
+        """@brief Fill one `PlanNextStep` response from the backend decision."""
         try:
             decision = self.backend.plan_next_action(request)
         except Exception as exc:  # noqa: BLE001
@@ -144,6 +168,7 @@ class SandwichSupervisorServer(Node):
         return response
 
     def _handle_verify_step(self, request, response):
+        """@brief Fill one `VerifyStep` response from the backend verifier."""
         try:
             verification = self.backend.verify_step(request)
         except Exception as exc:  # noqa: BLE001
@@ -161,6 +186,7 @@ class SandwichSupervisorServer(Node):
         return response
 
 def run(cfg: SupervisorConfig) -> None:
+    """@brief Start and spin the supervisor ROS2 service node."""
     init_logging()
     logging.info(pformat(asdict(cfg)))
 
@@ -189,6 +215,7 @@ def run(cfg: SupervisorConfig) -> None:
 
 
 def main(argv: list[str] | None = None) -> int:
+    """@brief CLI entry point for `lerobot-bt-supervisor-server`."""
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--config_path",

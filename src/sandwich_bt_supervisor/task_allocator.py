@@ -1,4 +1,5 @@
-"""Closed-set task allocation for the collaborative sandwich supervisor."""
+"""@file task_allocator.py
+@brief Closed-set task allocation for the collaborative sandwich supervisor."""
 
 from __future__ import annotations
 
@@ -6,12 +7,16 @@ from .planner_schema import PlanStepDecision, SceneEstimate, SupervisorConfig, T
 
 
 class SandwichTaskAllocator:
+    """@brief Choose the next primitive and actor from a scene estimate."""
+
     def __init__(self, cfg: SupervisorConfig) -> None:
+        """@brief Index primitives by name and required scene phase."""
         self.cfg = cfg
         self._primitives_by_name = {primitive.name: primitive for primitive in cfg.task_primitives}
         self._primitives_by_state = {primitive.required_state: primitive for primitive in cfg.task_primitives}
 
     def primitive_for_step(self, step_name: str) -> TaskPrimitive:
+        """@brief Return the configured primitive for a step name."""
         return self._primitives_by_name[step_name]
 
     def plan_next_step(
@@ -23,6 +28,7 @@ class SandwichTaskAllocator:
         available_robot_skills: list[str] | None = None,
         available_human_skills: list[str] | None = None,
     ) -> PlanStepDecision:
+        """@brief Produce the next robot/human/done/abort decision."""
         goal_name = goal or self.cfg.goal
         task_name = current_task or self.cfg.current_task
         robot_skills = set(

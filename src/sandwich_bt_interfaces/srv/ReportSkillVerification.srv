@@ -1,19 +1,22 @@
-# Report the verification verdict for a named skill attempt.
+# @file ReportSkillVerification.srv
+# @brief External verifier to Python verification-registry update boundary.
 #
-# This is the external verifier/VLM -> Python verification relay boundary.
+# Request fields:
+# skill_name identifies the primitive whose attempt is being judged.
 string skill_name
-# 0 means "apply to the latest pending attempt for this skill".
+# attempt_id selects a concrete attempt; 0 applies to the latest pending attempt.
 int32 attempt_id
-# Expected values: SUCCESS or FAILURE.
+# status is the verifier verdict and should be SUCCESS or FAILURE.
 string status
-# Optional explanation from the verifier.
+# message explains the verdict for logs, operators, and tests.
 string message
-# Optional confidence score from the verifier.
+# confidence is the optional confidence score reported by the verifier.
 float32 confidence
 ---
-# Whether the report was accepted and applied.
+# Response fields:
+# accepted is true when the registry applied the report.
 bool accepted
-# Attempt that was updated when the report succeeded.
+# applied_attempt_id is the attempt updated when accepted is true.
 int32 applied_attempt_id
-# Diagnostic message for logs or tooling.
+# message describes rejection or success details for tooling.
 string message

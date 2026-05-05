@@ -1,21 +1,21 @@
-# Request one named command from the Python skill/recovery executor.
+# @file RunNamedCommand.srv
+# @brief C++ behavior-tree to Python executor command boundary.
 #
-# This is the C++ BT -> Python execution boundary.
-# Request sent by the C++ BT to the Python server.
-# kind:
-#   - "skill"    -> run one learned primitive
-#   - "recovery" -> run one scripted recovery
-# name:
-#   must match one configured entry on the Python side
-# timeout_s:
-#   optional override for the command duration
+# Request fields:
+# kind selects the command table: "skill" for learned primitives or "recovery"
+# for scripted recovery motions.
 string kind
+# name must match one configured command entry on the Python side.
 string name
+# timeout_s optionally overrides the command duration; 0 lets the server decide.
 float32 timeout_s
 ---
-# Response returned by the Python server to the BT.
-# success/status are what the BT uses to decide whether to continue or retry.
+# Response fields:
+# success is the boolean outcome consumed by the BT leaf.
 bool success
+# status is the detailed executor state, for example SUCCESS, FAILURE, or TIMEOUT.
 string status
+# elapsed_s reports how long the Python command spent executing.
 float32 elapsed_s
+# message carries human-readable diagnostics for logs and tests.
 string message
