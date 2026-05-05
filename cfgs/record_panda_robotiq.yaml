@@ -26,12 +26,12 @@ teleop:
   type: metaquest_rail
 
 dataset:
-  repo_id: HSP-IIT/toast_pick_and_place
+  repo_id: HSP-IIT/pick_place_2nd
   single_task: Pick.
   fps: 10
   episode_time_s: 2000
   reset_time_s: 0
-  num_episodes: 5
+  num_episodes: 15
   video: true
   push_to_hub: true
   private: false

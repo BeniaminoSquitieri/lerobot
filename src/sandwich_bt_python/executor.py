@@ -14,9 +14,10 @@ import logging
 import threading
 import time
 from dataclasses import dataclass
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from lerobot.common.control_utils import predict_action
+from lerobot.datasets.pipeline_features import aggregate_pipeline_dataset_features, create_initial_features
 from lerobot.policies.factory import make_policy, make_pre_post_processors
 from lerobot.policies.pretrained import PreTrainedPolicy
 from lerobot.policies.utils import make_robot_action
@@ -24,7 +25,7 @@ from lerobot.processor import PolicyAction, PolicyProcessorPipeline, RobotProces
 from lerobot.processor.rename_processor import rename_stats
 from lerobot.utils.constants import OBS_STR
 from lerobot.utils.device_utils import get_safe_torch_device
-from lerobot.utils.feature_utils import build_dataset_frame
+from lerobot.utils.feature_utils import build_dataset_frame, combine_feature_dicts
 from lerobot.utils.robot_utils import precise_sleep
 from lerobot.utils.visualization_utils import log_rerun_data
 
@@ -42,7 +43,7 @@ class SkillRuntime:
     # Runtime bundle for one learned primitive:
     # config + dataset metadata + policy + processors.
     cfg: PrimitiveSkillConfig
-    ds_meta: LeRobotDatasetMetadata
+    ds_meta: Any
     policy: PreTrainedPolicy
     preprocessor: PolicyProcessorPipeline[dict, dict]
     postprocessor: PolicyProcessorPipeline[PolicyAction, PolicyAction]
@@ -51,6 +52,16 @@ class SkillRuntime:
         self.policy.reset()
         self.preprocessor.reset()
         self.postprocessor.reset()
+
+
+@dataclass
+class LiveRobotDatasetMetadata:
+    # Minimal metadata object with the attributes used by make_policy and the
+    # inference loop. This mirrors record.py's rollout metadata without creating
+    # or writing a LeRobotDataset on disk.
+    repo_id: str
+    features: dict[str, dict]
+    stats: dict | None = None
 
 
 @dataclass
@@ -64,17 +75,41 @@ class CommandResult:
 def _build_skill_runtime(
     skill_cfg: PrimitiveSkillConfig,
     rename_map: dict[str, str],
+    robot: CustomManipulator,
+    robot_action_processor: RobotProcessorPipeline,
+    robot_observation_processor: RobotProcessorPipeline,
 ) -> SkillRuntime:
     # Prepares everything needed to execute one named skill at runtime.
     # This is where a skill name becomes:
     # dataset metadata + policy checkpoint + processors.
-    from lerobot.datasets.lerobot_dataset import LeRobotDatasetMetadata
+    if skill_cfg.metadata_source == "robot":
+        features = combine_feature_dicts(
+            aggregate_pipeline_dataset_features(
+                pipeline=robot_action_processor,
+                initial_features=create_initial_features(action=robot.action_features),
+                use_videos=True,
+            ),
+            aggregate_pipeline_dataset_features(
+                pipeline=robot_observation_processor,
+                initial_features=create_initial_features(observation=robot.observation_features),
+                use_videos=True,
+            ),
+        )
+        ds_meta = LiveRobotDatasetMetadata(repo_id=skill_cfg.dataset_repo_id, features=features)
+        logging.info(
+            "Skill '%s' using live robot rollout metadata with features=%s.",
+            skill_cfg.name,
+            sorted(features),
+        )
+    else:
+        from lerobot.datasets.lerobot_dataset import LeRobotDatasetMetadata
 
-    ds_meta = LeRobotDatasetMetadata(
-        skill_cfg.dataset_repo_id,
-        root=skill_cfg.dataset_root,
-        revision=skill_cfg.dataset_revision,
-    )
+        ds_meta = LeRobotDatasetMetadata(
+            skill_cfg.dataset_repo_id,
+            root=skill_cfg.dataset_root,
+            revision=skill_cfg.dataset_revision,
+        )
+
     policy = make_policy(skill_cfg.policy, ds_meta=ds_meta, rename_map=rename_map)
     preprocessor, postprocessor = make_pre_post_processors(
         policy_cfg=skill_cfg.policy,
@@ -105,9 +140,20 @@ class SkillCommandExecutor:
         # Only one command at a time should touch the real robot.
         self._command_lock = threading.Lock()
 
-    def _get_skill_runtime(self, skill_name: str) -> SkillRuntime:
+    def _get_skill_runtime(
+        self,
+        skill_name: str,
+        robot_action_processor: RobotProcessorPipeline,
+        robot_observation_processor: RobotProcessorPipeline,
+    ) -> SkillRuntime:
         if skill_name not in self.skills:
-            self.skills[skill_name] = _build_skill_runtime(self.skill_configs[skill_name], self.cfg.rename_map)
+            self.skills[skill_name] = _build_skill_runtime(
+                self.skill_configs[skill_name],
+                self.cfg.rename_map,
+                self.robot,
+                robot_action_processor,
+                robot_observation_processor,
+            )
         return self.skills[skill_name]
 
     def execute_skill(
@@ -124,7 +170,13 @@ class SkillCommandExecutor:
         with self._command_lock:
             start_t = time.perf_counter()
             try:
-                skill = self._get_skill_runtime(skill_name)
+                if self.cfg.reset_robot_before_skill:
+                    logging.info("Resetting robot before skill '%s'.", skill_name)
+                    self.robot.reset()
+                    logging.info("Robot reset before skill '%s' complete.", skill_name)
+                    start_t = time.perf_counter()
+
+                skill = self._get_skill_runtime(skill_name, robot_action_processor, robot_observation_processor)
                 skill.reset()
                 if skill.cfg.settle_time_s > 0:
                     time.sleep(skill.cfg.settle_time_s)
@@ -136,14 +188,12 @@ class SkillCommandExecutor:
                     else timeout_override_s if timeout_override_s > 0 else skill.cfg.transition.max_duration_s
                 )
 
+                step_idx = 0
                 while True:
                     loop_t = time.perf_counter()
                     # Live rollout: read observation -> evaluate status -> maybe predict action.
                     obs = self.robot.get_observation()
                     obs_processed = robot_observation_processor(obs)
-
-                    if self.cfg.display_data:
-                        log_rerun_data(observation=obs_processed, action=None)
 
                     elapsed_s = time.perf_counter() - start_t
                     status = self._skill_status(skill, obs_processed, elapsed_s, timeout_s)
@@ -156,7 +206,8 @@ class SkillCommandExecutor:
                         logging.error(message)
                         return CommandResult(False, status, elapsed_s, message)
 
-                    self._run_skill_step(skill, obs, obs_processed, robot_action_processor)
+                    self._run_skill_step(skill, obs, obs_processed, robot_action_processor, step_idx=step_idx)
+                    step_idx += 1
 
                     dt_s = time.perf_counter() - loop_t
                     if dt_s > target_dt_s:
@@ -235,6 +286,8 @@ class SkillCommandExecutor:
         obs: dict,
         obs_processed: dict,
         robot_action_processor: RobotProcessorPipeline,
+        *,
+        step_idx: int,
     ) -> None:
         # One control step of the learned primitive:
         # processed observation -> ACT prediction -> robot action -> send to robot.
@@ -249,6 +302,37 @@ class SkillCommandExecutor:
             task=skill.cfg.task,
             robot_type=self.robot.robot_type,
         )
+        if self.cfg.display_data:
+            try:
+                from lerobot.robots.custom_manipulator.policy_rollout_viewer import log_policy_rollout
+
+                log_policy_rollout(
+                    action_values,
+                    list(skill.policy._action_queue),
+                    skill.ds_meta.features,
+                    skill.postprocessor,
+                )
+            except Exception as exc:  # noqa: BLE001
+                logging.debug("Policy rollout visualization skipped: %s", exc)
         selected_action = make_robot_action(action_values, skill.ds_meta.features)
         robot_action_to_send = robot_action_processor((selected_action, obs))
-        self.robot.send_action(robot_action_to_send)
+        if step_idx < 5:
+            current_pos = [float(obs[f"position.{axis}"]) for axis in "xyz"]
+            target_pos = [float(selected_action[f"position.{axis}"]) for axis in "xyz"]
+            current_ori = [float(obs[f"orientation.{axis}"]) for axis in "xyz"]
+            target_ori = [float(selected_action[f"orientation.{axis}"]) for axis in "xyz"]
+            logging.info(
+                "Skill '%s' action debug #%d: current_pos=%s target_pos=%s current_ori=%s "
+                "target_ori=%s gripper=%.4f",
+                skill.cfg.name,
+                step_idx + 1,
+                [round(v, 4) for v in current_pos],
+                [round(v, 4) for v in target_pos],
+                [round(v, 4) for v in current_ori],
+                [round(v, 4) for v in target_ori],
+                float(selected_action.get("gripper", 0.0)),
+            )
+        sent_action = self.robot.send_action(robot_action_to_send)
+        if self.cfg.display_data:
+            log_rerun_data(observation=obs_processed, action=selected_action)
+        return sent_action

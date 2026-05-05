@@ -2,8 +2,7 @@
   <BehaviorTree ID="MainTree">
     <Sequence name="sandwich_task">
       <RetryUntilSuccessful num_attempts="-1">
-        <Sequence name="place_first_toast_with_recovery">
-          <RunNamedCommand kind="recovery" command_name="recover_place_first_toast"/>
+        <Sequence name="place_first_toast_policy_rollout">
           <RunNamedCommand kind="skill" command_name="place_first_toast"/>
           <VerifySkillOutcome skill_name="place_first_toast"/>
         </Sequence>

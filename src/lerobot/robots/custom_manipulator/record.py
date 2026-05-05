@@ -39,6 +39,7 @@ from lerobot.processor.converters import (
 )
 from lerobot.robots.custom_manipulator.custom_manipulator import CustomManipulator
 from lerobot.robots.custom_manipulator.episode_start_overlay import make_episode_start_overlay
+from lerobot.robots.custom_manipulator.policy_rollout_viewer import log_policy_rollout
 from lerobot.robots.custom_manipulator.record_config import (
     RecordConfig,
     get_missing_policy_source_message,
@@ -212,6 +213,7 @@ def record_loop(
         # Get action from either policy or teleop
         if teleop_engaged:
             selected_action = teleop_action_processor((act, obs))
+            action_values = selected_action
         else:
             if isinstance(teleop, Teleoperator):
                 teleop_action_processor.reset()
@@ -236,7 +238,12 @@ def record_loop(
                     task=single_task,
                     robot_type=robot.robot_type,
                 )
+
+                if display_data:
+                    log_policy_rollout(action_values, list(policy._action_queue), dataset.features, postprocessor)
+
                 selected_action = make_robot_action(action_values, dataset.features)
+                action_values = selected_action
             else:
                 logging.info(
                     "No policy or teleoperator provided, skipping action generation."
@@ -247,13 +254,12 @@ def record_loop(
                 continue
 
         # Applies a pipeline to the action, default is IdentityProcessor
-        action_values = selected_action
         robot_action_to_send = robot_action_processor((selected_action, obs))
 
         _sent_action = robot.send_action(robot_action_to_send)
 
-        if dataset is not None:
-            action_frame = build_dataset_frame(dataset.features, action_values, prefix=ACTION)
+        if dataset is not None and (policy is None or teleop is None or teleop_engaged):
+            action_frame = build_dataset_frame(dataset.features, _sent_action, prefix=ACTION)
             frame = {**observation_frame, **action_frame, "task": single_task}
             dataset.add_frame(frame)
 
@@ -324,7 +330,6 @@ def _resolve_resume_root(cfg: RecordConfig) -> Path:
         root,
     )
     return root
-
 @parser.wrap(config_path='cfgs/record.yaml')
 def record(cfg: RecordConfig):
     init_logging()
@@ -332,6 +337,8 @@ def record(cfg: RecordConfig):
     
     if cfg.display_data:
         init_rerun(session_name="recording_custom_manipulator")
+        if cfg.rerun_blueprint:
+            rr.log_file_from_path(Path(cfg.rerun_blueprint).expanduser())
 
     # Initialize robot and teleop from config
     robot = CustomManipulator(cfg.robot)
@@ -369,10 +376,12 @@ def record(cfg: RecordConfig):
     )
 
     if cfg.resume:
+        resume_root = _resolve_resume_root(cfg)
+        LeRobotDataset(cfg.dataset.repo_id, root=resume_root)
         num_cameras = len(robot.cameras) if hasattr(robot, "cameras") else 0
         dataset = LeRobotDataset.resume(
             cfg.dataset.repo_id,
-            root=_resolve_resume_root(cfg),
+            root=resume_root,
             batch_encoding_size=cfg.dataset.video_encoding_batch_size,
             image_writer_processes=cfg.dataset.num_image_writer_processes if num_cameras > 0 else 0,
             image_writer_threads=cfg.dataset.num_image_writer_threads_per_camera * num_cameras
@@ -381,7 +390,7 @@ def record(cfg: RecordConfig):
         )
         sanity_check_dataset_robot_compatibility(dataset, robot, cfg.dataset.fps, dataset_features)
     else:
-        sanity_check_dataset_name(cfg.dataset.repo_id, cfg.policy)
+        sanity_check_dataset_name(cfg.dataset.repo_id, cfg.policy, cfg.teleop)
         dataset = LeRobotDataset.create(
             cfg.dataset.repo_id,
             cfg.dataset.fps,
@@ -452,6 +461,7 @@ def record(cfg: RecordConfig):
 
             if not events["stop_recording"] and (
                 (recorded_episodes < cfg.dataset.num_episodes - 1) or events["rerecord_episode"]
+                or (cfg.policy is not None and cfg.teleop is not None and not dataset.has_pending_frames())
             ):
                 log_say("Reset the environment", cfg.play_sounds)
                 robot.reset()
@@ -462,6 +472,12 @@ def record(cfg: RecordConfig):
                 events["rerecord_episode"] = False
                 events["exit_early"] = False
                 dataset.clear_episode_buffer()
+                continue
+
+            if cfg.policy is not None and cfg.teleop is not None and not dataset.has_pending_frames():
+                if events["stop_recording"]:
+                    break
+                log_say("No corrections recorded. Retry episode", cfg.play_sounds)
                 continue
 
             dataset.save_episode()
@@ -489,3 +505,4 @@ def record(cfg: RecordConfig):
 
 if __name__ == "__main__":
     record()
+    import os, sys; sys.stdout.flush(); sys.stderr.flush(); os._exit(0)

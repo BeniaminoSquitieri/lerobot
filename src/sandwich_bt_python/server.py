@@ -236,7 +236,10 @@ class SkillCommandServer(Node):
                 if request.kind in {SIMULATED_SKILL_KIND, SIMULATED_SKILL_PENDING_KIND}:
                     self.verification_registry.register_skill_name(request.name)
                 verification_snapshot = self.verification_registry.begin_attempt(request.name)
-                if request.kind in _KINDS_THAT_AUTO_VERIFY:
+                should_auto_verify = request.kind in _KINDS_THAT_AUTO_VERIFY or (
+                    request.kind == "skill" and self.cfg.auto_verify_real_skills
+                )
+                if should_auto_verify:
                     self.verification_registry.report(
                         skill_name=request.name,
                         attempt_id=verification_snapshot.attempt_id,

@@ -25,7 +25,7 @@ from ..configs import ArmConfig
 from ..ros_spin import spin_until_future_complete
 try:
     from .panda_utils import PandaDebugTools
-except ModuleNotFoundError as exc:
+except ImportError as exc:
     _PANDA_DEBUG_IMPORT_ERROR = str(exc)
 
     class PandaDebugTools:
@@ -157,6 +157,7 @@ class Panda(Node):
         self._q_nom = None
         self._debug = None
         self._debug_urdf_path = None
+        self._command_debug_count = 0
 
         self.urdf_path = str(_resolve_panda_urdf_path(self.config))
         self._debug = PandaDebugTools(
@@ -266,6 +267,17 @@ class Panda(Node):
 
             # IK
             q_desired = self.compute_ik(wrist_pos, wrist_rot, q_seed=qpos)
+            if self._command_debug_count < 5:
+                current_eef_pos, current_eef_ori = self._forward_kinematics(qpos)
+                q_delta_norm = float(np.linalg.norm(np.asarray(q_desired, dtype=float) - qpos))
+                self.get_logger().info(
+                    f"Panda action debug #{self._command_debug_count + 1}: "
+                    f"current_eef={[round(float(v), 4) for v in current_eef_pos]} "
+                    f"current_ori={[round(float(v), 4) for v in current_eef_ori]} "
+                    f"target_eef={[round(float(v), 4) for v in eef_pos]} "
+                    f"target_ori={[round(float(v), 4) for v in axis_angle]} "
+                    f"q_delta_norm={q_delta_norm:.6f}"
+                )
 
         request = Panda.interfaces['apply_commands'].Request()
         # Ensure q_desired is a list or array
@@ -284,7 +296,14 @@ class Panda(Node):
             
         request.command = PandaCommand(position=q_desired, gain=gain)
         self.future = self.client_names['apply_commands'].call_async(request)
-        return
+        spin_until_future_complete(self, self.future)
+        result = self.future.result()
+        if result is not None and hasattr(result, "success") and not result.success:
+            raise RuntimeError("Panda /apply_commands service returned success=false.")
+        if action is not None and self._command_debug_count < 5:
+            self.get_logger().info(f"Panda /apply_commands result #{self._command_debug_count + 1}: {result}")
+            self._command_debug_count += 1
+        return result
 
     def get_sensors(self):
         request = Panda.interfaces['get_sensors'].Request()

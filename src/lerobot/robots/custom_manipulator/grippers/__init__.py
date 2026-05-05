@@ -2,7 +2,7 @@ from .config_xhand import XHandConfig
 
 try:
 	from .xhand import XHand
-except ModuleNotFoundError:
+except ImportError:
 	XHand = None
 
 try:

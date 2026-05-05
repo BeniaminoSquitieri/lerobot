@@ -2,9 +2,8 @@
   <BehaviorTree ID="MainTree">
     <Sequence name="single_primitive_test">
       <RetryUntilSuccessful num_attempts="-1">
-        <Sequence name="place_first_toast_with_recovery">
-          <RunNamedCommand kind="recovery" command_name="recover_place_first_toast"/>
-          <RunNamedCommand kind="skill" command_name="place_first_toast"/>
+        <Sequence name="place_first_toast_policy_rollout">
+          <RunNamedCommand kind="skill" command_name="place_first_toast" timeout_s="30.0"/>
           <VerifySkillOutcome skill_name="place_first_toast"/>
         </Sequence>
       </RetryUntilSuccessful>

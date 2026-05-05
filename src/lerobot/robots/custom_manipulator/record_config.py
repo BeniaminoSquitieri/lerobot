@@ -81,6 +81,8 @@ class RecordConfig:
     policy: PreTrainedConfig | None = None
     # Display all cameras on screen
     display_data: bool = False
+    # Optional Rerun blueprint file to load when display_data is enabled.
+    rerun_blueprint: str | Path | None = None
     # Use vocal synthesis to read events.
     play_sounds: bool = True
     # Resume recording on an existing dataset.

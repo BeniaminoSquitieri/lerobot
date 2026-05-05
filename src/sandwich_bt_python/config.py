@@ -101,10 +101,19 @@ class PrimitiveSkillConfig:
     dataset_root: str | Path | None = None
     # Optional dataset revision (branch/commit) to select metadata.
     dataset_revision: str | None = None
+    # Metadata source for policy features. "dataset" loads LeRobot metadata from
+    # dataset_repo_id; "robot" builds metadata from the live robot features, like
+    # custom_manipulator/record.py does for rollout.
+    metadata_source: str = "dataset"
     # Time to wait after the rollout ends before declaring completion.
     settle_time_s: float = 0.0
 
     def __post_init__(self) -> None:
+        if self.metadata_source not in {"dataset", "robot"}:
+            raise ValueError(
+                f"Skill '{self.name}' has unsupported metadata_source={self.metadata_source!r}. "
+                "Expected 'dataset' or 'robot'."
+            )
         # The skill must reference a pretrained model path (either local folder
         # or a Hugging Face Hub id). This prevents accidental runtime failures
         # where a skill is declared but has no model to run.
@@ -196,6 +205,12 @@ class SkillCommandServerConfig:
     play_sounds: bool = True
     # Attempt to reset the robot hardware when the server starts.
     reset_robot_on_startup: bool = True
+    # Reset the robot immediately before every learned skill rollout, matching
+    # the standalone custom_manipulator record/rollout entrypoint.
+    reset_robot_before_skill: bool = False
+    # Testing convenience: after a real skill finishes, automatically accept its
+    # verification attempt as if a VLM had returned SUCCESS.
+    auto_verify_real_skills: bool = False
     # Map of feature/key renames to align dataset keys with live robot keys.
     rename_map: dict[str, str] = field(default_factory=dict)
     # Processor pipeline applied to actions before they reach the robot.

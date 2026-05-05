@@ -1233,48 +1233,50 @@ want the BT to continue through the full sandwich sequence.
 
 This tree runs:
 
-* `recover_place_first_toast` as a real recovery
-* `place_first_toast` as a real learned skill
+* `place_first_toast` as a real learned skill, with a robot reset before rollout
 * `recover_pour` as a simulated recovery
 * `pour` as a simulated, auto-verified skill
 * `recover_place_second_toast` as a simulated recovery
 * `place_second_toast` as a simulated, auto-verified skill
 
+In the default bring-up config, `auto_verify_real_skills: true` also simulates
+the VLM verdict for the first real skill. That means no `vlm_stub.py` terminal
+is needed for this test: after the first skill times out successfully, the BT
+can advance directly to the simulated `pour` and `place_second_toast` nodes.
+
 Terminal 1, real skill server:
 
 ```bash
+source /home/panda-admin/miniconda3/etc/profile.d/conda.sh
 conda activate lerobot
-cd ~/lerobot
-source /opt/ros/jazzy/setup.bash
-source install/setup.bash
+cd /home/panda-admin/users/sben/lerobot
 
-lerobot-bt-skill-server \
-  --config_path "$(pwd)/src/sandwich_bt_python/sandwich_bt_executor.yaml"
+unset PYTHONPATH
+source "$CONDA_PREFIX/setup.bash"
+source install/local_setup.bash
+export PATH="$CONDA_PREFIX/bin:$PATH"
+export PYTHONPATH="$(pwd)/src:${PYTHONPATH:-}"
+hash -r
+
+which python
+python -m sandwich_bt_python.server
 ```
 
 Leave this terminal running.
 
-Terminal 2, simulated VLM verifier:
+Terminal 2, BT runner:
 
 ```bash
+source /home/panda-admin/miniconda3/etc/profile.d/conda.sh
 conda activate lerobot
-cd ~/lerobot
-source /opt/ros/jazzy/setup.bash
-source install/setup.bash
+cd /home/panda-admin/users/sben/lerobot
 
-python -m sandwich_bt_python.vlm_stub
-```
-
-Leave this terminal running too. It listens on `/sandwich_bt/vlm_sim` and
-forwards each JSON verdict to `/sandwich_bt/report_skill_verification`.
-
-Terminal 3, BT runner:
-
-```bash
-conda activate lerobot
-cd ~/lerobot
-source /opt/ros/jazzy/setup.bash
-source install/setup.bash
+unset PYTHONPATH
+source "$CONDA_PREFIX/setup.bash"
+source install/local_setup.bash
+export PATH="$CONDA_PREFIX/bin:$PATH"
+export PYTHONPATH="$(pwd)/src:${PYTHONPATH:-}"
+hash -r
 
 ros2 run sandwich_bt_runtime_cpp sandwich_bt_runner --ros-args \
   -p tree_xml_path:="$(pwd)/src/sandwich_bt_runtime_cpp/trees/sandwich_tree_first_real_rest_simulated.xml"
@@ -1282,46 +1284,20 @@ ros2 run sandwich_bt_runtime_cpp sandwich_bt_runner --ros-args \
 
 What happens next:
 
-1. the BT runs the real `recover_place_first_toast`
-2. the BT runs the real `place_first_toast`
-3. the Python server opens a `PENDING` verification attempt for `place_first_toast`
-4. the BT waits inside `VerifySkillOutcome`
-5. the simulated `pour` and `place_second_toast` steps will run only after `place_first_toast` is verified
-
-Terminal 4, publish the simulated VLM verdict after checking the scene:
-
-```bash
-conda activate lerobot
-cd ~/lerobot
-source /opt/ros/jazzy/setup.bash
-source install/setup.bash
-
-ros2 topic pub /sandwich_bt/vlm_sim std_msgs/msg/String \
-  "{data: '{\"skill_name\":\"place_first_toast\",\"status\":\"SUCCESS\",\"confidence\":0.95,\"message\":\"first toast ok\"}'}" -1
-```
-
-Use `SUCCESS` only if the first toast is actually correct in the scene.
-
-If the first toast is wrong and you want the BT to retry the first primitive,
-publish `FAILURE` instead:
-
-```bash
-ros2 topic pub /sandwich_bt/vlm_sim std_msgs/msg/String \
-  "{data: '{\"skill_name\":\"place_first_toast\",\"status\":\"FAILURE\",\"confidence\":0.95,\"message\":\"first toast not on plate\"}'}" -1
-```
-
-With `FAILURE`, `VerifySkillOutcome` returns BT `FAILURE`, and the surrounding
-`RetryUntilSuccessful` reruns:
-
-```text
-recover_place_first_toast
-place_first_toast
-VerifySkillOutcome
-```
+1. the BT runs the real `place_first_toast`
+2. the Python server resets the robot, loads `HSP-IIT/act_toast_pick_and_place`, and runs the rollout
+3. the XML timeout override `timeout_s="30.0"` stops the real rollout after 30 seconds for bring-up
+4. the server auto-resolves the first skill verification as `SUCCESS`
+5. the BT advances to simulated `recover_pour`, `pour`, `recover_place_second_toast`, and `place_second_toast`
 
 If later you want the simulated `pour` or `place_second_toast` steps to wait
 for a VLM too, edit only the BT XML and change their command kind from
 `simulated_skill` to `simulated_skill_pending`.
+
+If you want the first real skill to wait for an external VLM verdict again, set
+`auto_verify_real_skills: false` in
+`src/sandwich_bt_python/sandwich_bt_executor.yaml` and run the VLM stub from
+section `13.3`.
 
 The simulated skill names do not need a trained policy in
 `sandwich_bt_executor.yaml`. The server registers simulated skill names for

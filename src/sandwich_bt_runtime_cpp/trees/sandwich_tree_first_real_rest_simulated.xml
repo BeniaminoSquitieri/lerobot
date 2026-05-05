@@ -3,8 +3,7 @@
     <Sequence name="sandwich_first_real_rest_simulated">
       <RetryUntilSuccessful num_attempts="-1">
         <Sequence name="place_first_toast_with_real_skill">
-          <RunNamedCommand kind="recovery" command_name="recover_place_first_toast"/>
-          <RunNamedCommand kind="skill" command_name="place_first_toast"/>
+          <RunNamedCommand kind="skill" command_name="place_first_toast" timeout_s="30.0"/>
           <VerifySkillOutcome skill_name="place_first_toast"/>
         </Sequence>
       </RetryUntilSuccessful>
