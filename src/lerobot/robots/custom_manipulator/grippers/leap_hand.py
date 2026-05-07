@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import sys
+import threading
+import time
 from pathlib import Path
 
 import numpy as np
@@ -83,6 +85,15 @@ class LeapHand:
         self._vectorops = vectorops
         _, self._leap_utils = _get_leap_runtime()
         self.dxl_client = None
+        self._command_lock = threading.Lock()
+        self._command_thread = None
+        self._command_thread_stop = threading.Event()
+        self._command_rate_hz = 100.0
+        self._interp_duration_s = 0.1
+        self._last_sent_qpos = np.zeros(16, dtype=float)
+        self._interp_start_qpos = np.zeros(16, dtype=float)
+        self._target_qpos = np.zeros(16, dtype=float)
+        self._interp_start_time = time.perf_counter()
 
         urdf_path = _resolve_urdf_path(self.config.urdf_path)
 
@@ -130,6 +141,9 @@ class LeapHand:
         self.qpos = np.zeros(16, dtype=float)
         if self.config.home_position is not None:
             self.qpos[:] = np.asarray(self.config.home_position, dtype=float)
+        self._last_sent_qpos[:] = self.qpos
+        self._interp_start_qpos[:] = self.qpos
+        self._target_qpos[:] = self.qpos
         self._apply_qpos_to_model(self.qpos)
 
     def get_end_effector_transform(self, arm_type: str) -> np.ndarray:
@@ -147,6 +161,7 @@ class LeapHand:
                 self.dxl_client = DynamixelClient(list(self.config.motor_ids), port, self.config.baudrate)
                 self.dxl_client.connect()
                 self._configure_controller()
+                self._start_command_thread()
                 print(f"[leap_hand] Connected on {port}.", flush=True)
                 return
             except Exception as exc:
@@ -166,9 +181,10 @@ class LeapHand:
             self.qpos[:] = np.asarray(self.config.home_position, dtype=float)
         self._apply_qpos_to_model(self.qpos)
         if self.dxl_client is not None:
-            self._write_qpos_to_hardware(self.qpos)
+            self._set_target_qpos(self.qpos, immediate=True)
 
     def disconnect(self):
+        self._stop_command_thread()
         if self.dxl_client is not None:
             self.dxl_client.disconnect()
         self.dxl_client = None
@@ -209,7 +225,7 @@ class LeapHand:
         self.qpos[:] = self.retargeter.retarget(self._action_with_targets(action, transformed_targets))
         self._apply_qpos_to_model(self.qpos)
         if self.dxl_client is not None:
-            self._write_qpos_to_hardware(self.qpos)
+            self._set_target_qpos(self.qpos)
 
         tip_values, tip_positions = self._get_fingertips_from_current_model_state(return_positions=True)
         joints = {
@@ -277,6 +293,44 @@ class LeapHand:
             list(self.config.motor_ids),
             self._model_to_device_joint_values(qpos),
         )
+
+    def _set_target_qpos(self, qpos: np.ndarray, immediate: bool = False) -> None:
+        with self._command_lock:
+            if immediate:
+                self._last_sent_qpos[:] = qpos
+                self._interp_start_qpos[:] = qpos
+                self._target_qpos[:] = qpos
+                self._interp_start_time = time.perf_counter()
+                self._write_qpos_to_hardware(qpos)
+                return
+
+            self._interp_start_qpos[:] = self._last_sent_qpos
+            self._target_qpos[:] = qpos
+            self._interp_start_time = time.perf_counter()
+
+    def _start_command_thread(self) -> None:
+        if self._command_thread is not None and self._command_thread.is_alive():
+            return
+        self._command_thread_stop.clear()
+        self._command_thread = threading.Thread(target=self._command_loop, name="leap-hand-command", daemon=True)
+        self._command_thread.start()
+
+    def _stop_command_thread(self) -> None:
+        self._command_thread_stop.set()
+        if self._command_thread is not None:
+            self._command_thread.join(timeout=1.0)
+        self._command_thread = None
+
+    def _command_loop(self) -> None:
+        period_s = 1.0 / self._command_rate_hz
+        while not self._command_thread_stop.is_set():
+            with self._command_lock:
+                elapsed = time.perf_counter() - self._interp_start_time
+                alpha = min(1.0, elapsed / self._interp_duration_s)
+                qpos = (1.0 - alpha) * self._interp_start_qpos + alpha * self._target_qpos
+                self._last_sent_qpos[:] = qpos
+            self._write_qpos_to_hardware(qpos)
+            time.sleep(period_s)
 
     def _read_qpos_from_hardware(self) -> np.ndarray:
         if self.dxl_client is None:
