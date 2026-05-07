@@ -45,7 +45,7 @@ DEFAULT_MOTOR_IDS = tuple(range(16))
 DEFAULT_PORT_CANDIDATES = ("/dev/ttyUSB0", "/dev/ttyUSB1", "COM13")
 DEFAULT_SIDE_TO_SIDE_MOTOR_IDS = (0, 4, 8)
 
-DEFAULT_URDF_PATH = "/home/panda-user/dex-urdf/robots/hands/leap_hand/leap_hand_right.urdf"
+DEFAULT_URDF_PATH = "src/lerobot/robots/custom_manipulator/grippers/urdfs/leap_hand_right.urdf"
 
 
 @GripperConfig.register_subclass("leap_hand")

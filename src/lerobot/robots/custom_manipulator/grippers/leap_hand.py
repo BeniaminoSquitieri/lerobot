@@ -72,6 +72,29 @@ def _resolve_urdf_path(urdf_path: str) -> str:
     return str(resolved)
 
 
+def _expand_candidate_ports(config: LeapHandConfig) -> list[str]:
+    candidate_ports: list[str] = []
+    if config.port:
+        candidate_ports.append(config.port)
+    candidate_ports.extend(port for port in config.port_candidates if port not in candidate_ports)
+
+    # Add any currently-present serial devices (helps when /dev/serial/by-id changes across machines).
+    for port_path in sorted(Path("/dev/serial/by-id").glob("*")):
+        port_str = str(port_path)
+        if port_str not in candidate_ports:
+            candidate_ports.append(port_str)
+    for port_path in sorted(Path("/dev").glob("ttyUSB*")):
+        port_str = str(port_path)
+        if port_str not in candidate_ports:
+            candidate_ports.append(port_str)
+    for port_path in sorted(Path("/dev").glob("ttyACM*")):
+        port_str = str(port_path)
+        if port_str not in candidate_ports:
+            candidate_ports.append(port_str)
+
+    return candidate_ports
+
+
 class LeapHand:
     end_effector_transforms = {"panda": np.eye(4, dtype=float), "dummy": np.eye(4, dtype=float)}
 
@@ -151,11 +174,16 @@ class LeapHand:
 
     def connect(self):
         DynamixelClient, _ = _get_leap_runtime()
-        candidate_ports = [self.config.port] if self.config.port else []
-        candidate_ports.extend(port for port in self.config.port_candidates if port not in candidate_ports)
+        candidate_ports = _expand_candidate_ports(self.config)
 
         last_error = None
+        attempted_ports: list[str] = []
+        missing_ports: list[str] = []
         for port in candidate_ports:
+            if not Path(port).exists():
+                missing_ports.append(port)
+                continue
+            attempted_ports.append(port)
             try:
                 print(f"[leap_hand] Connecting on {port}...", flush=True)
                 self.dxl_client = DynamixelClient(list(self.config.motor_ids), port, self.config.baudrate)
@@ -173,7 +201,13 @@ class LeapHand:
                         pass
                     self.dxl_client = None
 
-        raise RuntimeError(f"Failed to connect LEAP hand on ports {candidate_ports}.") from last_error
+        message = (
+            "Failed to connect LEAP hand."
+            f" attempted_ports={attempted_ports or '[]'}"
+            f" missing_ports={missing_ports or '[]'}"
+            " (If you ran `sudo usermod -aG dialout $USER`, log out/in or run `newgrp dialout`.)"
+        )
+        raise RuntimeError(message) from last_error
 
     def reset(self):
         self.qpos[:] = 0.0
@@ -250,7 +284,13 @@ class LeapHand:
         side_to_side_motor_ids = list(self.config.side_to_side_motor_ids)
 
         self.dxl_client.sync_write(motor_ids, np.ones(len(motor_ids)) * self.config.control_mode, 11, 1)
-        self.dxl_client.set_torque_enabled(motor_ids, True)
+        remaining_ids = self.dxl_client.set_torque_enabled(motor_ids, True)
+        if remaining_ids:
+            raise RuntimeError(
+                "LEAP hand did not respond to torque enable for motor IDs "
+                f"{remaining_ids}. Common causes: wrong `baudrate`, wrong `port`, "
+                "insufficient power, or wrong Dynamixel protocol/wiring."
+            )
         self.dxl_client.sync_write(motor_ids, np.ones(len(motor_ids)) * self.config.kp, 84, 2)
         self.dxl_client.sync_write(
             side_to_side_motor_ids,

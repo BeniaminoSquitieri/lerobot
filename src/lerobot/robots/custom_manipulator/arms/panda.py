@@ -88,6 +88,13 @@ class Panda(Node):
     }
 
     def __init__(self, config: PandaConfig = None, **kwargs):
+        try:
+            if not rclpy.ok():
+                rclpy.init(args=None)
+        except Exception:
+            # If rclpy is already initialized (or a custom context is used elsewhere),
+            # fall back to trying to create the node.
+            pass
         super().__init__('panda_client')
         self.config = config if config else PandaConfig()
         self.end_effector_transform = np.eye(4)

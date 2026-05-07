@@ -188,7 +188,7 @@ class DynamixelClient:
     def set_torque_enabled(self,
                            motor_ids: Sequence[int],
                            enabled: bool,
-                           retries: int = -1,
+                           retries: int = 3,
                            retry_interval: float = 0.25):
         """Sets whether torque is enabled for the motors.
 
@@ -200,20 +200,23 @@ class DynamixelClient:
             retry_interval: The number of seconds to wait between retries.
         """
         remaining_ids = list(motor_ids)
+        last_remaining_ids: list[int] | None = None
         while remaining_ids:
             remaining_ids = self.write_byte(
                 remaining_ids,
                 int(enabled),
                 ADDR_TORQUE_ENABLE,
             )
-            if remaining_ids:
+            if remaining_ids and remaining_ids != last_remaining_ids:
                 logging.error('Could not set torque %s for IDs: %s',
                               'enabled' if enabled else 'disabled',
                               str(remaining_ids))
+                last_remaining_ids = list(remaining_ids)
             if retries == 0:
                 break
             time.sleep(retry_interval)
             retries -= 1
+        return remaining_ids
 
     def read_pos_vel_cur(self) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
         """Returns the current positions and velocities."""

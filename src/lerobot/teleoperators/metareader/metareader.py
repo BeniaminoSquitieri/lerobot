@@ -178,7 +178,7 @@ class MetaReaderTeleoperator(Teleoperator):
     def _frame_to_action(self, frame: Any) -> dict[str, float]:
         hand = frame.right_hand
         palm = getattr(hand.palm, "pose", None)
-        engaged = 1.0
+        engaged = 1.0 if self._clutch.pressed else 0.0
         if engaged == 0.0 or palm is None or not palm.valid:
             return self._neutral_action(engaged)
 

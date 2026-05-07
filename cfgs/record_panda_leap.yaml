@@ -1,7 +1,7 @@
 robot:
   type: custom_manipulator
   arm:
-    type: dummy
+    type: panda
     # use_delta_actions: true
     # visualize: true
   gripper:
