@@ -63,7 +63,7 @@ Advance the BT manually, using the same topic a real VLM will use:
 
 ```bash
 ros2 topic pub --once /sandwich_bt/vlm_result std_msgs/msg/String \
-  "{data: '{\"skill_name\":\"place_first_toast\",\"attempt_id\":0,\"status\":\"SUCCESS\",\"message\":\"scene ok\",\"confidence\":0.95}'}"
+  "{data: '{\"skill_name\":\"place_first_toast\",\"attempt_id\":0,\"status\":\"SUCCESS\",\"message\":\"scene ok\"}'}"
 ```
 
 Publish `FAILURE` instead of `SUCCESS` to make the enclosing
@@ -74,7 +74,7 @@ Publish waiting states to keep the BT blocked:
 
 ```bash
 ros2 topic pub --once /sandwich_bt/vlm_result std_msgs/msg/String \
-  "{data: '{\"skill_name\":\"pour_ingredient\",\"attempt_id\":0,\"status\":\"WAIT_HUMAN\",\"message\":\"human is pouring\",\"confidence\":0.9}'}"
+  "{data: '{\"skill_name\":\"pour_ingredient\",\"attempt_id\":0,\"status\":\"WAIT_HUMAN\",\"message\":\"human is pouring\"}'}"
 ```
 
 The same topic can carry richer VLM reasons:

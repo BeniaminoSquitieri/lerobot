@@ -18,7 +18,7 @@ update.
 
 ```bash
 ros2 topic pub --once /sandwich_bt/vlm_result std_msgs/msg/String \
-  "{data: '{\"skill_name\":\"place_first_toast\",\"attempt_id\":0,\"status\":\"SUCCESS\",\"message\":\"ok\",\"confidence\":0.95}'}"
+  "{data: '{\"skill_name\":\"place_first_toast\",\"attempt_id\":0,\"status\":\"SUCCESS\",\"message\":\"ok\"}'}"
 ```
 
 ## Unsupported Command Kind

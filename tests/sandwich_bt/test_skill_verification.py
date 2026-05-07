@@ -138,7 +138,6 @@ def test_mock_service_exposes_pending_then_successful_vlm_check() -> None:
             skill_name="place_first_toast",
             status=VLM_SUCCESS,
             message="scene looks correct",
-            confidence=0.91,
         )
     )
     resolved = service.handle_get_vlm_state(
@@ -152,4 +151,3 @@ def test_mock_service_exposes_pending_then_successful_vlm_check() -> None:
     assert report.applied_attempt_id == pending.attempt_id
     assert resolved.status == VLM_SUCCESS
     assert resolved.message == "scene looks correct"
-    assert resolved.confidence == pytest.approx(0.91)

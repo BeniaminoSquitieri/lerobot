@@ -15,5 +15,3 @@ int32 attempt_id
 string status
 # message provides human-readable status detail.
 string message
-# confidence is attached to the latest external verdict, when available.
-float32 confidence

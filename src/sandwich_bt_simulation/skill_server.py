@@ -356,7 +356,6 @@ class MockVlmStateResponse:
     attempt_id: int
     status: str
     message: str
-    confidence: float
 
 
 @dataclass
@@ -367,7 +366,6 @@ class MockLegacyVlmResultRequest:
     status: str
     attempt_id: int = 0
     message: str = ""
-    confidence: float = 0.0
 
 
 @dataclass
@@ -548,7 +546,6 @@ class MockRunNamedCommandService:
                     attempt_id=snapshot.attempt_id,
                     status=self.auto_vlm_result_status,
                     message=f"Mock VLM auto-reported {self.auto_vlm_result_status} for skill '{request.name}'.",
-                    confidence=1.0,
                 )
                 result.message = f"{result.message} {auto_update.message}"
 
@@ -572,7 +569,6 @@ class MockRunNamedCommandService:
                 attempt_id=0,
                 status=VLM_UNKNOWN,
                 message=str(exc),
-                confidence=0.0,
             )
         if snapshot is None:
             return MockVlmStateResponse(
@@ -580,7 +576,6 @@ class MockRunNamedCommandService:
                 attempt_id=0,
                 status=VLM_UNKNOWN,
                 message=f"No completed attempt has been recorded yet for skill '{request.skill_name}'.",
-                confidence=0.0,
             )
 
         return MockVlmStateResponse(
@@ -588,7 +583,6 @@ class MockRunNamedCommandService:
             attempt_id=snapshot.attempt_id,
             status=snapshot.status,
             message=snapshot.message,
-            confidence=snapshot.confidence,
         )
 
     def handle_legacy_vlm_result(
@@ -602,7 +596,6 @@ class MockRunNamedCommandService:
                 attempt_id=request.attempt_id,
                 status=request.status,
                 message=request.message,
-                confidence=request.confidence,
             )
         except ValueError as exc:
             return MockLegacyVlmResultResponse(
@@ -808,7 +801,6 @@ def run_ros2_service(
             response.attempt_id = int(result.attempt_id)
             response.status = result.status
             response.message = result.message
-            response.confidence = float(result.confidence)
             return response
 
         def _handle_legacy_vlm_result(self, request, response):
@@ -819,7 +811,6 @@ def run_ros2_service(
                     status=request.status,
                     attempt_id=int(request.attempt_id),
                     message=request.message,
-                    confidence=float(request.confidence),
                 )
             )
             response.accepted = bool(result.accepted)
@@ -883,7 +874,6 @@ def run_ros2_service(
                             payload,
                             status=_vlm_status_from_payload(payload),
                         ),
-                        confidence=float(payload.get("confidence", 0.0)),
                     )
                 )
             except (TypeError, ValueError) as exc:

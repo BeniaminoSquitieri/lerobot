@@ -372,7 +372,6 @@ class SkillCommandServer(Node):
                         attempt_id=vlm_check_attempt.attempt_id,
                         status=VLM_SUCCESS,
                         message=f"Simulated verifier accepted skill '{request.name}'.",
-                        confidence=1.0,
                     )
                     result.message = (
                         f"{result.message} "
@@ -424,7 +423,6 @@ class SkillCommandServer(Node):
             response.attempt_id = 0
             response.status = VLM_UNKNOWN
             response.message = str(exc)
-            response.confidence = 0.0
             self.get_logger().error(response.message)
             return response
 
@@ -433,7 +431,6 @@ class SkillCommandServer(Node):
             response.attempt_id = 0
             response.status = VLM_UNKNOWN
             response.message = f"No completed attempt has been recorded yet for skill '{request.skill_name}'."
-            response.confidence = 0.0
             self.get_logger().warning(response.message)
             return response
 
@@ -441,7 +438,6 @@ class SkillCommandServer(Node):
         response.attempt_id = int(snapshot.attempt_id)
         response.status = snapshot.status
         response.message = snapshot.message
-        response.confidence = float(snapshot.confidence)
         if snapshot.status in VLM_WAITING_STATUSES:
             self.get_logger().debug(
                 f"VLM check for skill '{snapshot.skill_name}' attempt {snapshot.attempt_id} is {snapshot.status}."
@@ -452,7 +448,7 @@ class SkillCommandServer(Node):
         """@brief Accept a verifier verdict for a pending skill attempt.
 
         @param request ROS2 request containing skill name, attempt id, status,
-            message, and confidence.
+            and message.
         @param response Mutable ROS2 response that reports whether the verdict
             was applied.
         @return The filled ROS2 response object.
@@ -463,7 +459,6 @@ class SkillCommandServer(Node):
                 attempt_id=int(request.attempt_id),
                 status=request.status,
                 message=request.message,
-                confidence=float(request.confidence),
             )
         except ValueError as exc:
             response.accepted = False
@@ -525,13 +520,11 @@ class SkillCommandServer(Node):
             status = _vlm_status_from_payload(payload)
             attempt_id = int(payload.get("attempt_id", 0))
             message = _vlm_message_from_payload(payload, status=status)
-            confidence = float(payload.get("confidence", 0.0))
             update = self.vlm_check_registry.report(
                 skill_name=skill_name,
                 attempt_id=attempt_id,
                 status=status,
                 message=message,
-                confidence=confidence,
             )
         except (TypeError, ValueError) as exc:
             self.get_logger().error(f"Rejected VLM result topic message: {exc}")

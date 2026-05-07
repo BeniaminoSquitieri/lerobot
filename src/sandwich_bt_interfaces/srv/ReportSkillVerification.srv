@@ -13,8 +13,6 @@ int32 attempt_id
 string status
 # message explains the verdict for logs, operators, and tests.
 string message
-# confidence is the optional confidence score reported by the verifier.
-float32 confidence
 ---
 # Response fields:
 # accepted is true when the registry applied the report.

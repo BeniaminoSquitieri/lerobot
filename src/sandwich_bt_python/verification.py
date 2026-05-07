@@ -53,9 +53,6 @@ class VlmCheckSnapshot:
     message: str
     """Human-readable explanation for logs and operators."""
 
-    confidence: float = 0.0
-    """Verifier confidence score when available."""
-
     created_at_s: float = 0.0
     """Monotonic timestamp when this VLM check attempt was opened."""
 
@@ -116,7 +113,6 @@ class VlmCheckRegistry:
                 attempt_id=attempt_id,
                 status=VLM_PENDING,
                 message=message or default_message,
-                confidence=0.0,
                 created_at_s=self._clock(),
                 timeout_s=self._vlm_timeout_s,
             )
@@ -136,7 +132,6 @@ class VlmCheckRegistry:
         skill_name: str,
         status: str,
         message: str = "",
-        confidence: float = 0.0,
         attempt_id: int = 0,
     ) -> VlmCheckUpdate:
         """@brief Apply an external VLM result to the latest open attempt."""
@@ -144,9 +139,6 @@ class VlmCheckRegistry:
             raise ValueError(
                 f"Unsupported VLM status '{status}'. Expected one of {sorted(_ALLOWED_VLM_STATUSES)}."
             )
-        if confidence < 0.0:
-            raise ValueError("VLM confidence must be >= 0.")
-
         with self._lock:
             self._validate_skill_name(skill_name)
             latest_snapshot = self._attempts.get(skill_name)
@@ -184,7 +176,6 @@ class VlmCheckRegistry:
                 attempt_id=target_attempt_id,
                 status=status,
                 message=message or f"External verifier reported {status} for skill '{skill_name}'.",
-                confidence=confidence,
                 created_at_s=latest_snapshot.created_at_s,
                 timeout_s=latest_snapshot.timeout_s,
             )
@@ -219,7 +210,6 @@ class VlmCheckRegistry:
                 f"VLM check attempt {snapshot.attempt_id} for skill '{snapshot.skill_name}' timed out "
                 f"after {snapshot.timeout_s:.2f}s without SUCCESS."
             ),
-            confidence=0.0,
             created_at_s=snapshot.created_at_s,
             timeout_s=snapshot.timeout_s,
         )

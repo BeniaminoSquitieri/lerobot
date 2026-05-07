@@ -93,7 +93,6 @@ def test_simulated_skill_auto_passes_vlm_check_without_touching_executor() -> No
     assert executor.skill_calls == []
     assert vlm_check is not None
     assert vlm_check.status == VLM_SUCCESS
-    assert vlm_check.confidence == 1.0
 
 
 def test_simulated_skill_pending_waits_for_external_verifier() -> None:
@@ -154,7 +153,6 @@ def test_vlm_result_topic_resolves_pending_attempt() -> None:
                     "skill_name": "place_first_toast",
                     "status": "SUCCESS",
                     "message": "scene ok",
-                    "confidence": 0.93,
                 }
             )
         ),
@@ -164,7 +162,6 @@ def test_vlm_result_topic_resolves_pending_attempt() -> None:
     assert vlm_check is not None
     assert vlm_check.status == VLM_SUCCESS
     assert vlm_check.message == "scene ok"
-    assert vlm_check.confidence == 0.93
 
 
 def test_vlm_result_topic_accepts_waiting_human_state() -> None:
@@ -182,7 +179,6 @@ def test_vlm_result_topic_accepts_waiting_human_state() -> None:
                     "status": "WAIT_HUMAN",
                     "message": "human is pouring",
                     "scene_state": "ingredient stream visible",
-                    "confidence": 0.8,
                 }
             )
         ),

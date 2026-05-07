@@ -56,7 +56,6 @@ def test_vlm_stub_republishes_manual_verdict_to_report_topic() -> None:
                 "skill_name": "place_first_toast",
                 "attempt_id": 7,
                 "status": "SUCCESS",
-                "confidence": 0.95,
                 "message": "first toast ok",
             }
         )
@@ -71,7 +70,6 @@ def test_vlm_stub_republishes_manual_verdict_to_report_topic() -> None:
         "attempt_id": 7,
         "status": "SUCCESS",
         "message": "first toast ok",
-        "confidence": 0.95,
     }
     assert logger.error_messages == []
 

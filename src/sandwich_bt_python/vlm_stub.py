@@ -6,7 +6,7 @@ the normalized verdict on `/sandwich_bt/vlm_result`, which is the same
 topic a real VLM should use.
 
 Expected input payload (`std_msgs/String.data`):
-  {"skill_name":"place_first_toast","status":"SUCCESS","confidence":0.9,"message":"ok"}
+  {"skill_name":"place_first_toast","status":"SUCCESS","message":"ok"}
 """
 
 from __future__ import annotations
@@ -85,11 +85,20 @@ class VLMStubNode(Node):
             return
 
         try:
-            report = dict(payload)
+            passthrough_keys = (
+                "skill_name",
+                "attempt_id",
+                "status",
+                "next_action",
+                "message",
+                "failure_reason",
+                "scene_state",
+                "required_human_action",
+            )
+            report = {key: payload[key] for key in passthrough_keys if key in payload}
             report["skill_name"] = skill_name
             report["attempt_id"] = int(payload.get("attempt_id", 0))
             report["message"] = str(payload.get("message", ""))
-            report["confidence"] = float(payload.get("confidence", 0.0))
             if status:
                 report["status"] = status
             if next_action:
