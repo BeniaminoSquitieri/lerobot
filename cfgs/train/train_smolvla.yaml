@@ -1,7 +1,7 @@
 policy:
   type: smolvla
   repo_id: steb6/smolvla_roboarena_HRII
-#  pretrained_path: steb6/smolvla_roboarena_hrii
+  pretrained_path: steb6/smolvla_roboarena_hrii
   device: cuda
   chunk_size: 16
   n_action_steps: 16

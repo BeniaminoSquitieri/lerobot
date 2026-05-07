@@ -6,6 +6,9 @@ robot:
     # visualize: true
   gripper:
     type: leap_hand
+    port: /dev/serial/by-id/usb-FTDI_USB__-__Serial_Converter_FT94W0JX-if00-port0
+    port_candidates: [/dev/serial/by-id/usb-FTDI_USB__-__Serial_Converter_FT94W0JX-if00-port0]
+    disabled_joints: [pip, pip_2, pip_3]
     # enable_tip_scale_tuner: true
     # visualize: true
   # cameras:

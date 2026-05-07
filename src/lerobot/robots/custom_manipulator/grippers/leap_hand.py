@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import sys
+from pathlib import Path
+
 import numpy as np
 
 from lerobot.robots.custom_manipulator.grippers.config_leap_hand import LeapHandConfig, TIPS
@@ -12,6 +15,59 @@ from lerobot.robots.custom_manipulator.grippers.leap_hand_utils import (
     LeapHandDebugTools,
     transform_leap_target_positions,
 )
+
+
+def _get_leap_runtime():
+    repo_root = Path(__file__).resolve().parents[5]
+    leap_hand_root = repo_root / "leap_hand"
+    if leap_hand_root.is_dir() and str(leap_hand_root) not in sys.path:
+        sys.path.insert(0, str(leap_hand_root))
+
+    try:
+        import dynamixel_sdk  # noqa: F401
+    except ImportError:
+        _append_local_dynamixel_sdk_path(repo_root)
+        try:
+            import dynamixel_sdk  # noqa: F401
+        except ImportError as exc:
+            raise ModuleNotFoundError(
+                "Missing optional dependency `dynamixel_sdk` for the LEAP hand runtime. "
+                "Install it in the active environment or make sure the local LEAP/SDK site-packages path is available."
+            ) from exc
+
+    try:
+        from leap_hand_utils.dynamixel_client import DynamixelClient
+        import leap_hand_utils.leap_hand_utils as leap_utils
+    except ImportError as exc:
+        raise ModuleNotFoundError(
+            "LEAP hand support requires the local `leap_hand/` folder and its runtime dependencies, "
+            "including `dynamixel_sdk`."
+        ) from exc
+
+    return DynamixelClient, leap_utils
+
+
+def _append_local_dynamixel_sdk_path(repo_root: Path) -> None:
+    leap_api_root = repo_root.parent / "LEAP_Hand_API"
+    site_packages_roots = sorted(leap_api_root.glob("env_leap/lib/python*/site-packages"))
+    for site_packages in site_packages_roots:
+        dynamixel_pkg = site_packages / "dynamixel_sdk"
+        if dynamixel_pkg.is_dir() and str(site_packages) not in sys.path:
+            sys.path.append(str(site_packages))
+            return
+
+
+def _resolve_urdf_path(urdf_path: str) -> str:
+    source = Path(urdf_path).expanduser().resolve()
+    source_text = source.read_text()
+    rewritten = source_text.replace("package:///", "")
+    if rewritten == source_text:
+        return str(source)
+
+    resolved = source.with_name(f"{source.stem}.resolved{source.suffix}")
+    if not resolved.exists() or resolved.read_text() != rewritten:
+        resolved.write_text(rewritten)
+    return str(resolved)
 
 
 class LeapHand:
@@ -25,8 +81,10 @@ class LeapHand:
 
         self._so3 = so3
         self._vectorops = vectorops
+        _, self._leap_utils = _get_leap_runtime()
+        self.dxl_client = None
 
-        urdf_path = self.config.urdf_path
+        urdf_path = _resolve_urdf_path(self.config.urdf_path)
 
         world = WorldModel()
         ok = world.loadRobot(urdf_path)
@@ -53,6 +111,7 @@ class LeapHand:
         self.retargeter = LeapHandDexPilotRetargeter(
             urdf_path=urdf_path,
             command_index_by_link_name=self.config.command_index_by_link_name,
+            disabled_link_names=self.config.disabled_joints,
         )
 
         palm_r, palm_t = self.palm_frame.getTransform()
@@ -77,15 +136,42 @@ class LeapHand:
         return self.end_effector_transforms[arm_type].copy()
 
     def connect(self):
-        return None
+        DynamixelClient, _ = _get_leap_runtime()
+        candidate_ports = [self.config.port] if self.config.port else []
+        candidate_ports.extend(port for port in self.config.port_candidates if port not in candidate_ports)
+
+        last_error = None
+        for port in candidate_ports:
+            try:
+                print(f"[leap_hand] Connecting on {port}...", flush=True)
+                self.dxl_client = DynamixelClient(list(self.config.motor_ids), port, self.config.baudrate)
+                self.dxl_client.connect()
+                self._configure_controller()
+                print(f"[leap_hand] Connected on {port}.", flush=True)
+                return
+            except Exception as exc:
+                last_error = exc
+                if self.dxl_client is not None:
+                    try:
+                        self.dxl_client.disconnect()
+                    except Exception:
+                        pass
+                    self.dxl_client = None
+
+        raise RuntimeError(f"Failed to connect LEAP hand on ports {candidate_ports}.") from last_error
 
     def reset(self):
         self.qpos[:] = 0.0
         if self.config.home_position is not None:
             self.qpos[:] = np.asarray(self.config.home_position, dtype=float)
         self._apply_qpos_to_model(self.qpos)
+        if self.dxl_client is not None:
+            self._write_qpos_to_hardware(self.qpos)
 
     def disconnect(self):
+        if self.dxl_client is not None:
+            self.dxl_client.disconnect()
+        self.dxl_client = None
         self.debug.close()
 
     close = disconnect
@@ -101,6 +187,9 @@ class LeapHand:
         return {f"{tip}.position.{axis}": float for tip in TIPS for axis in "xyz"}
 
     def get_sensors(self) -> dict[str, float]:
+        if self.dxl_client is not None:
+            self.qpos[:] = self._read_qpos_from_hardware()
+            self._apply_qpos_to_model(self.qpos)
         return dict(self._get_fingertips_from_current_model_state())
 
     def apply_commands(self, action: dict | None = None, **kwargs):
@@ -119,6 +208,8 @@ class LeapHand:
 
         self.qpos[:] = self.retargeter.retarget(self._action_with_targets(action, transformed_targets))
         self._apply_qpos_to_model(self.qpos)
+        if self.dxl_client is not None:
+            self._write_qpos_to_hardware(self.qpos)
 
         tip_values, tip_positions = self._get_fingertips_from_current_model_state(return_positions=True)
         joints = {
@@ -134,6 +225,70 @@ class LeapHand:
             if link_name in self.drivers:
                 self.drivers[link_name].setValue(float(qpos[idx]))
         self.model.setConfig(self.model.getConfig())
+
+    def _configure_controller(self) -> None:
+        if self.dxl_client is None:
+            raise RuntimeError("LEAP hand is not connected.")
+
+        motor_ids = list(self.config.motor_ids)
+        side_to_side_motor_ids = list(self.config.side_to_side_motor_ids)
+
+        self.dxl_client.sync_write(motor_ids, np.ones(len(motor_ids)) * self.config.control_mode, 11, 1)
+        self.dxl_client.set_torque_enabled(motor_ids, True)
+        self.dxl_client.sync_write(motor_ids, np.ones(len(motor_ids)) * self.config.kp, 84, 2)
+        self.dxl_client.sync_write(
+            side_to_side_motor_ids,
+            np.ones(len(side_to_side_motor_ids)) * (self.config.kp * 0.75),
+            84,
+            2,
+        )
+        self.dxl_client.sync_write(motor_ids, np.ones(len(motor_ids)) * self.config.ki, 82, 2)
+        self.dxl_client.sync_write(motor_ids, np.ones(len(motor_ids)) * self.config.kd, 80, 2)
+        self.dxl_client.sync_write(
+            side_to_side_motor_ids,
+            np.ones(len(side_to_side_motor_ids)) * (self.config.kd * 0.75),
+            80,
+            2,
+        )
+        self.dxl_client.sync_write(motor_ids, np.ones(len(motor_ids)) * self.config.curr_lim, 102, 2)
+        self.dxl_client.write_desired_pos(motor_ids, self._home_device_joints())
+
+    def _home_device_joints(self) -> np.ndarray:
+        if self.config.home_position is not None:
+            return np.asarray(self.config.home_position, dtype=float)
+        return np.asarray(
+            self._leap_utils.allegro_to_LEAPhand(np.zeros(len(self.config.motor_ids), dtype=float)),
+            dtype=float,
+        )
+
+    def _model_to_device_joint_values(self, model_joints: list[float] | np.ndarray) -> np.ndarray:
+        return np.asarray(
+            self._leap_utils.angle_safety_clip(self._leap_utils.LEAPsim_to_LEAPhand(model_joints)),
+            dtype=float,
+        )
+
+    def _device_to_model_joint_values(self, device_joints: list[float] | np.ndarray) -> np.ndarray:
+        return np.asarray(self._leap_utils.LEAPhand_to_LEAPsim(device_joints), dtype=float)
+
+    def _write_qpos_to_hardware(self, qpos: np.ndarray) -> None:
+        if self.dxl_client is None:
+            raise RuntimeError("LEAP hand is not connected.")
+        self.dxl_client.write_desired_pos(
+            list(self.config.motor_ids),
+            self._model_to_device_joint_values(qpos),
+        )
+
+    def _read_qpos_from_hardware(self) -> np.ndarray:
+        if self.dxl_client is None:
+            raise RuntimeError("LEAP hand is not connected.")
+
+        device_qpos = np.asarray(self.dxl_client.read_pos(), dtype=float)
+        if device_qpos.shape[0] != len(self.config.motor_ids):
+            raise RuntimeError(
+                "Unexpected LEAP hand observation size: "
+                f"expected {len(self.config.motor_ids)}, got {device_qpos.shape[0]}."
+            )
+        return self._device_to_model_joint_values(device_qpos)
 
     def _action_to_targets(self, action: dict[str, float]) -> dict[str, list[float]]:
         targets = {
@@ -186,6 +341,7 @@ if __name__ == "__main__":
     teleop.connect()
 
     hand = LeapHand(LeapHandConfig(visualize=True))
+    hand.connect()
 
     while True:
         action = teleop.get_action()

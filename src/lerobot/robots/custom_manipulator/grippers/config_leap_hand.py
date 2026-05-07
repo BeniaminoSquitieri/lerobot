@@ -38,6 +38,7 @@ DEFAULT_COMMAND_INDEX_BY_LINK_NAME = {
 COMMAND_LINK_NAMES = tuple(
     link_name for link_name, _ in sorted(DEFAULT_COMMAND_INDEX_BY_LINK_NAME.items(), key=lambda item: item[1])
 )
+DEFAULT_DISABLED_JOINTS: tuple[str, ...] = ()
 JOINT_ACTIONS = {f"action.gripper.{link_name}": float for link_name in COMMAND_LINK_NAMES}
 DEFAULT_MOTOR_IDS = tuple(range(16))
 DEFAULT_PORT_CANDIDATES = ("/dev/ttyUSB0", "/dev/ttyUSB1", "COM13")
@@ -72,6 +73,7 @@ class LeapHandConfig(GripperConfig):
     command_index_by_link_name: dict[str, int] = field(
         default_factory=lambda: dict(DEFAULT_COMMAND_INDEX_BY_LINK_NAME)
     )
+    disabled_joints: tuple[str, ...] = DEFAULT_DISABLED_JOINTS
     home_position: list[float] | None = None
     enable_tip_scale_tuner: bool = False
     visualize: bool = False

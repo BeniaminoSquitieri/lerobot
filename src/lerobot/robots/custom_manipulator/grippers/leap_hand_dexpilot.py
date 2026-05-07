@@ -29,11 +29,32 @@ class LeapHandDexPilotRetargeter:
         has_joint_limits: bool = True,
         project_dist: float = 0.03,
         escape_dist: float = 0.05,
+        disabled_link_names: tuple[str, ...] = (),
     ):
         self.urdf_path = urdf_path
         self.wrist_link_name = wrist_link_name
         self.finger_tip_link_names = tuple(finger_tip_link_names)
         self.command_index_by_link_name = dict(command_index_by_link_name or DEFAULT_COMMAND_INDEX_BY_LINK_NAME)
+        self.disabled_link_names = tuple(disabled_link_names)
+        unknown_disabled = tuple(
+            link_name for link_name in self.disabled_link_names if link_name not in self.command_index_by_link_name
+        )
+        if unknown_disabled:
+            raise ValueError(
+                f"Unknown LeapHand disabled joints: {unknown_disabled}. "
+                f"Available joints: {tuple(self.command_index_by_link_name)}"
+            )
+        self.disabled_joint_indices = tuple(
+            sorted(
+                self.command_index_by_link_name[link_name]
+                for link_name in self.disabled_link_names
+            )
+        )
+        self.active_joint_indices = tuple(
+            idx
+            for idx in range(len(self.command_index_by_link_name))
+            if idx not in self.disabled_joint_indices
+        )
 
         from dex_retargeting.retargeting_config import RetargetingConfig
 
@@ -48,11 +69,11 @@ class LeapHandDexPilotRetargeter:
                 "has_joint_limits": has_joint_limits,
                 "project_dist": project_dist,
                 "escape_dist": escape_dist,
-                "target_joint_names": [str(i) for i in range(16)],
+                "target_joint_names": [str(i) for i in self.active_joint_indices],
             }
         )
         self.retargeting = cfg.build()
-        self.joint_names = tuple(str(i) for i in range(16))
+        self.joint_names = tuple(str(i) for i in self.active_joint_indices)
 
     def reset(self) -> None:
         self.retargeting.reset()
@@ -70,8 +91,12 @@ class LeapHandDexPilotRetargeter:
         task = np.array([1, 1, 1, 2, 2, 3, 1, 2, 3, 4], dtype=int)
         ref_value = points[task] - points[origin]
 
-        robot_qpos = self.retargeting.retarget(ref_value)
-        qpos = robot_qpos[self.retargeting.optimizer.idx_pin2target].astype(float, copy=False)
+        fixed_qpos = np.zeros(len(self.retargeting.optimizer.idx_pin2fixed), dtype=float)
+        robot_qpos = self.retargeting.retarget(ref_value, fixed_qpos=fixed_qpos)
+        active_qpos = robot_qpos[self.retargeting.optimizer.idx_pin2target].astype(float, copy=False)
+        qpos = np.zeros(len(self.command_index_by_link_name), dtype=float)
+        for idx, value in zip(self.active_joint_indices, active_qpos, strict=True):
+            qpos[idx] = float(value)
         return qpos
 
     def qpos_to_action(self, qpos: np.ndarray) -> dict[str, float]:
