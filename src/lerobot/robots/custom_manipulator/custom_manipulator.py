@@ -20,10 +20,9 @@ from typing import Any
 import numpy as np
 import cv2
 import torch
-from scipy.spatial.transform import Rotation as R
 
 # ROS2 imports
-import rclpy
+# import rclpy
 
 from lerobot.utils.errors import DeviceNotConnectedError
 from lerobot.cameras.utils import make_cameras_from_configs
@@ -40,8 +39,8 @@ class CustomManipulator(Robot):
 
     def __init__(self, config: CustomManipulatorConfig):
         Robot.__init__(self, config)
-        if not rclpy.ok():
-            rclpy.init()
+        # if not rclpy.ok():
+        #     rclpy.init()
         
         self.config = config
         self._is_connected = False

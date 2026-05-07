@@ -2,7 +2,7 @@ robot:
   type: custom_manipulator
   arm:
     type: panda
-    use_delta_actions: false
+    # use_delta_actions: true
     visualize: true
   gripper:
     type: robotiq
@@ -31,17 +31,18 @@ teleop_action_processor:
     # - arm_absolute_to_delta
 
 policy:
-  type: act
-  pretrained_path: HSP-IIT/act_no_aug_HRII
+  type: groot
+  pretrained_path: steb6/groot_hello_world
   device: cuda
   n_action_steps: 16
   chunk_size: 16
 
 dataset:
-  repo_id: HSP-IIT/roboarena_HRII
+  repo_id: steb6/eval_groot_pick_bread_dagger
+  root: outputs/eval_groot_pick_bread_dagger
   single_task: Pick.
   fps: 10
-  episode_time_s: 10000
+  episode_time_s: 12000
   reset_time_s: 0
   num_episodes: 100
   video: true
@@ -58,7 +59,6 @@ robot_action_processor:
 robot_observation_processor:
   steps: []
 
-display_data: true
-# rerun_blueprint: lerobot.robots.custom_manipulator.rerun_blueprint_utils.load_blueprint_from_file
+# display_data: true
 play_sounds: true
 resume: true

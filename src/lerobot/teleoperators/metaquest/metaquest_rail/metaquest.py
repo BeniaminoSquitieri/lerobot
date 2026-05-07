@@ -19,10 +19,10 @@ import sys
 from typing import Any
 
 import numpy as np
-from scipy.spatial.transform import Rotation as R
 
 from lerobot.utils.errors import DeviceNotConnectedError
 from lerobot.teleoperators.teleoperator import Teleoperator
+from lerobot.utils.rotation import Rotation as R
 from .configuration_metaquest import MetaQuestRailConfig
 
 HOME_ROT = R.from_rotvec([np.pi, 0.0, 0.0])

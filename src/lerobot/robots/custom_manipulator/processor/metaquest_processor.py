@@ -1,8 +1,8 @@
 import numpy as np
-from scipy.spatial.transform import Rotation as R
 
 from lerobot.processor import ProcessorStep, EnvTransition, ProcessorStepRegistry
 from lerobot.configs.types import PipelineFeatureType, PolicyFeature
+from lerobot.utils.rotation import Rotation as R
 
 FINGERTIP_KEYS = [(f"{tip}.position.{axis}", f"{tip}.position.{axis}") for tip in ("thumb", "index", "middle", "ring", "little") for axis in "xyz"]
 

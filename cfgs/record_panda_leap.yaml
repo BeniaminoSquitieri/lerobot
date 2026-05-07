@@ -1,0 +1,68 @@
+robot:
+  type: custom_manipulator
+  arm:
+    type: dummy
+    # use_delta_actions: true
+    # visualize: true
+  gripper:
+    type: leap_hand
+    port: /dev/serial/by-id/usb-FTDI_USB__-__Serial_Converter_FT94W0JX-if00-port0
+    port_candidates: [/dev/serial/by-id/usb-FTDI_USB__-__Serial_Converter_FT94W0JX-if00-port0]
+    kp: 500
+    ki: 0
+    kd: 240
+    curr_lim: 350
+    command_rate_hz: 100
+    command_interp_duration_s: 0.04
+    disabled_joints: [pip, pip_2, pip_3]
+    # Scale MetaQuest fingertip targets before IK / visualization.
+    target_scale_factors: {thumb: 1.2, index: 1.2, middle: 1.2, ring: 1.2}
+    enable_tip_scale_tuner: true
+    visualize: true
+  # cameras:
+  #   wrist:
+  #     type: intelrealsense
+  #     serial_number_or_name: "943222071614"
+  #     use_depth: false
+  #     width: 640
+  #     height: 480
+  #     fps: 30
+  #   left:
+  #     type: intelrealsense
+  #     serial_number_or_name: "123622270882"
+  #     use_depth: false
+  #     width: 640
+  #     height: 480
+  #     fps: 30
+
+teleop:
+  type: metareader
+
+dataset:
+  repo_id: HSP-IIT/leap_first_test
+  root: outputs/leap_first_test
+  single_task: Perform the task.
+  fps: 10
+  episode_time_s: 2000
+  reset_time_s: 0
+  num_episodes: 7
+  video: true
+  push_to_hub: true
+  private: false
+  num_image_writer_processes: 0
+  num_image_writer_threads_per_camera: 4
+  video_encoding_batch_size: 1
+  rename_map: {}
+
+teleop_action_processor:
+  steps: [clutch_processor]
+
+robot_action_processor:
+  steps: []
+
+robot_observation_processor:
+  steps: []
+
+display_data: false
+play_sounds: true
+resume: false

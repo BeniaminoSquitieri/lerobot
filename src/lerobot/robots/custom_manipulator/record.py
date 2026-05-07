@@ -23,8 +23,6 @@ from pprint import pformat
 
 from pyparsing import Optional
 
-from scipy.spatial.transform import Rotation as R
-
 from lerobot.configs import parser
 from lerobot.datasets.lerobot_dataset import LeRobotDataset
 from lerobot.datasets.pipeline_features import aggregate_pipeline_dataset_features, create_initial_features
@@ -67,6 +65,7 @@ from lerobot.common.control_utils import predict_action
 from typing import Any, List
 
 import rerun as rr
+from lerobot.utils.rotation import Rotation as R
 
 # import debugpy
 # debugpy.listen(5678)
