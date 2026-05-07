@@ -2,9 +2,10 @@
   @file sandwich_tree.xml
   @brief Full autonomous sandwich behavior tree.
 
-  Each sandwich stage is wrapped in RetryUntilSuccessful so a failed
-  VerifySkillOutcome restarts the same BC skill or VLM gate until the external
-  verifier reports success. No deterministic Panda recovery motions are used.
+  Each sandwich stage is wrapped in a named RetryUntilSuccessful so Groot shows
+  where VLM-driven retry/replanning happens. A failed VLM decision restarts
+  the same BC skill or VLM gate until the external verifier reports success.
+  No deterministic Panda recovery motions are used.
 -->
 <root BTCPP_format="4" main_tree_to_execute="MainTree">
   <!-- MainTree is the entry point loaded by sandwich_bt_runner. -->
@@ -12,36 +13,56 @@
     <!-- Execute the VLM-gated sandwich stages in order. -->
     <Sequence name="vlm_gated_sandwich_task">
       <!-- Stage 0: wait until the VLM confirms the initial scene is ready. -->
-      <RetryUntilSuccessful num_attempts="-1">
-        <Sequence name="initial_scene_gate">
+      <RetryUntilSuccessful name="retry_initial_scene_until_vlm_success" num_attempts="-1">
+        <Sequence name="initial_scene_vlm_replanning_gate">
           <RunNamedCommand kind="simulated_skill_pending" command_name="initial_scene_ready"/>
-          <VerifySkillOutcome skill_name="initial_scene_ready"/>
+          <WaitForVLMDecision name="wait_initial_scene_ready_or_manual_intervention" skill_name="initial_scene_ready"/>
         </Sequence>
       </RetryUntilSuccessful>
 
       <!-- Stage 1: place the first toast, then verify it. -->
-      <RetryUntilSuccessful num_attempts="-1">
-        <Sequence name="place_first_toast_retry_on_vlm_failure">
+      <RetryUntilSuccessful name="retry_place_first_toast_on_vlm_retry_skill" num_attempts="-1">
+        <Sequence name="place_first_toast_vlm_replanning_loop">
           <RunNamedCommand kind="skill" command_name="place_first_toast"/>
-          <VerifySkillOutcome skill_name="place_first_toast"/>
+          <VLMReplanningDecision
+            name="continue_wait_manual_or_retry_place_first_toast"
+            skill_name="place_first_toast"/>
         </Sequence>
       </RetryUntilSuccessful>
 
       <!-- Stage 2: human pouring is represented as a VLM verification gate. -->
-      <RetryUntilSuccessful num_attempts="-1">
-        <Sequence name="human_pouring_gate">
+      <RetryUntilSuccessful name="retry_human_pouring_until_vlm_success" num_attempts="-1">
+        <Sequence name="human_pouring_wait_or_manual_intervention_gate">
           <RunNamedCommand kind="simulated_skill_pending" command_name="pour_ingredient"/>
-          <VerifySkillOutcome skill_name="pour_ingredient"/>
+          <WaitForVLMDecision
+            name="wait_human_pouring_running_success_or_manual_intervention"
+            skill_name="pour_ingredient"/>
         </Sequence>
       </RetryUntilSuccessful>
 
       <!-- Stage 3: place the second toast, then verify it. -->
-      <RetryUntilSuccessful num_attempts="-1">
-        <Sequence name="place_second_toast_retry_on_vlm_failure">
+      <RetryUntilSuccessful name="retry_place_second_toast_on_vlm_retry_skill" num_attempts="-1">
+        <Sequence name="place_second_toast_vlm_replanning_loop">
           <RunNamedCommand kind="skill" command_name="place_second_toast"/>
-          <VerifySkillOutcome skill_name="place_second_toast"/>
+          <VLMReplanningDecision
+            name="continue_wait_manual_or_retry_place_second_toast"
+            skill_name="place_second_toast"/>
         </Sequence>
       </RetryUntilSuccessful>
     </Sequence>
   </BehaviorTree>
+
+  <TreeNodesModel>
+    <Action ID="RunNamedCommand">
+      <input_port name="kind"/>
+      <input_port name="command_name"/>
+      <input_port name="timeout_s"/>
+    </Action>
+    <Action ID="WaitForVLMDecision">
+      <input_port name="skill_name"/>
+    </Action>
+    <Action ID="VLMReplanningDecision">
+      <input_port name="skill_name"/>
+    </Action>
+  </TreeNodesModel>
 </root>

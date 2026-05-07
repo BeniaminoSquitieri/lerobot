@@ -1,12 +1,15 @@
 # @file ReportSkillVerification.srv
-# @brief External verifier to Python verification-registry update boundary.
+# @brief Legacy external verifier to Python VLM-check-registry update boundary.
 #
 # Request fields:
 # skill_name identifies the primitive whose attempt is being judged.
 string skill_name
 # attempt_id selects a concrete attempt; 0 applies to the latest pending attempt.
 int32 attempt_id
-# status is the verifier verdict and should be SUCCESS or FAILURE.
+# status is the verifier update:
+#   PENDING/RUNNING/WAIT_HUMAN/MANUAL_INTERVENTION_REQUIRED keep the BT blocked
+#   SUCCESS advances the BT
+#   FAILURE triggers XML retry/failure logic
 string status
 # message explains the verdict for logs, operators, and tests.
 string message

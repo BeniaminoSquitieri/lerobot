@@ -65,19 +65,20 @@ int main(int argc, char** argv)
 
   // Runtime parameters:
   // - which XML tree to load
-  // - which service to call on the Python side
+  // - where the BT sends skill/gate commands
+  // - where the BT polls VLM state
   // - BT tick period
   // - whether to publish to Groot
   auto node = std::make_shared<rclcpp::Node>("sandwich_bt_runner");
   node->declare_parameter<std::string>("tree_xml_path", default_tree_xml_path());
-  node->declare_parameter<std::string>("service_name", "/sandwich_bt/run_command");
-  node->declare_parameter<std::string>("verify_service_name", "/sandwich_bt/get_skill_verification");
+  node->declare_parameter<std::string>("bt_command_service", "/sandwich_bt/run");
+  node->declare_parameter<std::string>("vlm_state_service", "/sandwich_bt/vlm_state");
   node->declare_parameter<int>("tick_ms", 100);
   node->declare_parameter<bool>("enable_groot_publisher", true);
 
   const auto tree_xml_path = node->get_parameter("tree_xml_path").as_string();
-  const auto service_name = node->get_parameter("service_name").as_string();
-  const auto verify_service_name = node->get_parameter("verify_service_name").as_string();
+  const auto bt_command_service = node->get_parameter("bt_command_service").as_string();
+  const auto vlm_state_service = node->get_parameter("vlm_state_service").as_string();
   const auto tick_ms = node->get_parameter("tick_ms").as_int();
   const auto enable_groot = node->get_parameter("enable_groot_publisher").as_bool();
 
@@ -86,21 +87,41 @@ int main(int argc, char** argv)
   BT::BehaviorTreeFactory factory;
   factory.registerBuilder<sandwich_bt_runtime_cpp::RunNamedCommandNode>(
     "RunNamedCommand",
-    [node, service_name](const std::string& instance_name, const BT::NodeConfiguration& config) {
+    [node, bt_command_service](const std::string& instance_name, const BT::NodeConfiguration& config) {
       return std::make_unique<sandwich_bt_runtime_cpp::RunNamedCommandNode>(
         instance_name,
         config,
         node,
-        service_name);
+        bt_command_service);
     });
   factory.registerBuilder<sandwich_bt_runtime_cpp::VerifySkillOutcomeNode>(
     "VerifySkillOutcome",
-    [node, verify_service_name](const std::string& instance_name, const BT::NodeConfiguration& config) {
+    [node, vlm_state_service](const std::string& instance_name, const BT::NodeConfiguration& config) {
       return std::make_unique<sandwich_bt_runtime_cpp::VerifySkillOutcomeNode>(
         instance_name,
         config,
         node,
-        verify_service_name);
+        vlm_state_service);
+    });
+  // These aliases use the same ROS2 VLM state service but make the XML/Groot
+  // graph show whether a node is a waiting gate or a post-skill retry decision.
+  factory.registerBuilder<sandwich_bt_runtime_cpp::VerifySkillOutcomeNode>(
+    "WaitForVLMDecision",
+    [node, vlm_state_service](const std::string& instance_name, const BT::NodeConfiguration& config) {
+      return std::make_unique<sandwich_bt_runtime_cpp::VerifySkillOutcomeNode>(
+        instance_name,
+        config,
+        node,
+        vlm_state_service);
+    });
+  factory.registerBuilder<sandwich_bt_runtime_cpp::VerifySkillOutcomeNode>(
+    "VLMReplanningDecision",
+    [node, vlm_state_service](const std::string& instance_name, const BT::NodeConfiguration& config) {
+      return std::make_unique<sandwich_bt_runtime_cpp::VerifySkillOutcomeNode>(
+        instance_name,
+        config,
+        node,
+        vlm_state_service);
     });
 
   // Loading from file keeps the BT topology editable without recompiling this

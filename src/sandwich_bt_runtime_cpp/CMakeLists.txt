@@ -63,11 +63,8 @@ install(DIRECTORY include/
 # Explicit tree list prevents accidentally installing scratch or duplicate XML.
 set(SANDWICH_BT_TREE_FILES
   trees/sandwich_tree.xml
-  trees/sandwich_tree_first_primitive_only.xml
   trees/sandwich_tree_first_real_rest_simulated.xml
   trees/sandwich_tree_two_real_skills_manual_vlm.xml
-  trees/place_first_toast_subtree.xml
-  trees/place_second_toast_subtree.xml
 )
 
 # Install only the curated tree/subtree XML files into the package share path.

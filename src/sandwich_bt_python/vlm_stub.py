@@ -1,8 +1,8 @@
 """@file vlm_stub.py
-@brief Lightweight topic publisher that emulates VLM verification verdicts.
+@brief Lightweight topic publisher that emulates VLM result messages.
 
 Publish a small JSON string on `/sandwich_bt/vlm_sim` and this node republishes
-the normalized verdict on `/sandwich_bt/verification_report`, which is the same
+the normalized verdict on `/sandwich_bt/vlm_result`, which is the same
 topic a real VLM should use.
 
 Expected input payload (`std_msgs/String.data`):
@@ -17,17 +17,36 @@ import rclpy
 from rclpy.node import Node
 from std_msgs.msg import String
 
+_ALLOWED_STATUSES = {
+    "PENDING",
+    "RUNNING",
+    "WAIT_HUMAN",
+    "MANUAL_INTERVENTION_REQUIRED",
+    "SUCCESS",
+    "FAILURE",
+}
+_ALLOWED_NEXT_ACTIONS = {
+    "CONTINUE",
+    "PROCEED",
+    "RETRY",
+    "RETRY_SKILL",
+    "WAIT",
+    "WAIT_HUMAN",
+    "REQUEST_MANUAL_INTERVENTION",
+    "MANUAL_INTERVENTION",
+}
+
 
 class VLMStubNode(Node):
-    """@brief ROS2 node that turns simple JSON messages into verifier reports."""
+    """@brief ROS2 node that turns simple JSON messages into VLM result events."""
 
     def __init__(
         self,
         *,
         input_topic: str = "/sandwich_bt/vlm_sim",
-        report_topic: str = "/sandwich_bt/verification_report",
+        report_topic: str = "/sandwich_bt/vlm_result",
     ) -> None:
-        """@brief Subscribe to manual input and publish normalized verifier reports."""
+        """@brief Subscribe to manual input and publish normalized VLM results."""
         super().__init__("vlm_stub")
         self._input_topic = input_topic
         self._report_topic = report_topic
@@ -54,27 +73,34 @@ class VLMStubNode(Node):
             return
 
         status = str(payload.get("status", "")).upper()
-        if status not in {"SUCCESS", "FAILURE"}:
-            self.get_logger().error("'status' must be 'SUCCESS' or 'FAILURE'.")
+        next_action = str(payload.get("next_action", "")).upper()
+        if status and status not in _ALLOWED_STATUSES:
+            self.get_logger().error(f"'status' must be one of {sorted(_ALLOWED_STATUSES)}.")
+            return
+        if next_action and next_action not in _ALLOWED_NEXT_ACTIONS:
+            self.get_logger().error(f"'next_action' must be one of {sorted(_ALLOWED_NEXT_ACTIONS)}.")
+            return
+        if not status and not next_action:
+            self.get_logger().error("Payload must include 'status' or 'next_action'.")
             return
 
         try:
-            report = {
-                "skill_name": skill_name,
-                "attempt_id": int(payload.get("attempt_id", 0)),
-                "status": status,
-                "message": str(payload.get("message", "")),
-                "confidence": float(payload.get("confidence", 0.0)),
-            }
+            report = dict(payload)
+            report["skill_name"] = skill_name
+            report["attempt_id"] = int(payload.get("attempt_id", 0))
+            report["message"] = str(payload.get("message", ""))
+            report["confidence"] = float(payload.get("confidence", 0.0))
+            if status:
+                report["status"] = status
+            if next_action:
+                report["next_action"] = next_action
         except (TypeError, ValueError) as exc:
             self.get_logger().error(f"Invalid numeric field in payload: {exc}")
             return
         out_msg = String()
         out_msg.data = json.dumps(report, sort_keys=True)
         self._report_publisher.publish(out_msg)
-        self.get_logger().info(
-            f"Published verification report for skill '{skill_name}' with status '{status}'."
-        )
+        self.get_logger().info(f"Published VLM result for skill '{skill_name}' with status '{status or next_action}'.")
 
 
 def main(argv: list[str] | None = None) -> int:

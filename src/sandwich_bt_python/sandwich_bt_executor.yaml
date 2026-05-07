@@ -7,15 +7,18 @@
 # 3. The corresponding learned skill is executed on the robot.
 
 # ROS2 service used by RunNamedCommand BT leaves.
-service_name: "/sandwich_bt/run_command"
+bt_command_service: "/sandwich_bt/run"
 # ROS2 service used by VerifySkillOutcome BT leaves.
-verification_query_service_name: "/sandwich_bt/get_skill_verification"
+vlm_state_service: "/sandwich_bt/vlm_state"
 # Legacy ROS2 service for external verifier verdicts.
-verification_report_service_name: "/sandwich_bt/report_skill_verification"
+legacy_vlm_result_service: "/sandwich_bt/vlm_result_legacy"
 # Topic published when the BT needs a scene verdict.
-verification_request_topic_name: "/sandwich_bt/verification_request"
+vlm_request_topic: "/sandwich_bt/vlm_request"
 # Topic consumed from manual tests or the real VLM.
-verification_report_topic_name: "/sandwich_bt/verification_report"
+vlm_result_topic: "/sandwich_bt/vlm_result"
+# If the VLM/manual verifier does not report SUCCESS before this deadline,
+# the attempt is marked FAILURE and the BT retry wrapper reruns the skill.
+vlm_timeout_s: 30.0
 
 # Real robot hardware configuration used by the Python server.
 robot:
@@ -51,8 +54,8 @@ play_sounds: true
 # Robot reset behavior before server startup and before individual skills.
 reset_robot_on_startup: false
 reset_robot_before_skill: false
-# In real mode, VLM/manual verification must explicitly resolve each skill.
-auto_verify_real_skills: false
+# In real mode, VLM/manual results must explicitly resolve each skill.
+auto_pass_vlm_check_for_real_skills: false
 # Optional mapping from policy feature names to connected robot feature names.
 rename_map: {}
 

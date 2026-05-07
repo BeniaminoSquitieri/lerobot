@@ -21,9 +21,10 @@ It owns:
 
 - loading BT XML trees
 - registering the `RunNamedCommand` BT leaf
-- registering the `VerifySkillOutcome` BT leaf
+- registering the `VerifySkillOutcome` BT leaf and the Groot-readable aliases
+  `WaitForVLMDecision` and `VLMReplanningDecision`
 - ticking the tree until success or failure
-- converting service replies into BT `SUCCESS` or `FAILURE`
+- converting service replies into BT `RUNNING`, `SUCCESS`, or `FAILURE`
 - publishing to Groot when supported by the installed BehaviorTree.CPP version
 
 It does not own:
@@ -39,14 +40,11 @@ Those belong to `sandwich_bt_python`.
 - `src/sandwich_bt_main.cpp`: runner executable
 - `src/run_named_command_node.cpp`: service-backed BT leaf implementation
 - `include/sandwich_bt_runtime_cpp/run_named_command_node.hpp`: BT leaf declaration
-- `src/verify_skill_outcome_node.cpp`: BT leaf that polls scene verification state
-- `include/sandwich_bt_runtime_cpp/verify_skill_outcome_node.hpp`: verification leaf declaration
+- `src/verify_skill_outcome_node.cpp`: BT leaf that polls VLM check state
+- `include/sandwich_bt_runtime_cpp/verify_skill_outcome_node.hpp`: VLM check leaf declaration
 - `trees/sandwich_tree.xml`: full sandwich task tree
-- `trees/sandwich_tree_first_primitive_only.xml`: bring-up tree for only `place_first_toast`
 - `trees/sandwich_tree_first_real_rest_simulated.xml`: bring-up tree that runs `place_first_toast` as real and simulates the remaining primitives
 - `trees/sandwich_tree_two_real_skills_manual_vlm.xml`: current two-real-skill task with manual/VLM topic gates
-- `trees/place_first_toast_subtree.xml`: retry subtree for the first toast step
-- `trees/place_second_toast_subtree.xml`: retry subtree for the second toast step
 
 ## Execution Model
 
@@ -56,13 +54,15 @@ BehaviorTree.CPP tick loop and register the custom service-backed leaf nodes.
 At startup it:
 
 1. creates one ROS2 node named `sandwich_bt_runner`
-2. reads the runtime parameters `tree_xml_path`, `service_name`, `tick_ms`,
-   and `enable_groot_publisher`
+2. reads the runtime parameters `tree_xml_path`, `bt_command_service`,
+   `vlm_state_service`, `tick_ms`, and `enable_groot_publisher`
 3. registers `RunNamedCommand` as a custom BT builder
-4. loads the XML tree from disk
-5. optionally enables a Groot publisher if the installed BT.CPP version has a
+4. registers `VerifySkillOutcome`, `WaitForVLMDecision`, and
+   `VLMReplanningDecision` as VLM-check-node builders
+5. loads the XML tree from disk
+6. optionally enables a Groot publisher if the installed BT.CPP version has a
    compatible publisher API
-6. ticks the tree until the root stops returning `RUNNING`
+7. ticks the tree until the root stops returning `RUNNING`
 
 The executable returns `0` on final BT `SUCCESS` and `1` on final BT `FAILURE`.
 That makes the process exit code usable as a high-level integration signal.
@@ -92,19 +92,32 @@ does" remain on the Python side.
 
 This second custom leaf is also a `BT::StatefulActionNode`.
 
+The XML trees normally use two semantic aliases of this same C++ class:
+
+- `WaitForVLMDecision`: used for scene/human gates such as initial scene ready
+  or human pouring.
+- `VLMReplanningDecision`: used after a robot/simulated skill, where a VLM
+  `FAILURE` means "retry this same skill from the beginning."
+
+The aliases exist so Groot shows the intent of each VLM check point. They do
+not add a second communication path and they do not change the ROS2 contract.
+The XML files also include `TreeNodesModel` entries for these custom nodes so
+Groot can display/edit their ports when opening the tree file directly.
+
 Its behavior is:
 
 1. `onStart()` validates the `skill_name` input port and sends a
-   `GetSkillVerification` request.
-2. While the Python side still reports `PENDING`, the leaf keeps polling and
-   returns `RUNNING`.
+   `VLM state service` request.
+2. While the Python side reports `PENDING`, `RUNNING`, `WAIT_HUMAN`, or
+   `MANUAL_INTERVENTION_REQUIRED`, the leaf keeps polling and returns BT
+   `RUNNING`.
 3. If the Python side reports `SUCCESS`, the leaf returns BT `SUCCESS`.
 4. If the Python side reports `FAILURE`, or no attempt exists for that skill,
    the leaf returns BT `FAILURE`.
 
-This is the point where post-hoc scene verification gates the BT. The C++ node
+This is the point where the post-skill VLM check gates the BT. The C++ node
 polls Python-side state; the VLM/manual implementation itself is decoupled and
-reports verdicts through `/sandwich_bt/verification_report`.
+reports verdicts through `/sandwich_bt/vlm_result`.
 
 ## XML Contract Used In This Repository
 
@@ -114,11 +127,14 @@ shape:
 - retry behavior lives in XML through `RetryUntilSuccessful`
 - local ordering lives in XML through `Sequence`
 - robot-side effects are always requested through `RunNamedCommand`
+- VLM/manual waiting gates are shown as `WaitForVLMDecision`
+- post-skill retry decisions are shown as `VLMReplanningDecision`
 For example, the usual subtree shape is:
 
 1. run one named BC skill
-2. verify the outcome of that skill through `VerifySkillOutcome`
-3. if the VLM reports `FAILURE`, let `RetryUntilSuccessful` trigger another attempt
+2. check the outcome of that skill through `VLMReplanningDecision`
+3. if the VLM reports `FAILURE`, let the named `RetryUntilSuccessful` trigger
+   another attempt of the same skill
 
 That keeps retry structure visible in the tree instead of hiding it inside the
 Python executor.
@@ -130,7 +146,8 @@ Python executor.
   `skill`, `simulated_skill`, and `simulated_skill_pending`.
 - `timeout_s` is optional and overrides the Python-side default for that one
   leaf execution.
-- `VerifySkillOutcome` expects the port `skill_name`.
+- `VerifySkillOutcome`, `WaitForVLMDecision`, and `VLMReplanningDecision` expect
+  the port `skill_name`.
 
 The C++ runtime does not interpret the command name. It only forwards the
 string. The matching config entry must exist on the Python side.

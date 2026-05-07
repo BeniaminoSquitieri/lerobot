@@ -31,7 +31,7 @@
   <rect class="box" x="50" y="160" width="330" height="150" fill="#dbeafe"/>
   <text x="70" y="190" class="label">1) Request dal BT runtime</text>
   <text x="70" y="220" class="body">Caller: sandwich_bt_runtime_cpp</text>
-  <text x="70" y="245" class="body">Service: /sandwich_bt/run_command</text>
+  <text x="70" y="245" class="body">Service: /sandwich_bt/run</text>
   <text x="70" y="270" class="body">Payload:</text>
   <text x="95" y="295" class="body">kind</text>
   <text x="155" y="295" class="body">name</text>
@@ -43,10 +43,10 @@
   <text x="95" y="425" class="small">sandwich_bt_executor.yaml</text>
   <text x="95" y="448" class="small">sandwich_bt_executor_headless.yaml</text>
   <text x="70" y="480" class="body">Definisce:</text>
-  <text x="95" y="505" class="body">service_name</text>
+  <text x="95" y="505" class="body">bt_command_service</text>
   <text x="95" y="528" class="body">robot config</text>
   <text x="95" y="551" class="body">skills[] con policy/checkpoint</text>
-  <text x="95" y="574" class="body">servizi di verifica VLM</text>
+  <text x="95" y="574" class="body">topic/verifica VLM</text>
 
   <rect class="box" x="50" y="600" width="330" height="180" fill="#fef3c7"/>
   <text x="70" y="630" class="label">3) Backend robot / mock</text>
@@ -97,8 +97,8 @@
   <rect class="box" x="950" y="545" width="320" height="250" fill="#fee2e2"/>
   <text x="975" y="578" class="label">VLM retry rule</text>
   <text x="975" y="608" class="body">Il server apre un attempt PENDING.</text>
-  <text x="975" y="638" class="body">Il VLM riporta SUCCESS o FAILURE.</text>
-  <text x="975" y="668" class="body">Su FAILURE il BT ritenta</text>
+  <text x="975" y="638" class="body">Il VLM riporta waiting/SUCCESS/FAILURE.</text>
+  <text x="975" y="668" class="body">Waiting blocca; FAILURE ritenta</text>
   <text x="975" y="693" class="body">la stessa skill BC da capo.</text>
 
   <rect class="box" x="1080" y="190" width="270" height="165" fill="#dcfce7"/>

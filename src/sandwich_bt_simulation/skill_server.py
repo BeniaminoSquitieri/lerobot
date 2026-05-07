@@ -8,6 +8,7 @@ robot drivers. It is intended for local smoke tests of the named-command flow.
 from __future__ import annotations
 
 import argparse
+import json
 import sys
 from collections.abc import Sequence
 from dataclasses import dataclass, field
@@ -18,13 +19,21 @@ from typing import Any
 if __package__ in {None, ""}:
     sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
     from sandwich_bt_python.verification import (  # type: ignore
-        UNKNOWN_VERIFICATION_STATUS,
-        SkillVerificationRegistry,
+        VLM_FAILURE,
+        VLM_NEEDS_MANUAL_HELP,
+        VLM_UNKNOWN,
+        VLM_WAIT_HUMAN,
+        VLM_WAITING_STATUSES,
+        VlmCheckRegistry,
     )
 else:
     from sandwich_bt_python.verification import (
-        UNKNOWN_VERIFICATION_STATUS,
-        SkillVerificationRegistry,
+        VLM_FAILURE,
+        VLM_NEEDS_MANUAL_HELP,
+        VLM_UNKNOWN,
+        VLM_WAIT_HUMAN,
+        VLM_WAITING_STATUSES,
+        VlmCheckRegistry,
     )
 
 _ACTION_KEYS = (
@@ -39,11 +48,42 @@ _ACTION_KEYS = (
 SIMULATED_SKILL_KIND = "simulated_skill"
 SIMULATED_SKILL_PENDING_KIND = "simulated_skill_pending"
 
-_KINDS_THAT_OPEN_VERIFICATION = {
+_NEXT_ACTION_TO_STATUS = {
+    "CONTINUE": "SUCCESS",
+    "PROCEED": "SUCCESS",
+    "RETRY": VLM_FAILURE,
+    "RETRY_SKILL": VLM_FAILURE,
+    "WAIT_HUMAN": VLM_WAIT_HUMAN,
+    "REQUEST_MANUAL_INTERVENTION": VLM_NEEDS_MANUAL_HELP,
+}
+
+_COMMAND_KINDS_THAT_OPEN_VLM_CHECK = {
     "skill",
     SIMULATED_SKILL_KIND,
     SIMULATED_SKILL_PENDING_KIND,
 }
+
+
+def _vlm_status_from_payload(payload: dict[str, Any]) -> str:
+    """@brief Resolve topic status/next_action fields into registry status."""
+    status = str(payload.get("status", "")).upper()
+    if status:
+        return status
+    next_action = str(payload.get("next_action", "")).upper()
+    return _NEXT_ACTION_TO_STATUS.get(next_action, "")
+
+
+def _vlm_message_from_payload(payload: dict[str, Any], *, status: str) -> str:
+    """@brief Keep richer VLM reasons visible through the legacy message field."""
+    message_parts = []
+    message = str(payload.get("message", ""))
+    if message:
+        message_parts.append(message)
+    for key in ("failure_reason", "scene_state", "required_human_action", "next_action"):
+        value = payload.get(key)
+        if value not in (None, ""):
+            message_parts.append(f"{key}={value}")
+    return " | ".join(message_parts) if message_parts else f"External verifier reported {status}."
 
 
 @dataclass
@@ -98,14 +138,23 @@ class MockServerConfig:
     fps: int = 10
     """Virtual control frequency used to accumulate elapsed time."""
 
-    service_name: str = "/sandwich_bt/run_command"
+    bt_command_service: str = "/sandwich_bt/run"
     """ROS2 service name used when exposing the mock as a live node."""
 
-    verification_query_service_name: str = "/sandwich_bt/get_skill_verification"
-    """Mock verification query service name."""
+    vlm_state_service: str = "/sandwich_bt/vlm_state"
+    """Mock VLM state service name."""
 
-    verification_report_service_name: str = "/sandwich_bt/report_skill_verification"
-    """Mock verification report service name."""
+    legacy_vlm_result_service: str = "/sandwich_bt/vlm_result_legacy"
+    """Mock legacy VLM result service name."""
+
+    vlm_request_topic: str = "/sandwich_bt/vlm_request"
+    """Mock topic published when a VLM/manual verifier should inspect a scene."""
+
+    vlm_result_topic: str = "/sandwich_bt/vlm_result"
+    """Mock topic consumed from a VLM/manual verifier."""
+
+    vlm_timeout_s: float = 30.0
+    """Seconds before a waiting VLM check is treated as FAILURE."""
 
     display_data: bool = False
     play_sounds: bool = False
@@ -117,6 +166,8 @@ class MockServerConfig:
         """@brief Validate basic service/runtime invariants."""
         if self.fps <= 0:
             raise ValueError("fps must be > 0.")
+        if self.vlm_timeout_s < 0:
+            raise ValueError("vlm_timeout_s must be >= 0.")
         if not self.skills:
             raise ValueError("At least one skill must be configured.")
 
@@ -291,15 +342,15 @@ class MockRunNamedCommandResponse:
 
 
 @dataclass
-class MockGetSkillVerificationRequest:
-    """@brief In-process representation of a verification query request."""
+class MockVlmStateRequest:
+    """@brief In-process representation of a VLM state request."""
 
     skill_name: str
 
 
 @dataclass
-class MockGetSkillVerificationResponse:
-    """@brief In-process representation of a verification query response."""
+class MockVlmStateResponse:
+    """@brief In-process representation of a VLM state response."""
 
     has_attempt: bool
     attempt_id: int
@@ -309,8 +360,8 @@ class MockGetSkillVerificationResponse:
 
 
 @dataclass
-class MockReportSkillVerificationRequest:
-    """@brief In-process representation of a verifier report request."""
+class MockLegacyVlmResultRequest:
+    """@brief In-process representation of a legacy VLM result request."""
 
     skill_name: str
     status: str
@@ -320,8 +371,8 @@ class MockReportSkillVerificationRequest:
 
 
 @dataclass
-class MockReportSkillVerificationResponse:
-    """@brief In-process representation of a verifier report response."""
+class MockLegacyVlmResultResponse:
+    """@brief In-process representation of a legacy VLM result response."""
 
     accepted: bool
     applied_attempt_id: int
@@ -434,18 +485,23 @@ class MockRunNamedCommandService:
         self,
         executor: MockSkillCommandExecutor,
         *,
-        auto_verify_status: str | None = None,
+        auto_vlm_result_status: str | None = None,
         scripted_responses: dict[tuple[str, str], list[MockRunNamedCommandResponse]] | None = None,
     ):
-        """@brief Store executor, service names, scripts, and verification registry."""
+        """@brief Store executor, service/topic names, scripts, and VLM check registry."""
         self.executor = executor
-        self.service_name = executor.cfg.service_name
-        self.verification_query_service_name = executor.cfg.verification_query_service_name
-        self.verification_report_service_name = executor.cfg.verification_report_service_name
-        self.auto_verify_status = auto_verify_status
+        self.bt_command_service = executor.cfg.bt_command_service
+        self.vlm_state_service = executor.cfg.vlm_state_service
+        self.legacy_vlm_result_service = executor.cfg.legacy_vlm_result_service
+        self.vlm_request_topic = executor.cfg.vlm_request_topic
+        self.vlm_result_topic = executor.cfg.vlm_result_topic
+        self.auto_vlm_result_status = auto_vlm_result_status
         self.scripted_responses = scripted_responses if scripted_responses is not None else {}
         self.request_log: list[MockRunNamedCommandRequest] = []
-        self.verification_registry = SkillVerificationRegistry(known_skill_names=set(executor.skill_configs))
+        self.vlm_check_registry = VlmCheckRegistry(
+            known_skill_names=set(executor.skill_configs),
+            vlm_timeout_s=executor.cfg.vlm_timeout_s,
+        )
 
     def handle_request(self, request: MockRunNamedCommandRequest) -> MockRunNamedCommandResponse:
         """@brief Execute or script one mock named-command request."""
@@ -457,7 +513,7 @@ class MockRunNamedCommandService:
         if request.kind == "skill":
             result = self.executor.execute_skill(request.name, timeout_override_s=request.timeout_s)
         elif request.kind == SIMULATED_SKILL_KIND:
-            self.verification_registry.register_skill_name(request.name)
+            self.vlm_check_registry.register_skill_name(request.name)
             result = CommandResult(
                 True,
                 "SUCCESS",
@@ -465,12 +521,12 @@ class MockRunNamedCommandService:
                 f"Simulated skill '{request.name}' completed without mock robot execution.",
             )
         elif request.kind == SIMULATED_SKILL_PENDING_KIND:
-            self.verification_registry.register_skill_name(request.name)
+            self.vlm_check_registry.register_skill_name(request.name)
             result = CommandResult(
                 True,
                 "SUCCESS",
                 0.0,
-                f"Simulated skill '{request.name}' completed and is awaiting external verification.",
+                f"Simulated skill '{request.name}' completed and is awaiting a VLM result.",
             )
         else:
             result = CommandResult(
@@ -480,18 +536,18 @@ class MockRunNamedCommandService:
                 f"Unsupported command kind '{request.kind}'.",
             )
 
-        if request.kind in _KINDS_THAT_OPEN_VERIFICATION and result.success:
-            snapshot = self.verification_registry.begin_attempt(request.name)
+        if request.kind in _COMMAND_KINDS_THAT_OPEN_VLM_CHECK and result.success:
+            snapshot = self.vlm_check_registry.begin_attempt(request.name)
             result.message = (
-                f"{result.message} Verification attempt {snapshot.attempt_id} is now pending on "
-                f"'{self.verification_query_service_name}'."
+                f"{result.message} VLM check attempt {snapshot.attempt_id} is now pending on "
+                f"'{self.vlm_request_topic}'."
             )
-            if self.auto_verify_status is not None:
-                auto_update = self.verification_registry.report(
+            if self.auto_vlm_result_status is not None:
+                auto_update = self.vlm_check_registry.report(
                     skill_name=request.name,
                     attempt_id=snapshot.attempt_id,
-                    status=self.auto_verify_status,
-                    message=f"Mock verifier auto-reported {self.auto_verify_status} for skill '{request.name}'.",
+                    status=self.auto_vlm_result_status,
+                    message=f"Mock VLM auto-reported {self.auto_vlm_result_status} for skill '{request.name}'.",
                     confidence=1.0,
                 )
                 result.message = f"{result.message} {auto_update.message}"
@@ -503,31 +559,31 @@ class MockRunNamedCommandService:
             message=result.message,
         )
 
-    def handle_verification_query(
+    def handle_get_vlm_state(
         self,
-        request: MockGetSkillVerificationRequest,
-    ) -> MockGetSkillVerificationResponse:
-        """@brief Return mock verification state for a skill."""
+        request: MockVlmStateRequest,
+    ) -> MockVlmStateResponse:
+        """@brief Return mock VLM check state for a skill."""
         try:
-            snapshot = self.verification_registry.get_latest(request.skill_name)
+            snapshot = self.vlm_check_registry.get_latest(request.skill_name)
         except ValueError as exc:
-            return MockGetSkillVerificationResponse(
+            return MockVlmStateResponse(
                 has_attempt=False,
                 attempt_id=0,
-                status=UNKNOWN_VERIFICATION_STATUS,
+                status=VLM_UNKNOWN,
                 message=str(exc),
                 confidence=0.0,
             )
         if snapshot is None:
-            return MockGetSkillVerificationResponse(
+            return MockVlmStateResponse(
                 has_attempt=False,
                 attempt_id=0,
-                status=UNKNOWN_VERIFICATION_STATUS,
+                status=VLM_UNKNOWN,
                 message=f"No completed attempt has been recorded yet for skill '{request.skill_name}'.",
                 confidence=0.0,
             )
 
-        return MockGetSkillVerificationResponse(
+        return MockVlmStateResponse(
             has_attempt=True,
             attempt_id=snapshot.attempt_id,
             status=snapshot.status,
@@ -535,13 +591,13 @@ class MockRunNamedCommandService:
             confidence=snapshot.confidence,
         )
 
-    def handle_verification_report(
+    def handle_legacy_vlm_result(
         self,
-        request: MockReportSkillVerificationRequest,
-    ) -> MockReportSkillVerificationResponse:
+        request: MockLegacyVlmResultRequest,
+    ) -> MockLegacyVlmResultResponse:
         """@brief Apply a mock external verifier verdict."""
         try:
-            update = self.verification_registry.report(
+            update = self.vlm_check_registry.report(
                 skill_name=request.skill_name,
                 attempt_id=request.attempt_id,
                 status=request.status,
@@ -549,12 +605,12 @@ class MockRunNamedCommandService:
                 confidence=request.confidence,
             )
         except ValueError as exc:
-            return MockReportSkillVerificationResponse(
+            return MockLegacyVlmResultResponse(
                 accepted=False,
                 applied_attempt_id=0,
                 message=str(exc),
             )
-        return MockReportSkillVerificationResponse(
+        return MockLegacyVlmResultResponse(
             accepted=update.accepted,
             applied_attempt_id=0 if update.snapshot is None else update.snapshot.attempt_id,
             message=update.message,
@@ -564,8 +620,8 @@ class MockRunNamedCommandService:
 def build_demo_stack(
     use_delta_actions: bool = False,
     fps: int = 10,
-    service_name: str = "/sandwich_bt/run_command",
-    auto_verify_status: str | None = None,
+    bt_command_service: str = "/sandwich_bt/run",
+    auto_vlm_result_status: str | None = None,
     scripted_responses: dict[tuple[str, str], list[MockRunNamedCommandResponse]] | None = None,
 ) -> MockRunNamedCommandService:
     """@brief Build the default in-process mock sandwich command stack."""
@@ -580,7 +636,7 @@ def build_demo_stack(
 
     cfg = MockServerConfig(
         fps=fps,
-        service_name=service_name,
+        bt_command_service=bt_command_service,
         skills=[
             MockSkillConfig(
                 name="place_first_toast",
@@ -597,7 +653,7 @@ def build_demo_stack(
     executor = MockSkillCommandExecutor(cfg=cfg, robot=robot)
     return MockRunNamedCommandService(
         executor,
-        auto_verify_status=auto_verify_status,
+        auto_vlm_result_status=auto_vlm_result_status,
         scripted_responses=scripted_responses,
     )
 
@@ -605,14 +661,14 @@ def build_demo_stack(
 def build_ros2_demo_stack(
     use_delta_actions: bool = False,
     fps: int = 10,
-    service_name: str = "/sandwich_bt/run_command",
+    bt_command_service: str = "/sandwich_bt/run",
 ) -> MockRunNamedCommandService:
     """@brief Build a mock stack configured for ROS2 service smoke tests."""
     return build_demo_stack(
         use_delta_actions=use_delta_actions,
         fps=fps,
-        service_name=service_name,
-        auto_verify_status="SUCCESS",
+        bt_command_service=bt_command_service,
+        auto_vlm_result_status="SUCCESS",
     )
 
 
@@ -672,10 +728,11 @@ def run_ros2_service(
         import rclpy
         from rclpy.executors import ExternalShutdownException
         from rclpy.node import Node
+        from std_msgs.msg import String
 
         from sandwich_bt_python.server import _load_bt_services
 
-        run_named_command_type, get_skill_verification_type, report_skill_verification_type = _load_bt_services()
+        bt_command_service_type, vlm_state_service_type, legacy_vlm_result_service_type = _load_bt_services()
     except ModuleNotFoundError as exc:  # pragma: no cover - depends on ROS2 install
         raise RuntimeError(
             "ROS2 simulation mode requires rclpy and sandwich_bt_interfaces. "
@@ -691,25 +748,40 @@ def run_ros2_service(
         """@brief ROS2 adapter that forwards generated service calls to the mock."""
 
         def __init__(self) -> None:
-            """@brief Register command and verification services."""
+            """@brief Register command, VLM state, legacy VLM result services, and VLM topics."""
             super().__init__("sandwich_bt_skill_server_sim")
             self._service_impl = service
-            self._command_service = self.create_service(
-                run_named_command_type,
-                service.service_name,
+            self._bt_command_server = self.create_service(
+                bt_command_service_type,
+                service.bt_command_service,
                 self._handle_request,
             )
-            self._verification_query_service = self.create_service(
-                get_skill_verification_type,
-                service.verification_query_service_name,
-                self._handle_verification_query,
+            self._vlm_state_server = self.create_service(
+                vlm_state_service_type,
+                service.vlm_state_service,
+                self._handle_get_vlm_state,
             )
-            self._verification_report_service = self.create_service(
-                report_skill_verification_type,
-                service.verification_report_service_name,
-                self._handle_verification_report,
+            self._legacy_vlm_result_server = self.create_service(
+                legacy_vlm_result_service_type,
+                service.legacy_vlm_result_service,
+                self._handle_legacy_vlm_result,
             )
-            self.get_logger().info(f"Serving mock BT commands on '{service.service_name}'.")
+            self._vlm_request_publisher = self.create_publisher(
+                String,
+                service.vlm_request_topic,
+                10,
+            )
+            self._vlm_result_subscription = self.create_subscription(
+                String,
+                service.vlm_result_topic,
+                self._handle_vlm_result_topic,
+                10,
+            )
+            self.get_logger().info(
+                f"Serving mock BT commands on '{service.bt_command_service}', "
+                f"VLM requests on '{service.vlm_request_topic}', "
+                f"and VLM results from '{service.vlm_result_topic}'."
+            )
 
         def _handle_request(self, request, response):
             """@brief Convert generated ROS request/response objects to mock objects."""
@@ -724,12 +796,13 @@ def run_ros2_service(
             response.status = result.status
             response.elapsed_s = float(result.elapsed_s)
             response.message = result.message
+            self._publish_vlm_request_if_waiting(request)
             return response
 
-        def _handle_verification_query(self, request, response):
-            """@brief Convert a generated verification query into a mock query."""
-            result = self._service_impl.handle_verification_query(
-                MockGetSkillVerificationRequest(skill_name=request.skill_name)
+        def _handle_get_vlm_state(self, request, response):
+            """@brief Convert a generated VLM state request into a mock request."""
+            result = self._service_impl.handle_get_vlm_state(
+                MockVlmStateRequest(skill_name=request.skill_name)
             )
             response.has_attempt = bool(result.has_attempt)
             response.attempt_id = int(result.attempt_id)
@@ -738,10 +811,10 @@ def run_ros2_service(
             response.confidence = float(result.confidence)
             return response
 
-        def _handle_verification_report(self, request, response):
+        def _handle_legacy_vlm_result(self, request, response):
             """@brief Convert a generated verifier report into a mock report."""
-            result = self._service_impl.handle_verification_report(
-                MockReportSkillVerificationRequest(
+            result = self._service_impl.handle_legacy_vlm_result(
+                MockLegacyVlmResultRequest(
                     skill_name=request.skill_name,
                     status=request.status,
                     attempt_id=int(request.attempt_id),
@@ -753,6 +826,71 @@ def run_ros2_service(
             response.applied_attempt_id = int(result.applied_attempt_id)
             response.message = result.message
             return response
+
+        def _publish_vlm_request_if_waiting(self, request) -> None:
+            """@brief Emit the same topic request as the real server after opening a gate."""
+            if request.kind not in _COMMAND_KINDS_THAT_OPEN_VLM_CHECK:
+                return
+            try:
+                snapshot = self._service_impl.vlm_check_registry.get_latest(request.name)
+            except ValueError:
+                return
+            if snapshot is None or snapshot.status not in VLM_WAITING_STATUSES:
+                return
+            payload = {
+                "event": "vlm_check_requested",
+                "skill_name": snapshot.skill_name,
+                "attempt_id": int(snapshot.attempt_id),
+                "status": snapshot.status,
+                "message": snapshot.message,
+                "allowed_statuses": [
+                    "PENDING",
+                    "RUNNING",
+                    "WAIT_HUMAN",
+                    "MANUAL_INTERVENTION_REQUIRED",
+                    "SUCCESS",
+                    "FAILURE",
+                ],
+                "allowed_next_actions": [
+                    "CONTINUE",
+                    "RETRY_SKILL",
+                    "WAIT_HUMAN",
+                    "REQUEST_MANUAL_INTERVENTION",
+                ],
+            }
+            msg = String()
+            msg.data = json.dumps(payload, sort_keys=True)
+            self._vlm_request_publisher.publish(msg)
+
+        def _handle_vlm_result_topic(self, msg) -> None:
+            """@brief Apply a verifier report published on the same topic as real mode."""
+            try:
+                payload = json.loads(msg.data)
+            except Exception as exc:  # noqa: BLE001
+                self.get_logger().error(f"Invalid VLM result JSON: {exc}: '{msg.data}'")
+                return
+            if not isinstance(payload, dict):
+                self.get_logger().error("Rejected VLM result topic message: payload must be a JSON object.")
+                return
+
+            try:
+                result = self._service_impl.handle_legacy_vlm_result(
+                    MockLegacyVlmResultRequest(
+                        skill_name=str(payload.get("skill_name", "")),
+                        status=_vlm_status_from_payload(payload),
+                        attempt_id=int(payload.get("attempt_id", 0)),
+                        message=_vlm_message_from_payload(
+                            payload,
+                            status=_vlm_status_from_payload(payload),
+                        ),
+                        confidence=float(payload.get("confidence", 0.0)),
+                    )
+                )
+            except (TypeError, ValueError) as exc:
+                self.get_logger().error(f"Rejected VLM result topic message: {exc}")
+                return
+            log_fn = self.get_logger().info if result.accepted else self.get_logger().warning
+            log_fn(result.message)
 
     if not rclpy.ok():
         rclpy.init()
@@ -798,9 +936,11 @@ def main(argv: Sequence[str] | None = None) -> int:
         help="Expose the mock command handler as a ROS2 service so the C++ BT runner can connect to it.",
     )
     parser.add_argument(
+        "--bt-command-service",
         "--service-name",
-        default="/sandwich_bt/run_command",
-        help="ROS2 service name used in --ros2-service mode.",
+        dest="bt_command_service",
+        default="/sandwich_bt/run",
+        help="ROS2 service where the C++ BT sends skill/gate commands in --ros2-service mode.",
     )
     args = parser.parse_args(argv)
 
@@ -811,7 +951,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         build_ros2_demo_stack(
             use_delta_actions=args.delta_actions,
             fps=args.fps,
-            service_name=args.service_name,
+            bt_command_service=args.bt_command_service,
         )
         if args.ros2_service
         else build_demo_stack(use_delta_actions=args.delta_actions, fps=args.fps)

@@ -20,11 +20,11 @@ RunNamedCommandNode::RunNamedCommandNode(
   const std::string& name,
   const BT::NodeConfiguration& config,
   const rclcpp::Node::SharedPtr& ros_node,
-  const std::string& service_name)
+  const std::string& bt_command_service)
 : BT::StatefulActionNode(name, config),
   ros_node_(ros_node),
-  client_(ros_node_->create_client<ServiceT>(service_name)),
-  service_name_(service_name)
+  client_(ros_node_->create_client<ServiceT>(bt_command_service)),
+  bt_command_service_(bt_command_service)
 {
 }
 
@@ -60,7 +60,7 @@ BT::NodeStatus RunNamedCommandNode::onStart()
   getInput("timeout_s", timeout_s);
 
   if (!client_->wait_for_service(std::chrono::seconds(5))) {
-    RCLCPP_ERROR(ros_node_->get_logger(), "Service '%s' not available.", service_name_.c_str());
+    RCLCPP_ERROR(ros_node_->get_logger(), "Service '%s' not available.", bt_command_service_.c_str());
     return BT::NodeStatus::FAILURE;
   }
 
@@ -137,7 +137,7 @@ void RunNamedCommandNode::onHalted()
   RCLCPP_WARN(
     ros_node_->get_logger(),
     "RunNamedCommand halted while service '%s' may still be executing server-side.",
-    service_name_.c_str());
+    bt_command_service_.c_str());
 }
 
 }  // namespace sandwich_bt_runtime_cpp

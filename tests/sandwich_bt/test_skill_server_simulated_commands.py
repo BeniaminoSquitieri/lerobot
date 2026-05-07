@@ -6,9 +6,12 @@ from types import SimpleNamespace
 
 from sandwich_bt_python.config import SkillCommandServerConfig
 from sandwich_bt_python.verification import (
-    PENDING_VERIFICATION_STATUS,
-    SUCCESSFUL_VERIFICATION_STATUS,
-    SkillVerificationRegistry,
+    VLM_FAILURE,
+    VLM_NEEDS_MANUAL_HELP,
+    VLM_PENDING,
+    VLM_SUCCESS,
+    VLM_WAIT_HUMAN,
+    VlmCheckRegistry,
 )
 
 
@@ -44,14 +47,14 @@ def _make_server(*, known_skill_names: set[str] | None = None):
     server = SimpleNamespace(
         cfg=SimpleNamespace(
             play_sounds=False,
-            auto_verify_real_skills=False,
-            verification_query_service_name="/sandwich_bt/get_skill_verification",
-            verification_request_topic_name="/sandwich_bt/verification_request",
+            auto_pass_vlm_check_for_real_skills=False,
+            vlm_state_service="/sandwich_bt/vlm_state",
+            vlm_request_topic="/sandwich_bt/vlm_request",
         ),
         executor_backend=executor,
         robot_action_processor=object(),
         robot_observation_processor=object(),
-        verification_registry=SkillVerificationRegistry(known_skill_names=known_skill_names or set()),
+        vlm_check_registry=VlmCheckRegistry(known_skill_names=known_skill_names or set()),
         get_logger=lambda: _FakeLogger(),
     )
     return server, executor
@@ -79,18 +82,18 @@ def test_parser_wrap_sees_dataclass_config_annotation() -> None:
     assert argtype is SkillCommandServerConfig
 
 
-def test_simulated_skill_auto_resolves_verification_without_touching_executor() -> None:
+def test_simulated_skill_auto_passes_vlm_check_without_touching_executor() -> None:
     server, executor = _make_server(known_skill_names={"place_first_toast"})
 
     response = _handle_request(server, _request("simulated_skill", "pour"), _response())
-    verification = server.verification_registry.get_latest("pour")
+    vlm_check = server.vlm_check_registry.get_latest("pour")
 
     assert response.success
     assert response.status == "SUCCESS"
     assert executor.skill_calls == []
-    assert verification is not None
-    assert verification.status == SUCCESSFUL_VERIFICATION_STATUS
-    assert verification.confidence == 1.0
+    assert vlm_check is not None
+    assert vlm_check.status == VLM_SUCCESS
+    assert vlm_check.confidence == 1.0
 
 
 def test_simulated_skill_pending_waits_for_external_verifier() -> None:
@@ -101,12 +104,12 @@ def test_simulated_skill_pending_waits_for_external_verifier() -> None:
         _request("simulated_skill_pending", "place_second_toast"),
         _response(),
     )
-    verification = server.verification_registry.get_latest("place_second_toast")
+    vlm_check = server.vlm_check_registry.get_latest("place_second_toast")
 
     assert response.success
     assert executor.skill_calls == []
-    assert verification is not None
-    assert verification.status == PENDING_VERIFICATION_STATUS
+    assert vlm_check is not None
+    assert vlm_check.status == VLM_PENDING
 
 
 def test_recovery_kind_is_rejected() -> None:
@@ -122,28 +125,28 @@ def test_recovery_kind_is_rejected() -> None:
     assert response.status == "ERROR"
     assert "Unsupported command kind" in response.message
     assert executor.skill_calls == []
-    assert server.verification_registry.get_latest("recover_pour") is None
+    assert server.vlm_check_registry.get_latest("recover_pour") is None
 
 
-def test_real_skill_kind_still_delegates_to_executor_and_opens_pending_verification() -> None:
+def test_real_skill_kind_still_delegates_to_executor_and_opens_pending_vlm_check() -> None:
     server, executor = _make_server(known_skill_names={"place_first_toast"})
 
     response = _handle_request(server, _request("skill", "place_first_toast"), _response())
-    verification = server.verification_registry.get_latest("place_first_toast")
+    vlm_check = server.vlm_check_registry.get_latest("place_first_toast")
 
     assert response.success
     assert executor.skill_calls == ["place_first_toast"]
-    assert verification is not None
-    assert verification.status == PENDING_VERIFICATION_STATUS
+    assert vlm_check is not None
+    assert vlm_check.status == VLM_PENDING
 
 
-def test_verification_report_topic_resolves_pending_attempt() -> None:
+def test_vlm_result_topic_resolves_pending_attempt() -> None:
     server, _executor = _make_server(known_skill_names={"place_first_toast"})
     _handle_request(server, _request("skill", "place_first_toast"), _response())
 
     from sandwich_bt_python.server import SkillCommandServer
 
-    SkillCommandServer._handle_verification_report_topic(
+    SkillCommandServer._handle_vlm_result_topic(
         server,
         SimpleNamespace(
             data=json.dumps(
@@ -156,9 +159,78 @@ def test_verification_report_topic_resolves_pending_attempt() -> None:
             )
         ),
     )
-    verification = server.verification_registry.get_latest("place_first_toast")
+    vlm_check = server.vlm_check_registry.get_latest("place_first_toast")
 
-    assert verification is not None
-    assert verification.status == SUCCESSFUL_VERIFICATION_STATUS
-    assert verification.message == "scene ok"
-    assert verification.confidence == 0.93
+    assert vlm_check is not None
+    assert vlm_check.status == VLM_SUCCESS
+    assert vlm_check.message == "scene ok"
+    assert vlm_check.confidence == 0.93
+
+
+def test_vlm_result_topic_accepts_waiting_human_state() -> None:
+    server, _executor = _make_server(known_skill_names={"pour_ingredient"})
+    _handle_request(server, _request("simulated_skill_pending", "pour_ingredient"), _response())
+
+    from sandwich_bt_python.server import SkillCommandServer
+
+    SkillCommandServer._handle_vlm_result_topic(
+        server,
+        SimpleNamespace(
+            data=json.dumps(
+                {
+                    "skill_name": "pour_ingredient",
+                    "status": "WAIT_HUMAN",
+                    "message": "human is pouring",
+                    "scene_state": "ingredient stream visible",
+                    "confidence": 0.8,
+                }
+            )
+        ),
+    )
+    vlm_check = server.vlm_check_registry.get_latest("pour_ingredient")
+
+    assert vlm_check is not None
+    assert vlm_check.status == VLM_WAIT_HUMAN
+    assert "human is pouring" in vlm_check.message
+    assert "scene_state=ingredient stream visible" in vlm_check.message
+
+
+def test_vlm_result_topic_maps_next_actions_to_bt_statuses() -> None:
+    server, _executor = _make_server(known_skill_names={"place_first_toast"})
+    _handle_request(server, _request("skill", "place_first_toast"), _response())
+
+    from sandwich_bt_python.server import SkillCommandServer
+
+    SkillCommandServer._handle_vlm_result_topic(
+        server,
+        SimpleNamespace(
+            data=json.dumps(
+                {
+                    "skill_name": "place_first_toast",
+                    "next_action": "REQUEST_MANUAL_INTERVENTION",
+                    "failure_reason": "object_missing",
+                    "required_human_action": "put toast back in reachable area",
+                }
+            )
+        ),
+    )
+    manual = server.vlm_check_registry.get_latest("place_first_toast")
+    assert manual is not None
+    assert manual.status == VLM_NEEDS_MANUAL_HELP
+    assert "failure_reason=object_missing" in manual.message
+
+    SkillCommandServer._handle_vlm_result_topic(
+        server,
+        SimpleNamespace(
+            data=json.dumps(
+                {
+                    "skill_name": "place_first_toast",
+                    "next_action": "RETRY_SKILL",
+                    "message": "human fixed the scene but placement still failed",
+                }
+            )
+        ),
+    )
+    retry = server.vlm_check_registry.get_latest("place_first_toast")
+    assert retry is not None
+    assert retry.status == VLM_FAILURE

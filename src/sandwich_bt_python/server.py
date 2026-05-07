@@ -8,7 +8,7 @@ This module is the runtime boundary between the C++ BehaviorTree.CPP process,
 the Python robot execution process, and external scene verifiers. The C++ side
 never imports policy or robot code directly: it sends a `RunNamedCommand`
 request, waits for this server to finish the command, and then polls the
-verification state managed here. VLM/manual verifiers use topics only.
+VLM check state managed here. VLM/manual verifiers use topics only.
 
 Flow role:
 1. Wait for the C++ BT to send a named command.
@@ -44,10 +44,15 @@ from lerobot.utils.visualization_utils import init_rerun as init_rerun_viz
 from .config import SkillCommandServerConfig
 from .executor import CommandResult, SkillCommandExecutor
 from .verification import (
-    PENDING_VERIFICATION_STATUS,
-    SUCCESSFUL_VERIFICATION_STATUS,
-    UNKNOWN_VERIFICATION_STATUS,
-    SkillVerificationRegistry,
+    VLM_FAILURE,
+    VLM_NEEDS_MANUAL_HELP,
+    VLM_PENDING,
+    VLM_RUNNING,
+    VLM_SUCCESS,
+    VLM_UNKNOWN,
+    VLM_WAIT_HUMAN,
+    VLM_WAITING_STATUSES,
+    VlmCheckRegistry,
 )
 
 DEFAULT_CONFIG_PATH = Path(__file__).resolve().parent / "sandwich_bt_executor.yaml"
@@ -57,19 +62,56 @@ if TYPE_CHECKING:
     from lerobot.robots.custom_manipulator.custom_manipulator import CustomManipulator
 
 SIMULATED_SKILL_KIND = "simulated_skill"
-"""Command kind that acknowledges a skill and auto-resolves verification."""
+"""Command kind that acknowledges a skill and auto-resolves the VLM check."""
 
 SIMULATED_SKILL_PENDING_KIND = "simulated_skill_pending"
-"""Command kind that acknowledges a skill but leaves verification pending."""
+"""Command kind that acknowledges a skill but leaves the VLM check pending."""
 
-_KINDS_THAT_OPEN_VERIFICATION = {
+_COMMAND_KINDS_THAT_OPEN_VLM_CHECK = {
     "skill",
     SIMULATED_SKILL_KIND,
     SIMULATED_SKILL_PENDING_KIND,
 }
-_KINDS_THAT_AUTO_VERIFY = {
+_COMMAND_KINDS_THAT_AUTO_PASS_VLM_CHECK = {
     SIMULATED_SKILL_KIND,
 }
+
+_NEXT_ACTION_TO_STATUS = {
+    "CONTINUE": VLM_SUCCESS,
+    "PROCEED": VLM_SUCCESS,
+    "RETRY": VLM_FAILURE,
+    "RETRY_SKILL": VLM_FAILURE,
+    "WAIT": VLM_RUNNING,
+    "WAIT_HUMAN": VLM_WAIT_HUMAN,
+    "REQUEST_MANUAL_INTERVENTION": VLM_NEEDS_MANUAL_HELP,
+    "MANUAL_INTERVENTION": VLM_NEEDS_MANUAL_HELP,
+}
+
+
+def _vlm_status_from_payload(payload: dict[str, Any]) -> str:
+    """@brief Resolve VLM status/next_action fields into the BT-facing status."""
+    status = str(payload.get("status", "")).upper()
+    if status:
+        return status
+    next_action = str(payload.get("next_action", "")).upper()
+    if next_action in _NEXT_ACTION_TO_STATUS:
+        return _NEXT_ACTION_TO_STATUS[next_action]
+    return ""
+
+
+def _vlm_message_from_payload(payload: dict[str, Any], *, status: str) -> str:
+    """@brief Build a compact operator message from richer VLM topic fields."""
+    message_parts = []
+    message = str(payload.get("message", ""))
+    if message:
+        message_parts.append(message)
+    for key in ("failure_reason", "scene_state", "required_human_action", "next_action"):
+        value = payload.get(key)
+        if value not in (None, ""):
+            message_parts.append(f"{key}={value}")
+    if not message_parts:
+        message_parts.append(f"External verifier reported {status}.")
+    return " | ".join(message_parts)
 
 
 def _instantiate_processor_step(step_spec: Any):
@@ -183,14 +225,14 @@ def _load_bt_services():
 
 
 class SkillCommandServer(Node):
-    """@brief ROS2 node that executes BT commands and stores verification state.
+    """@brief ROS2 node that executes BT commands and stores VLM check state.
 
     The node owns three services and two verifier-facing topics:
     - `RunNamedCommand`: command execution requested by BT XML leaf nodes.
-    - `GetSkillVerification`: polling endpoint used by `VerifySkillOutcome`.
-    - `ReportSkillVerification`: legacy endpoint kept for compatibility.
-    - `verification_request_topic_name`: published when a scene verdict is needed.
-    - `verification_report_topic_name`: consumed from manual/VLM verifier verdicts.
+    - `VLM state service`: polling endpoint used by `VerifySkillOutcome`.
+    - `legacy VLM result service`: legacy endpoint kept for compatibility.
+    - `vlm_request_topic`: published when a scene verdict is needed.
+    - `vlm_result_topic`: consumed from manual/VLM results.
     """
 
     def __init__(
@@ -200,7 +242,7 @@ class SkillCommandServer(Node):
         executor_backend: SkillCommandExecutor,
         robot_action_processor: RobotProcessorPipeline,
         robot_observation_processor: RobotProcessorPipeline,
-        verification_registry: SkillVerificationRegistry,
+        vlm_check_registry: VlmCheckRegistry,
     ) -> None:
         """@brief Construct the service node and register every ROS2 service.
 
@@ -209,7 +251,7 @@ class SkillCommandServer(Node):
         @param executor_backend Object that actually runs learned skills.
         @param robot_action_processor Pipeline that converts policy actions.
         @param robot_observation_processor Pipeline that converts observations.
-        @param verification_registry In-memory state machine for skill attempts.
+        @param vlm_check_registry In-memory state machine for skill attempts.
         """
         super().__init__("sandwich_bt_skill_server")
         self.cfg = cfg
@@ -217,41 +259,45 @@ class SkillCommandServer(Node):
         self.executor_backend = executor_backend
         self.robot_action_processor = robot_action_processor
         self.robot_observation_processor = robot_observation_processor
-        self.verification_registry = verification_registry
+        self.vlm_check_registry = vlm_check_registry
 
         # ROS2 entrypoints used by the BT runtime and verifier-facing topics.
-        run_named_command, get_skill_verification, report_skill_verification = _load_bt_services()
+        bt_command_service_type, vlm_state_service_type, legacy_vlm_result_service_type = _load_bt_services()
         from std_msgs.msg import String  # type: ignore
 
-        self._command_service = self.create_service(run_named_command, cfg.service_name, self._handle_request)
-        self._verification_query_service = self.create_service(
-            get_skill_verification,
-            cfg.verification_query_service_name,
-            self._handle_get_skill_verification,
+        self._bt_command_server = self.create_service(
+            bt_command_service_type,
+            cfg.bt_command_service,
+            self._handle_request,
         )
-        self._verification_report_service = self.create_service(
-            report_skill_verification,
-            cfg.verification_report_service_name,
-            self._handle_report_skill_verification,
+        self._vlm_state_server = self.create_service(
+            vlm_state_service_type,
+            cfg.vlm_state_service,
+            self._handle_get_vlm_state,
         )
-        self._verification_request_publisher = self.create_publisher(
+        self._legacy_vlm_result_server = self.create_service(
+            legacy_vlm_result_service_type,
+            cfg.legacy_vlm_result_service,
+            self._handle_legacy_vlm_result,
+        )
+        self._vlm_request_publisher = self.create_publisher(
             String,
-            cfg.verification_request_topic_name,
+            cfg.vlm_request_topic,
             10,
         )
-        self._verification_report_subscription = self.create_subscription(
+        self._vlm_result_subscription = self.create_subscription(
             String,
-            cfg.verification_report_topic_name,
-            self._handle_verification_report_topic,
+            cfg.vlm_result_topic,
+            self._handle_vlm_result_topic,
             10,
         )
         self.get_logger().info(
             "Serving BT commands on "
-            f"'{cfg.service_name}', verification queries on "
-            f"'{cfg.verification_query_service_name}', legacy verification reports on "
-            f"'{cfg.verification_report_service_name}', verification requests on "
-            f"'{cfg.verification_request_topic_name}', and verifier verdicts from "
-            f"'{cfg.verification_report_topic_name}'."
+            f"'{cfg.bt_command_service}', VLM state service on "
+            f"'{cfg.vlm_state_service}', legacy VLM result service on "
+            f"'{cfg.legacy_vlm_result_service}', VLM requests on "
+            f"'{cfg.vlm_request_topic}', and VLM results from "
+            f"'{cfg.vlm_result_topic}'."
         )
 
     def _handle_request(self, request, response):
@@ -262,7 +308,7 @@ class SkillCommandServer(Node):
         @return The filled ROS2 response object.
 
         This method deliberately separates command execution from post-skill
-        scene verification. A successful skill opens a verification attempt; the
+        scene check. A successful skill opens a VLM check attempt; the
         BT can only advance after `VerifySkillOutcome` sees that attempt resolve.
         """
         # This is the handoff point between C++ BT orchestration and Python execution.
@@ -278,7 +324,7 @@ class SkillCommandServer(Node):
                     timeout_override_s=request.timeout_s,
                 )
             elif request.kind == SIMULATED_SKILL_KIND:
-                # Bring-up path: act as though a skill ran and verification passed.
+                # Bring-up path: act as though a skill ran and the VLM check passed.
                 result = CommandResult(
                     True,
                     "SUCCESS",
@@ -286,12 +332,12 @@ class SkillCommandServer(Node):
                     f"Simulated skill '{request.name}' completed without robot execution.",
                 )
             elif request.kind == SIMULATED_SKILL_PENDING_KIND:
-                # Verification-flow test path: open an attempt but do not resolve it.
+                # VLM-flow test path: open an attempt but do not resolve it.
                 result = CommandResult(
                     True,
                     "SUCCESS",
                     0.0,
-                    f"Simulated skill '{request.name}' completed and is awaiting external verification.",
+                    f"Simulated skill '{request.name}' completed and is awaiting a VLM result.",
                 )
             else:
                 result = None
@@ -311,46 +357,46 @@ class SkillCommandServer(Node):
             self.get_logger().error(response.message)
             return response
 
-        if request.kind in _KINDS_THAT_OPEN_VERIFICATION and result.success:
+        if request.kind in _COMMAND_KINDS_THAT_OPEN_VLM_CHECK and result.success:
             try:
                 if request.kind in {SIMULATED_SKILL_KIND, SIMULATED_SKILL_PENDING_KIND}:
                     # Simulated skill names may not exist in the real skill config.
-                    self.verification_registry.register_skill_name(request.name)
-                verification_snapshot = self.verification_registry.begin_attempt(request.name)
-                should_auto_verify = request.kind in _KINDS_THAT_AUTO_VERIFY or (
-                    request.kind == "skill" and self.cfg.auto_verify_real_skills
+                    self.vlm_check_registry.register_skill_name(request.name)
+                vlm_check_attempt = self.vlm_check_registry.begin_attempt(request.name)
+                should_auto_pass_vlm_check = request.kind in _COMMAND_KINDS_THAT_AUTO_PASS_VLM_CHECK or (
+                    request.kind == "skill" and self.cfg.auto_pass_vlm_check_for_real_skills
                 )
-                if should_auto_verify:
-                    self.verification_registry.report(
+                if should_auto_pass_vlm_check:
+                    self.vlm_check_registry.report(
                         skill_name=request.name,
-                        attempt_id=verification_snapshot.attempt_id,
-                        status=SUCCESSFUL_VERIFICATION_STATUS,
+                        attempt_id=vlm_check_attempt.attempt_id,
+                        status=VLM_SUCCESS,
                         message=f"Simulated verifier accepted skill '{request.name}'.",
                         confidence=1.0,
                     )
                     result.message = (
                         f"{result.message} "
-                        f"Verification attempt {verification_snapshot.attempt_id} was auto-resolved as SUCCESS."
+                        f"VLM check attempt {vlm_check_attempt.attempt_id} was auto-resolved as SUCCESS."
                     )
                 else:
-                    publish_request = getattr(self, "_publish_verification_request", None)
-                    if publish_request is not None:
-                        publish_request(verification_snapshot)
-                    verification_request_topic = getattr(
+                    publish_vlm_request = getattr(self, "_publish_vlm_request", None)
+                    if publish_vlm_request is not None:
+                        publish_vlm_request(vlm_check_attempt)
+                    vlm_request_topic = getattr(
                         self.cfg,
-                        "verification_request_topic_name",
-                        self.cfg.verification_query_service_name,
+                        "vlm_request_topic",
+                        self.cfg.vlm_state_service,
                     )
                     result.message = (
                         f"{result.message} "
-                        f"Verification attempt {verification_snapshot.attempt_id} is now pending on "
-                        f"'{verification_request_topic}'."
+                        f"VLM check attempt {vlm_check_attempt.attempt_id} is now pending on "
+                        f"'{vlm_request_topic}'."
                     )
             except Exception as exc:  # noqa: BLE001
                 response.success = False
                 response.status = "ERROR"
                 response.elapsed_s = float(result.elapsed_s)
-                response.message = f"Could not open verification for command '{request.name}': {exc}"
+                response.message = f"Could not open VLM check for command '{request.name}': {exc}"
                 self.get_logger().error(response.message)
                 return response
 
@@ -364,19 +410,19 @@ class SkillCommandServer(Node):
             self.get_logger().error(result.message)
         return response
 
-    def _handle_get_skill_verification(self, request, response):
-        """@brief Return the latest verification attempt for one skill.
+    def _handle_get_vlm_state(self, request, response):
+        """@brief Return the latest VLM check attempt for one skill.
 
         @param request ROS2 request containing `skill_name`.
         @param response Mutable ROS2 response with attempt metadata.
         @return The filled ROS2 response object.
         """
         try:
-            snapshot = self.verification_registry.get_latest(request.skill_name)
+            snapshot = self.vlm_check_registry.get_latest(request.skill_name)
         except ValueError as exc:
             response.has_attempt = False
             response.attempt_id = 0
-            response.status = UNKNOWN_VERIFICATION_STATUS
+            response.status = VLM_UNKNOWN
             response.message = str(exc)
             response.confidence = 0.0
             self.get_logger().error(response.message)
@@ -385,7 +431,7 @@ class SkillCommandServer(Node):
         if snapshot is None:
             response.has_attempt = False
             response.attempt_id = 0
-            response.status = UNKNOWN_VERIFICATION_STATUS
+            response.status = VLM_UNKNOWN
             response.message = f"No completed attempt has been recorded yet for skill '{request.skill_name}'."
             response.confidence = 0.0
             self.get_logger().warning(response.message)
@@ -396,13 +442,13 @@ class SkillCommandServer(Node):
         response.status = snapshot.status
         response.message = snapshot.message
         response.confidence = float(snapshot.confidence)
-        if snapshot.status == PENDING_VERIFICATION_STATUS:
+        if snapshot.status in VLM_WAITING_STATUSES:
             self.get_logger().debug(
-                f"Verification for skill '{snapshot.skill_name}' attempt {snapshot.attempt_id} is still pending."
+                f"VLM check for skill '{snapshot.skill_name}' attempt {snapshot.attempt_id} is {snapshot.status}."
             )
         return response
 
-    def _handle_report_skill_verification(self, request, response):
+    def _handle_legacy_vlm_result(self, request, response):
         """@brief Accept a verifier verdict for a pending skill attempt.
 
         @param request ROS2 request containing skill name, attempt id, status,
@@ -412,7 +458,7 @@ class SkillCommandServer(Node):
         @return The filled ROS2 response object.
         """
         try:
-            update = self.verification_registry.report(
+            update = self.vlm_check_registry.report(
                 skill_name=request.skill_name,
                 attempt_id=int(request.attempt_id),
                 status=request.status,
@@ -433,43 +479,54 @@ class SkillCommandServer(Node):
         log_fn(response.message)
         return response
 
-    def _publish_verification_request(self, snapshot) -> None:
+    def _publish_vlm_request(self, snapshot) -> None:
         """@brief Publish a topic event asking a VLM/manual verifier for a verdict."""
         from std_msgs.msg import String  # type: ignore
 
         payload = {
-            "event": "verification_requested",
+            "event": "vlm_check_requested",
             "skill_name": snapshot.skill_name,
             "attempt_id": int(snapshot.attempt_id),
-            "status": PENDING_VERIFICATION_STATUS,
+            "status": VLM_PENDING,
             "message": snapshot.message,
-            "allowed_statuses": ["SUCCESS", "FAILURE"],
+            "allowed_statuses": [
+                "PENDING",
+                "RUNNING",
+                "WAIT_HUMAN",
+                "MANUAL_INTERVENTION_REQUIRED",
+                "SUCCESS",
+                "FAILURE",
+            ],
+            "allowed_next_actions": [
+                "CONTINUE",
+                "RETRY_SKILL",
+                "WAIT_HUMAN",
+                "REQUEST_MANUAL_INTERVENTION",
+            ],
         }
         msg = String()
         msg.data = json.dumps(payload, sort_keys=True)
-        self._verification_request_publisher.publish(msg)
-        self.get_logger().info(
-            f"Published verification request for skill '{snapshot.skill_name}' attempt {snapshot.attempt_id}."
-        )
+        self._vlm_request_publisher.publish(msg)
+        self.get_logger().info(f"Published VLM request for skill '{snapshot.skill_name}' attempt {snapshot.attempt_id}.")
 
-    def _handle_verification_report_topic(self, msg) -> None:
+    def _handle_vlm_result_topic(self, msg) -> None:
         """@brief Apply one JSON verifier verdict received from a ROS2 topic."""
         try:
             payload = json.loads(msg.data)
         except Exception as exc:  # noqa: BLE001
-            self.get_logger().error(f"Invalid verification report JSON: {exc}: '{msg.data}'")
+            self.get_logger().error(f"Invalid VLM result JSON: {exc}: '{msg.data}'")
             return
         if not isinstance(payload, dict):
-            self.get_logger().error("Rejected verification report topic message: payload must be a JSON object.")
+            self.get_logger().error("Rejected VLM result topic message: payload must be a JSON object.")
             return
 
         try:
             skill_name = str(payload.get("skill_name", ""))
-            status = str(payload.get("status", "")).upper()
+            status = _vlm_status_from_payload(payload)
             attempt_id = int(payload.get("attempt_id", 0))
-            message = str(payload.get("message", ""))
+            message = _vlm_message_from_payload(payload, status=status)
             confidence = float(payload.get("confidence", 0.0))
-            update = self.verification_registry.report(
+            update = self.vlm_check_registry.report(
                 skill_name=skill_name,
                 attempt_id=attempt_id,
                 status=status,
@@ -477,7 +534,7 @@ class SkillCommandServer(Node):
                 confidence=confidence,
             )
         except (TypeError, ValueError) as exc:
-            self.get_logger().error(f"Rejected verification report topic message: {exc}")
+            self.get_logger().error(f"Rejected VLM result topic message: {exc}")
             return
 
         log_fn = self.get_logger().info if update.accepted else self.get_logger().warning
@@ -531,8 +588,11 @@ def run(cfg: SkillCommandServerConfig) -> None:
     logging.info("Constructing skill command executor.")
     executor_backend = SkillCommandExecutor(cfg=cfg, robot=robot)
     logging.info("Skill command executor ready.")
-    verification_registry = SkillVerificationRegistry(known_skill_names=set(executor_backend.skill_configs))
-    logging.info("Skill verification registry ready.")
+    vlm_check_registry = VlmCheckRegistry(
+        known_skill_names=set(executor_backend.skill_configs),
+        vlm_timeout_s=cfg.vlm_timeout_s,
+    )
+    logging.info("VLM check registry ready.")
 
     logging.info("Creating ROS2 skill command service node.")
     server_node = SkillCommandServer(
@@ -541,7 +601,7 @@ def run(cfg: SkillCommandServerConfig) -> None:
         executor_backend=executor_backend,
         robot_action_processor=robot_action_processor,
         robot_observation_processor=robot_observation_processor,
-        verification_registry=verification_registry,
+        vlm_check_registry=vlm_check_registry,
     )
     logging.info("ROS2 skill command service node is ready.")
 

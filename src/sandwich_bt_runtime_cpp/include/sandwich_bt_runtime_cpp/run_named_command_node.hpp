@@ -48,13 +48,13 @@ public:
    * @param name Runtime instance name assigned by BehaviorTree.CPP.
    * @param config Input/output port configuration supplied by the BT factory.
    * @param ros_node Shared ROS2 node used to create the service client.
-   * @param service_name Fully qualified service endpoint to call.
+   * @param bt_command_service Fully qualified service endpoint to call.
    */
   RunNamedCommandNode(
     const std::string& name,
     const BT::NodeConfiguration& config,
     const rclcpp::Node::SharedPtr& ros_node,
-    const std::string& service_name);
+    const std::string& bt_command_service);
 
   /**
    * @brief Declares the XML input ports consumed by this BT leaf.
@@ -80,7 +80,7 @@ public:
 private:
   rclcpp::Node::SharedPtr ros_node_;            ///< Shared ROS2 node used for logging and service transport.
   rclcpp::Client<ServiceT>::SharedPtr client_;  ///< Client that sends RunNamedCommand requests.
-  std::string service_name_;                    ///< Service endpoint name reported in diagnostics.
+  std::string bt_command_service_;                    ///< Service endpoint name reported in diagnostics.
   rclcpp::Client<ServiceT>::SharedFuture future_;  ///< Future holding the in-flight service response.
   bool request_pending_{false};                 ///< True while a service request is awaiting completion.
 };

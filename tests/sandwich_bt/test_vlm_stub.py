@@ -74,3 +74,31 @@ def test_vlm_stub_republishes_manual_verdict_to_report_topic() -> None:
         "confidence": 0.95,
     }
     assert logger.error_messages == []
+
+
+def test_vlm_stub_allows_richer_waiting_and_replanning_fields() -> None:
+    logger = _FakeLogger()
+    publisher = _FakePublisher()
+    node = _FakeVLMStub(publisher=publisher, logger=logger)
+    msg = SimpleNamespace(
+        data=json.dumps(
+            {
+                "skill_name": "pour_ingredient",
+                "status": "WAIT_HUMAN",
+                "next_action": "REQUEST_MANUAL_INTERVENTION",
+                "failure_reason": "human_hand_still_in_scene",
+                "required_human_action": "move hand away",
+            }
+        )
+    )
+
+    VLMStubNode._on_msg(node, msg)
+
+    assert len(publisher.messages) == 1
+    payload = json.loads(publisher.messages[0].data)
+    assert payload["skill_name"] == "pour_ingredient"
+    assert payload["status"] == "WAIT_HUMAN"
+    assert payload["next_action"] == "REQUEST_MANUAL_INTERVENTION"
+    assert payload["failure_reason"] == "human_hand_still_in_scene"
+    assert payload["required_human_action"] == "move hand away"
+    assert logger.error_messages == []

@@ -5,15 +5,18 @@
 # service boundary without physical hardware.
 
 # ROS2 service used by RunNamedCommand BT leaves.
-service_name: "/sandwich_bt/run_command"
+bt_command_service: "/sandwich_bt/run"
 # ROS2 service used by VerifySkillOutcome BT leaves.
-verification_query_service_name: "/sandwich_bt/get_skill_verification"
+vlm_state_service: "/sandwich_bt/vlm_state"
 # Legacy ROS2 service for external verifier verdicts.
-verification_report_service_name: "/sandwich_bt/report_skill_verification"
+legacy_vlm_result_service: "/sandwich_bt/vlm_result_legacy"
 # Topic published when the BT needs a scene verdict.
-verification_request_topic_name: "/sandwich_bt/verification_request"
+vlm_request_topic: "/sandwich_bt/vlm_request"
 # Topic consumed from manual tests or the real VLM.
-verification_report_topic_name: "/sandwich_bt/verification_report"
+vlm_result_topic: "/sandwich_bt/vlm_result"
+# If the verifier does not report SUCCESS before this deadline, the attempt
+# becomes FAILURE so tests do not wait forever.
+vlm_timeout_s: 5.0
 
 # Mock robot configuration for headless/simulator mode.
 robot:

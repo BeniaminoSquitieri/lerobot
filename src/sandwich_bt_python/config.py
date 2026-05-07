@@ -141,15 +141,18 @@ class SkillCommandServerConfig:
     # List of learned skills available to the BT runtime.
     skills: list[PrimitiveSkillConfig]
     # ROS2 service name the server will advertise.
-    service_name: str = "/sandwich_bt/run_command"
-    # ROS2 service name used by the BT runtime to query external verification state.
-    verification_query_service_name: str = "/sandwich_bt/get_skill_verification"
+    bt_command_service: str = "/sandwich_bt/run"
+    # ROS2 service name used by the BT runtime to query VLM check state.
+    vlm_state_service: str = "/sandwich_bt/vlm_state"
     # Legacy ROS2 service name used to report success or failure.
-    verification_report_service_name: str = "/sandwich_bt/report_skill_verification"
+    legacy_vlm_result_service: str = "/sandwich_bt/vlm_result_legacy"
     # Topic published whenever the BT is blocked on a scene verdict.
-    verification_request_topic_name: str = "/sandwich_bt/verification_request"
+    vlm_request_topic: str = "/sandwich_bt/vlm_request"
     # Topic consumed from a manual tester or VLM to resolve the active scene verdict.
-    verification_report_topic_name: str = "/sandwich_bt/verification_report"
+    vlm_result_topic: str = "/sandwich_bt/vlm_result"
+    # Maximum seconds to wait for an external verifier SUCCESS after a command
+    # opens a VLM check attempt. Zero disables automatic timeout-to-failure.
+    vlm_timeout_s: float = 30.0
     # Control loop frequency in Hz used by the executor.
     fps: int = 10
     # Whether to publish/display diagnostic data for debugging.
@@ -162,8 +165,8 @@ class SkillCommandServerConfig:
     # the standalone custom_manipulator record/rollout entrypoint.
     reset_robot_before_skill: bool = False
     # Testing convenience: after a real skill finishes, automatically accept its
-    # verification attempt as if a VLM had returned SUCCESS.
-    auto_verify_real_skills: bool = False
+    # VLM check attempt as if a VLM had returned SUCCESS.
+    auto_pass_vlm_check_for_real_skills: bool = False
     # Map of feature/key renames to align dataset keys with live robot keys.
     rename_map: dict[str, str] = field(default_factory=dict)
     # Processor pipeline applied to actions before they reach the robot.
@@ -179,13 +182,15 @@ class SkillCommandServerConfig:
         # Validate the frame rate is positive.
         if self.fps <= 0:
             raise ValueError("fps must be > 0.")
-        if not self.service_name:
-            raise ValueError("service_name must not be empty.")
-        if not self.verification_query_service_name:
-            raise ValueError("verification_query_service_name must not be empty.")
-        if not self.verification_report_service_name:
-            raise ValueError("verification_report_service_name must not be empty.")
-        if not self.verification_request_topic_name:
-            raise ValueError("verification_request_topic_name must not be empty.")
-        if not self.verification_report_topic_name:
-            raise ValueError("verification_report_topic_name must not be empty.")
+        if not self.bt_command_service:
+            raise ValueError("bt_command_service must not be empty.")
+        if not self.vlm_state_service:
+            raise ValueError("vlm_state_service must not be empty.")
+        if not self.legacy_vlm_result_service:
+            raise ValueError("legacy_vlm_result_service must not be empty.")
+        if not self.vlm_request_topic:
+            raise ValueError("vlm_request_topic must not be empty.")
+        if not self.vlm_result_topic:
+            raise ValueError("vlm_result_topic must not be empty.")
+        if self.vlm_timeout_s < 0:
+            raise ValueError("vlm_timeout_s must be >= 0.")
