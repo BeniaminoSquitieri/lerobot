@@ -71,3 +71,22 @@ verdict to the latest pending attempt for that skill.
 
 The legacy `/sandwich_bt/report_skill_verification` service still exists for
 compatibility, but new manual tools and VLM implementations should use topics.
+
+## Current Two-Skill Test
+
+Use `sandwich_tree_two_real_skills_manual_vlm.xml` for the current temporary
+task with two real BC skills and manual VLM verdicts. Wait for each
+`/sandwich_bt/verification_request` before publishing the corresponding report.
+
+Expected manual report order:
+
+```text
+initial_scene_ready SUCCESS -> starts place_first_toast
+place_first_toast SUCCESS -> opens the human pouring gate
+pour_ingredient SUCCESS -> starts place_second_toast
+place_second_toast SUCCESS -> completes the BT
+```
+
+Any `FAILURE` verdict for a requested stage makes the XML retry block rerun that
+same gate or skill. The future real VLM should publish the same JSON reports on
+the same topic, so the BT does not change when manual CLI publishing is replaced.

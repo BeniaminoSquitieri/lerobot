@@ -44,6 +44,7 @@ Those belong to `sandwich_bt_python`.
 - `trees/sandwich_tree.xml`: full sandwich task tree
 - `trees/sandwich_tree_first_primitive_only.xml`: bring-up tree for only `place_first_toast`
 - `trees/sandwich_tree_first_real_rest_simulated.xml`: bring-up tree that runs `place_first_toast` as real and simulates the remaining primitives
+- `trees/sandwich_tree_two_real_skills_manual_vlm.xml`: current two-real-skill task with manual/VLM topic gates
 - `trees/place_first_toast_subtree.xml`: retry subtree for the first toast step
 - `trees/place_second_toast_subtree.xml`: retry subtree for the second toast step
 

@@ -116,7 +116,8 @@ lerobot-bt-skill-server \
 BT runner:
 
 ```bash
-ros2 run sandwich_bt_runtime_cpp sandwich_bt_runner
+ros2 run sandwich_bt_runtime_cpp sandwich_bt_runner --ros-args \
+  -p tree_xml_path:="$(pwd)/src/sandwich_bt_runtime_cpp/trees/sandwich_tree_two_real_skills_manual_vlm.xml"
 ```
 
 Mock server:
@@ -128,9 +129,8 @@ lerobot-bt-skill-sim --ros2-service
 Manual VLM verdict:
 
 ```bash
-ros2 service call /sandwich_bt/report_skill_verification \
-  sandwich_bt_interfaces/srv/ReportSkillVerification \
-  "{skill_name: place_first_toast, attempt_id: 0, status: SUCCESS, message: 'first toast ok', confidence: 0.95}"
+ros2 topic pub --once /sandwich_bt/verification_report std_msgs/msg/String \
+  "{data: '{\"skill_name\":\"place_first_toast\",\"attempt_id\":0,\"status\":\"SUCCESS\",\"message\":\"first toast ok\",\"confidence\":0.95}'}"
 ```
 
 `attempt_id: 0` means "apply to the latest pending attempt for that
