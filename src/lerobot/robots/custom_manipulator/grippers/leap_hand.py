@@ -88,8 +88,8 @@ class LeapHand:
         self._command_lock = threading.Lock()
         self._command_thread = None
         self._command_thread_stop = threading.Event()
-        self._command_rate_hz = 100.0
-        self._interp_duration_s = 0.1
+        self._command_rate_hz = float(self.config.command_rate_hz)
+        self._interp_duration_s = float(self.config.command_interp_duration_s)
         self._last_sent_qpos = np.zeros(16, dtype=float)
         self._interp_start_qpos = np.zeros(16, dtype=float)
         self._target_qpos = np.zeros(16, dtype=float)
@@ -324,13 +324,16 @@ class LeapHand:
     def _command_loop(self) -> None:
         period_s = 1.0 / self._command_rate_hz
         while not self._command_thread_stop.is_set():
+            start_time = time.perf_counter()
             with self._command_lock:
                 elapsed = time.perf_counter() - self._interp_start_time
                 alpha = min(1.0, elapsed / self._interp_duration_s)
                 qpos = (1.0 - alpha) * self._interp_start_qpos + alpha * self._target_qpos
                 self._last_sent_qpos[:] = qpos
             self._write_qpos_to_hardware(qpos)
-            time.sleep(period_s)
+            elapsed = time.perf_counter() - start_time
+            time.sleep(period_s - elapsed if elapsed < period_s else 0.0)
+            print(f"[leap_hand] Command loop iteration took {elapsed:.6f}s", flush=True)
 
     def _read_qpos_from_hardware(self) -> np.ndarray:
         if self.dxl_client is None:
@@ -350,7 +353,8 @@ class LeapHand:
         }
         for tip in ("thumb", "index", "middle", "ring"):
             if all(f"{tip}.position.{a}" in action for a in "xyz"):
-                targets[tip] = [float(action[f"{tip}.position.{a}"]) for a in "xyz"]
+                scale = float(self.config.target_scale_factors.get(tip, 1.0))
+                targets[tip] = [scale * float(action[f"{tip}.position.{a}"]) for a in "xyz"]
         return targets
 
     def _action_with_targets(

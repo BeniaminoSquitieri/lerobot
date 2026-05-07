@@ -15,6 +15,7 @@ DEFAULT_TIP_POINT_LINK_NAMES = {
     "middle": "middle_tip_head",
     "ring": "ring_tip_head",
 }
+DEFAULT_TARGET_SCALE_FACTORS = {tip: 1.0 for tip in TIPS}
 DEFAULT_TIP_SCALE_FACTORS = {tip: 1.0 for tip in TIPS}
 DEFAULT_PALM_CENTER_OFFSET = (-0.0, -0.0, -0.0)
 DEFAULT_COMMAND_INDEX_BY_LINK_NAME = {
@@ -61,6 +62,8 @@ class LeapHandConfig(GripperConfig):
     ki: int = 0
     kd: int = 200
     curr_lim: int = 350
+    command_rate_hz: float = 100.0
+    command_interp_duration_s: float = 0.05
     urdf_path: str = DEFAULT_URDF_PATH
     root_link_name: str = "base"
     dexpilot_wrist_link_name: str = "base"
@@ -69,6 +72,7 @@ class LeapHandConfig(GripperConfig):
     niter: int = 20000
     tip_link_names: dict[str, str] = field(default_factory=lambda: dict(DEFAULT_ACTUATED_TIP_LINK_NAMES))
     tip_point_link_names: dict[str, str] = field(default_factory=lambda: dict(DEFAULT_TIP_POINT_LINK_NAMES))
+    target_scale_factors: dict[str, float] = field(default_factory=lambda: dict(DEFAULT_TARGET_SCALE_FACTORS))
     tip_scale_factors: dict[str, float] = field(default_factory=lambda: dict(DEFAULT_TIP_SCALE_FACTORS))
     command_index_by_link_name: dict[str, int] = field(
         default_factory=lambda: dict(DEFAULT_COMMAND_INDEX_BY_LINK_NAME)
