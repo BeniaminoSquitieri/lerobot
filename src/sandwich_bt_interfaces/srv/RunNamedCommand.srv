@@ -2,8 +2,10 @@
 # @brief C++ behavior-tree to Python executor command boundary.
 #
 # Request fields:
-# kind selects the command table: "skill" for learned primitives or "recovery"
-# for scripted recovery motions.
+# kind selects the command path:
+#   - "skill"                   -> run one learned primitive
+#   - "simulated_skill"         -> simulate one primitive and auto-verify it
+#   - "simulated_skill_pending" -> simulate one gate and wait for VLM verification
 string kind
 # name must match one configured command entry on the Python side.
 string name

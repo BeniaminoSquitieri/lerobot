@@ -24,7 +24,7 @@ def test_mock_service_runs_full_demo_sequence() -> None:
 
     assert robot.reset_count == 1
     assert len(robot.sent_actions) > 0
-    assert observation["gripper"] == pytest.approx(1.0)
+    assert observation["gripper"] == pytest.approx(0.0)
     assert observation["position.z"] > 0.0
 
 
@@ -38,19 +38,14 @@ def test_unknown_command_kind_returns_error() -> None:
     assert "Unsupported command kind" in response.message
 
 
-def test_delta_mode_recovery_updates_state() -> None:
+def test_recovery_kind_is_not_supported() -> None:
     service = build_demo_stack(use_delta_actions=True)
 
-    response = service.handle_request(
-        MockRunNamedCommandRequest(kind="recovery", name="recover_place_first_toast")
-    )
+    response = service.handle_request(MockRunNamedCommandRequest(kind="recovery", name="recover_place_first_toast"))
 
-    assert response.success
-    assert response.status == "SUCCESS"
-
-    observation = service.executor.robot.get_observation()
-    assert observation["gripper"] == pytest.approx(1.0)
-    assert observation["position.z"] > 0.0
+    assert not response.success
+    assert response.status == "ERROR"
+    assert "Unsupported command kind" in response.message
 
 
 def test_parse_command_spec_with_timeout_override() -> None:

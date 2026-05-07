@@ -3,36 +3,41 @@
   @brief Full autonomous sandwich behavior tree.
 
   Each sandwich stage is wrapped in RetryUntilSuccessful so a failed
-  VerifySkillOutcome returns control to the recovery+skill sequence until the
-  Python verifier reports success.
+  VerifySkillOutcome restarts the same BC skill or VLM gate until the external
+  verifier reports success. No deterministic Panda recovery motions are used.
 -->
 <root BTCPP_format="4" main_tree_to_execute="MainTree">
   <!-- MainTree is the entry point loaded by sandwich_bt_runner. -->
   <BehaviorTree ID="MainTree">
-    <!-- Execute the three sandwich stages in order. -->
-    <Sequence name="sandwich_task">
-      <!-- Stage 1: recover/pre-position, place the first toast, then verify it. -->
+    <!-- Execute the VLM-gated sandwich stages in order. -->
+    <Sequence name="vlm_gated_sandwich_task">
+      <!-- Stage 0: wait until the VLM confirms the initial scene is ready. -->
       <RetryUntilSuccessful num_attempts="-1">
-        <Sequence name="place_first_toast_policy_rollout">
-          <RunNamedCommand kind="recovery" command_name="recover_place_first_toast"/>
+        <Sequence name="initial_scene_gate">
+          <RunNamedCommand kind="simulated_skill_pending" command_name="initial_scene_ready"/>
+          <VerifySkillOutcome skill_name="initial_scene_ready"/>
+        </Sequence>
+      </RetryUntilSuccessful>
+
+      <!-- Stage 1: place the first toast, then verify it. -->
+      <RetryUntilSuccessful num_attempts="-1">
+        <Sequence name="place_first_toast_retry_on_vlm_failure">
           <RunNamedCommand kind="skill" command_name="place_first_toast"/>
           <VerifySkillOutcome skill_name="place_first_toast"/>
         </Sequence>
       </RetryUntilSuccessful>
 
-      <!-- Stage 2: recover/pre-position, pour the ingredient, then verify it. -->
+      <!-- Stage 2: human pouring is represented as a VLM verification gate. -->
       <RetryUntilSuccessful num_attempts="-1">
-        <Sequence name="pour_with_recovery">
-          <RunNamedCommand kind="recovery" command_name="recover_pour"/>
-          <RunNamedCommand kind="skill" command_name="pour"/>
-          <VerifySkillOutcome skill_name="pour"/>
+        <Sequence name="human_pouring_gate">
+          <RunNamedCommand kind="simulated_skill_pending" command_name="pour_ingredient"/>
+          <VerifySkillOutcome skill_name="pour_ingredient"/>
         </Sequence>
       </RetryUntilSuccessful>
 
-      <!-- Stage 3: recover/pre-position, place the second toast, then verify it. -->
+      <!-- Stage 3: place the second toast, then verify it. -->
       <RetryUntilSuccessful num_attempts="-1">
-        <Sequence name="place_second_toast_with_recovery">
-          <RunNamedCommand kind="recovery" command_name="recover_place_second_toast"/>
+        <Sequence name="place_second_toast_retry_on_vlm_failure">
           <RunNamedCommand kind="skill" command_name="place_second_toast"/>
           <VerifySkillOutcome skill_name="place_second_toast"/>
         </Sequence>

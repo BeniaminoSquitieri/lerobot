@@ -5,8 +5,6 @@ import pytest
 from sandwich_bt_python.config import ObservationConditionConfig, SkillTransitionConfig
 from sandwich_bt_python.simulation import (
     MockCustomManipulator,
-    MockRecoveryConfig,
-    MockRecoveryStep,
     MockServerConfig,
     MockSkillCommandExecutor,
     MockSkillConfig,
@@ -39,12 +37,6 @@ def test_mock_executor_until_success_returns_success_without_timeout() -> None:
                 MockSkillConfig(
                     name="demo_skill",
                     transition=MockSkillTransition(mode="until_success", max_duration_s=0.1),
-                )
-            ],
-            recoveries=[
-                MockRecoveryConfig(
-                    name="recover_demo",
-                    steps=[MockRecoveryStep(kind="pause", duration_s=0.1)],
                 )
             ],
         ),

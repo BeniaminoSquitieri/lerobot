@@ -3,7 +3,7 @@
 
 Each dataclass mirrors the YAML schema used by `server.py` to load the
 runtime configuration. The server reads one root config (see
-`SkillCommandServerConfig`) and uses the contained skill/recovery entries to
+`SkillCommandServerConfig`) and uses the contained skill entries to
 drive execution.
 
 The comments below annotate every field and validation to make the contract
@@ -14,6 +14,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from lerobot.configs.policies import PreTrainedConfig
+
 # Import known policy families so `draccus` can deserialize them when the YAML
 # contains a `policy` entry. These imports are intentionally here to register
 # the subclasses; they are not referenced directly in code below.
@@ -128,80 +129,27 @@ class PrimitiveSkillConfig:
 
 
 @dataclass
-class RecoveryStepConfig:
-    """One deterministic recovery primitive executed between BT attempts.
-
-    Recovery steps are small, deterministic motions or state changes (pauses,
-    robot resets, small cartesian deltas, or explicit gripper positions).
-    """
-    # The kind of recovery: 'pause', 'robot_reset', 'cartesian_delta', 'set_gripper'.
-    kind: str
-    # Duration the step should take, in seconds (ignored for 'robot_reset').
-    duration_s: float = 0.5
-    # Cartesian delta in meters to apply (x,y,z) for 'cartesian_delta'.
-    dx: float = 0.0
-    dy: float = 0.0
-    dz: float = 0.0
-    # Orientation deltas in radians for roll/pitch/yaw.
-    droll: float = 0.0
-    dpitch: float = 0.0
-    dyaw: float = 0.0
-    # Optional gripper target value for 'set_gripper'. Range depends on driver.
-    gripper_value: float | None = None
-
-    def __post_init__(self) -> None:
-        """@brief Validate recovery step kind and required fields."""
-        # Validate allowed kinds to catch typos in YAML configs early.
-        allowed_kinds = {"pause", "robot_reset", "cartesian_delta", "set_gripper"}
-        if self.kind not in allowed_kinds:
-            raise ValueError(f"Unsupported recovery step '{self.kind}'. Expected one of {sorted(allowed_kinds)}.")
-        # Durations must be non-negative for motion steps.
-        if self.kind != "robot_reset" and self.duration_s < 0:
-            raise ValueError("recovery duration_s must be >= 0.")
-        # set_gripper requires an explicit target value.
-        if self.kind == "set_gripper" and self.gripper_value is None:
-            raise ValueError("Recovery step 'set_gripper' requires gripper_value.")
-
-
-@dataclass
-class RecoveryConfig:
-    """Named list of recovery steps referenced by the BT.
-
-    The BT only refers to recoveries by name; this dataclass maps that name to
-    the concrete sequence of `RecoveryStepConfig` steps to execute when the
-    recovery is requested.
-    """
-    # Name referenced by the BT XML.
-    name: str
-    # Ordered list of steps that compose the recovery.
-    steps: list[RecoveryStepConfig] = field(default_factory=list)
-
-    def __post_init__(self) -> None:
-        """@brief Ensure a named recovery has at least one concrete step."""
-        if not self.steps:
-            raise ValueError(f"Recovery '{self.name}' must define at least one step.")
-
-
-@dataclass
 class SkillCommandServerConfig:
     """Top-level configuration for the Python ROS2 skill command server.
 
     This root config is what `server.py` parses at startup. It contains the
-    robot description, the list of learned skills, named recoveries, and
-    server-level adapters/processors used during execution.
+    robot description, the list of learned skills, and server-level
+    adapters/processors used during execution.
     """
     # Robot hardware configuration (CustomManipulatorConfig contains arm/gripper/cameras).
     robot: CustomManipulatorConfig
     # List of learned skills available to the BT runtime.
     skills: list[PrimitiveSkillConfig]
-    # Optional named recoveries.
-    recoveries: list[RecoveryConfig] = field(default_factory=list)
     # ROS2 service name the server will advertise.
     service_name: str = "/sandwich_bt/run_command"
     # ROS2 service name used by the BT runtime to query external verification state.
     verification_query_service_name: str = "/sandwich_bt/get_skill_verification"
-    # ROS2 service name used by an external verifier/VLM to report success or failure.
+    # Legacy ROS2 service name used to report success or failure.
     verification_report_service_name: str = "/sandwich_bt/report_skill_verification"
+    # Topic published whenever the BT is blocked on a scene verdict.
+    verification_request_topic_name: str = "/sandwich_bt/verification_request"
+    # Topic consumed from a manual tester or VLM to resolve the active scene verdict.
+    verification_report_topic_name: str = "/sandwich_bt/verification_report"
     # Control loop frequency in Hz used by the executor.
     fps: int = 10
     # Whether to publish/display diagnostic data for debugging.
@@ -237,3 +185,7 @@ class SkillCommandServerConfig:
             raise ValueError("verification_query_service_name must not be empty.")
         if not self.verification_report_service_name:
             raise ValueError("verification_report_service_name must not be empty.")
+        if not self.verification_request_topic_name:
+            raise ValueError("verification_request_topic_name must not be empty.")
+        if not self.verification_report_topic_name:
+            raise ValueError("verification_report_topic_name must not be empty.")

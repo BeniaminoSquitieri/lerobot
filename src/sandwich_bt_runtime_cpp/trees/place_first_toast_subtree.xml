@@ -2,16 +2,15 @@
   @file place_first_toast_subtree.xml
   @brief Standalone subtree for first-toast placement.
 
-  The supervisor can point directly at this file when it wants to execute only
-  the robot stage that places the base toast on the plate.
+  This file executes only the robot stage that places the base toast on the
+  plate. A VLM failure retries the same BC skill from the beginning.
 -->
 <root BTCPP_format="4" main_tree_to_execute="MainTree">
-  <!-- MainTree contains one retrying recovery+skill+verification sequence. -->
+  <!-- MainTree contains one retrying skill+verification sequence. -->
   <BehaviorTree ID="MainTree">
     <!-- Retry forever until verification confirms the toast placement. -->
     <RetryUntilSuccessful num_attempts="-1">
-      <Sequence name="place_first_toast_policy_rollout">
-        <RunNamedCommand kind="recovery" command_name="recover_place_first_toast"/>
+      <Sequence name="place_first_toast_retry_on_vlm_failure">
         <RunNamedCommand kind="skill" command_name="place_first_toast" timeout_s="30.0"/>
         <VerifySkillOutcome skill_name="place_first_toast"/>
       </Sequence>

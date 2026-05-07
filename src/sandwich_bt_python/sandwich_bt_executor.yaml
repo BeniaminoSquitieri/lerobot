@@ -4,14 +4,18 @@
 # Flow role:
 # 1. The C++ BT sends a named command.
 # 2. The Python server resolves the name using this file.
-# 3. The corresponding learned skill or recovery is executed on the robot.
+# 3. The corresponding learned skill is executed on the robot.
 
 # ROS2 service used by RunNamedCommand BT leaves.
 service_name: "/sandwich_bt/run_command"
 # ROS2 service used by VerifySkillOutcome BT leaves.
 verification_query_service_name: "/sandwich_bt/get_skill_verification"
-# ROS2 service used by external VLM/operator verdict publishers.
+# Legacy ROS2 service for external verifier verdicts.
 verification_report_service_name: "/sandwich_bt/report_skill_verification"
+# Topic published when the BT needs a scene verdict.
+verification_request_topic_name: "/sandwich_bt/verification_request"
+# Topic consumed from manual tests or the real VLM.
+verification_report_topic_name: "/sandwich_bt/verification_report"
 
 # Real robot hardware configuration used by the Python server.
 robot:
@@ -46,9 +50,9 @@ display_data: true
 play_sounds: true
 # Robot reset behavior before server startup and before individual skills.
 reset_robot_on_startup: false
-reset_robot_before_skill: true
-# In real mode, immediately resolves successful skills as verified.
-auto_verify_real_skills: true
+reset_robot_before_skill: false
+# In real mode, VLM/manual verification must explicitly resolve each skill.
+auto_verify_real_skills: false
 # Optional mapping from policy feature names to connected robot feature names.
 rename_map: {}
 
@@ -78,19 +82,6 @@ skills:
       max_duration_s: 12000.0
     settle_time_s: 0.0
 
-  - name: pour
-    # Placeholder dataset/policy path for a future pouring primitive.
-    dataset_repo_id: "<hf_user>/pour_skill_dataset"
-    task: "Pour the ingredient on top of the first toast."
-    policy:
-      type: act
-      device: cuda
-      pretrained_path: "outputs/train/pour/checkpoints/last/pretrained_model"
-    transition:
-      mode: timeout
-      max_duration_s: 8.0
-    settle_time_s: 0.5
-
   - name: place_second_toast
     # Placeholder dataset/policy path for a future top-toast placement primitive.
     dataset_repo_id: "<hf_user>/toast_skill_2_dataset"
@@ -103,38 +94,3 @@ skills:
       mode: timeout
       max_duration_s: 10.0
     settle_time_s: 0.5
-
-# Scripted recoveries used by the BT between failed attempts.
-recoveries:
-  - name: recover_place_first_toast
-    # Open the gripper, lift away from the scene, then pause before retrying.
-    steps:
-      - kind: set_gripper
-        gripper_value: 1.0
-        duration_s: 0.3
-      - kind: cartesian_delta
-        dz: 0.05
-        duration_s: 0.5
-      - kind: pause
-        duration_s: 0.2
-
-  - name: recover_pour
-    # Move slightly up and pause before retrying the pour skill.
-    steps:
-      - kind: cartesian_delta
-        dz: 0.03
-        duration_s: 0.4
-      - kind: pause
-        duration_s: 0.2
-
-  - name: recover_place_second_toast
-    # Open the gripper, lift away from the scene, then pause before retrying.
-    steps:
-      - kind: set_gripper
-        gripper_value: 1.0
-        duration_s: 0.3
-      - kind: cartesian_delta
-        dz: 0.05
-        duration_s: 0.5
-      - kind: pause
-        duration_s: 0.2

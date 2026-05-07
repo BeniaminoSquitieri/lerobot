@@ -6,7 +6,7 @@ project(sandwich_bt_interfaces)
 #
 # This package has no executable target. Its only job is generating strongly
 # typed service bindings shared by the C++ behavior-tree runtime, the Python
-# skill executor, and the collaborative supervisor.
+# skill executor, and the VLM/manual verifier.
 
 # ament_cmake provides the package/build lifecycle macros.
 find_package(ament_cmake REQUIRED)
@@ -21,9 +21,7 @@ find_package(rosidl_generator_py REQUIRED)
 rosidl_generate_interfaces(${PROJECT_NAME}
   "srv/RunNamedCommand.srv"
   "srv/GetSkillVerification.srv"
-  "srv/PlanNextStep.srv"
   "srv/ReportSkillVerification.srv"
-  "srv/VerifyStep.srv"
 )
 
 # Downstream ROS2 packages need runtime access to the generated type support.

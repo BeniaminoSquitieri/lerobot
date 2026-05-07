@@ -1,26 +1,17 @@
-# Runtime Flows {#runtime_flows}
+# Runtime Flows
 
-## End-to-end robot step flow
+## Robot Skill
 
-1. `sandwich_bt_supervisor/collaborative_runner.py` requests next action.
-2. Supervisor picks actor and step.
-3. If actor is `robot`, runner executes a BT subtree.
-4. BT leaf `RunNamedCommand` sends ROS2 service request.
-5. Python server dispatches to executor.
-6. Executor runs learned skill or scripted recovery.
-7. Result maps back to BT `SUCCESS`/`FAILURE`.
-8. Runner asks supervisor to verify resulting scene state.
+1. BT runs `RunNamedCommand(kind="skill")`.
+2. Python executes the learned skill.
+3. Python opens a `PENDING` verification attempt.
+4. BT polls `VerifySkillOutcome`.
+5. VLM reports `SUCCESS` or `FAILURE`.
+6. BT advances on `SUCCESS` or retries the same BC skill on `FAILURE`.
 
-## Human handoff flow
+## Human Or Initial Scene Gate
 
-1. Runner receives actor `human` from supervisor.
-2. Human interface prompts operator and waits for confirmation.
-3. Runner asks supervisor to verify expected scene state.
-4. Runner continues, aborts, or retries depending on supervisor output.
-
-## Failure boundary design
-
-- BT runtime handles local action retry/recovery.
-- Python executor reports command-level failures.
-- Supervisor owns global abort/replan and verification failure decisions.
-- Scene/VLM integration remains read-only with respect to motion commands.
+1. BT runs `RunNamedCommand(kind="simulated_skill_pending")`.
+2. Python opens a `PENDING` verification attempt without moving the robot.
+3. BT polls `VerifySkillOutcome`.
+4. VLM reports `SUCCESS` when the scene is ready.

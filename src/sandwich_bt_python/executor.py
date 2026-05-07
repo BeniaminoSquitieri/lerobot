@@ -1,5 +1,5 @@
 """@file executor.py
-@brief Execution backend for learned skills and scripted recoveries.
+@brief Execution backend for learned sandwich skills.
 
 @details
 This module is the only layer that turns a BT command name into real robot work.
@@ -8,10 +8,9 @@ and returns compact command results to the ROS2 server.
 
 Flow role:
 1. The Python ROS2 server receives a named command from the BT.
-2. This backend resolves the name to a configured skill or recovery.
-3. If it is a skill, it runs the ACT inference loop on the real robot.
-4. If it is a recovery, it executes a deterministic scripted sequence.
-5. It returns SUCCESS/FAILURE/ERROR back to the server.
+2. This backend resolves the name to a configured skill.
+3. It runs the ACT inference loop on the real robot.
+4. It returns SUCCESS/FAILURE/ERROR back to the server.
 """
 
 from __future__ import annotations
@@ -23,7 +22,6 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 from lerobot.common.control_utils import predict_action
-from lerobot.datasets.pipeline_features import aggregate_pipeline_dataset_features, create_initial_features
 from lerobot.policies.factory import make_policy, make_pre_post_processors
 from lerobot.policies.pretrained import PreTrainedPolicy
 from lerobot.policies.utils import make_robot_action
@@ -37,10 +35,8 @@ from lerobot.utils.visualization_utils import log_rerun_data
 
 from .conditions import evaluate_all, evaluate_any
 from .config import PrimitiveSkillConfig, SkillCommandServerConfig
-from .recoveries import execute_recovery
 
 if TYPE_CHECKING:
-    from lerobot.datasets.lerobot_dataset import LeRobotDatasetMetadata
     from lerobot.robots.custom_manipulator.custom_manipulator import CustomManipulator
 
 
@@ -131,6 +127,11 @@ def _build_skill_runtime(
     processor pipelines that can run inside the control loop.
     """
     if skill_cfg.metadata_source == "robot":
+        from lerobot.datasets.pipeline_features import (
+            aggregate_pipeline_dataset_features,
+            create_initial_features,
+        )
+
         features = combine_feature_dicts(
             aggregate_pipeline_dataset_features(
                 pipeline=robot_action_processor,
@@ -178,17 +179,17 @@ def _build_skill_runtime(
 
 
 class SkillCommandExecutor:
-    """@brief Serialized executor for real learned skills and recoveries.
+    """@brief Serialized executor for real learned skills.
 
-    The executor owns the robot-side critical section. Every skill and recovery
-    goes through `_command_lock`, because two BT leaves must never command the
-    same Panda/Robotiq stack concurrently.
+    The executor owns the robot-side critical section. Every skill goes through
+    `_command_lock`, because two BT leaves must never command the same
+    Panda/Robotiq stack concurrently.
     """
 
     def __init__(self, cfg: SkillCommandServerConfig, robot: CustomManipulator) -> None:
         """@brief Index configured commands and keep the robot handle.
 
-        @param cfg Server config containing skills, recoveries, FPS, and flags.
+        @param cfg Server config containing skills, FPS, and flags.
         @param robot Connected or connectable `CustomManipulator` instance.
         """
         self.cfg = cfg
@@ -196,7 +197,6 @@ class SkillCommandExecutor:
         # Names are the bridge between the BT XML and the policy configs.
         self.skill_configs = {skill_cfg.name: skill_cfg for skill_cfg in cfg.skills}
         self.skills: dict[str, SkillRuntime] = {}
-        self.recoveries = {recovery.name: recovery for recovery in cfg.recoveries}
         # Only one command at a time should touch the real robot.
         self._command_lock = threading.Lock()
 
@@ -301,37 +301,6 @@ class SkillCommandExecutor:
                 message = f"Skill '{skill_name}' crashed with error: {exc}"
                 logging.exception(message)
                 return CommandResult(False, "ERROR", elapsed_s, message)
-
-    def execute_named_recovery(self, recovery_name: str, timeout_override_s: float = 0.0) -> CommandResult:
-        """@brief Execute one scripted recovery requested by the BT.
-
-        @param recovery_name Runtime recovery name from the BT leaf.
-        @param timeout_override_s Optional BT-side duration override.
-        @return Normalized command result for the ROS2 response.
-        """
-        if recovery_name not in self.recoveries:
-            return CommandResult(False, "ERROR", 0.0, f"Unknown recovery '{recovery_name}'.")
-
-        with self._command_lock:
-            recovery_cfg = self.recoveries[recovery_name]
-            start_t = time.perf_counter()
-            try:
-                execute_recovery(
-                    robot=self.robot,
-                    recovery_cfg=recovery_cfg,
-                    fps=self.cfg.fps,
-                    timeout_override_s=timeout_override_s,
-                )
-            except Exception as exc:  # noqa: BLE001
-                elapsed_s = time.perf_counter() - start_t
-                message = f"Recovery '{recovery_name}' failed with error: {exc}"
-                logging.exception(message)
-                return CommandResult(False, "ERROR", elapsed_s, message)
-
-            elapsed_s = time.perf_counter() - start_t
-            message = f"Recovery '{recovery_name}' completed in {elapsed_s:.2f}s."
-            logging.info(message)
-            return CommandResult(True, "SUCCESS", elapsed_s, message)
 
     def _skill_status(
         self,

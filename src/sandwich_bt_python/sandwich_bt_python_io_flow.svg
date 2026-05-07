@@ -1,6 +1,6 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="1400" height="980" viewBox="0 0 1400 980" role="img" aria-labelledby="title desc">
   <title id="title">sandwich_bt_python input output flow</title>
-  <desc id="desc">Diagramma del pacchetto sandwich_bt_python con input, flusso interno, ramo skill, ramo recovery e output verso BT e robot.</desc>
+  <desc id="desc">Diagramma del pacchetto sandwich_bt_python con input, flusso interno, ramo skill, verifica VLM e output verso BT e robot.</desc>
   <defs>
     <marker id="arrow" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto" markerUnits="strokeWidth">
       <path d="M0,0 L0,6 L9,3 z" fill="#1f2937"/>
@@ -22,7 +22,7 @@
   <rect x="0" y="0" width="1400" height="980" fill="#f8fafc"/>
 
   <text x="60" y="60" class="title">sandwich_bt_python: cosa prende in input e cosa produce in output</text>
-  <text x="60" y="88" class="subtitle">Package role: riceve un comando dal BT, lo risolve come skill o recovery, interagisce con robot/dummy backend, restituisce un esito ROS2.</text>
+  <text x="60" y="88" class="subtitle">Package role: riceve un comando dal BT, lo risolve come skill o gate simulato, interagisce con robot/dummy backend, restituisce un esito ROS2.</text>
 
   <text x="60" y="135" class="section">INPUT</text>
   <text x="510" y="135" class="section">CORE PACKAGE</text>
@@ -46,7 +46,7 @@
   <text x="95" y="505" class="body">service_name</text>
   <text x="95" y="528" class="body">robot config</text>
   <text x="95" y="551" class="body">skills[] con policy/checkpoint</text>
-  <text x="95" y="574" class="body">recoveries[] con step scriptati</text>
+  <text x="95" y="574" class="body">servizi di verifica VLM</text>
 
   <rect class="box" x="50" y="600" width="330" height="180" fill="#fef3c7"/>
   <text x="70" y="630" class="label">3) Backend robot / mock</text>
@@ -64,7 +64,7 @@
   <text x="495" y="270" class="body">Dispatch:</text>
   <text x="595" y="270" class="body">kind == skill</text>
   <text x="760" y="270" class="body">oppure</text>
-  <text x="825" y="270" class="body">kind == recovery</text>
+  <text x="825" y="270" class="body">kind simulato</text>
 
   <rect class="box" x="470" y="330" width="430" height="165" fill="#ede9fe"/>
   <text x="495" y="362" class="label">executor.py / SkillCommandExecutor</text>
@@ -75,7 +75,7 @@
   <text x="495" y="420" class="body">Risoluzione per nome:</text>
   <text x="710" y="420" class="body">skill_configs[name]</text>
   <text x="495" y="450" class="body">oppure</text>
-  <text x="580" y="450" class="body">recoveries[name]</text>
+  <text x="580" y="450" class="body">nessun recovery deterministico</text>
   <text x="495" y="480" class="body">Output interno comune:</text>
   <text x="730" y="480" class="body">CommandResult</text>
 
@@ -95,14 +95,11 @@
   <text x="510" y="843" class="body">robot.send_action(...)</text>
 
   <rect class="box" x="950" y="545" width="320" height="250" fill="#fee2e2"/>
-  <text x="975" y="578" class="label">Recovery branch</text>
-  <text x="975" y="608" class="body">recoveries.py esegue step scriptati:</text>
-  <text x="1005" y="638" class="body">pause</text>
-  <text x="1005" y="663" class="body">robot_reset</text>
-  <text x="1005" y="688" class="body">set_gripper</text>
-  <text x="1005" y="713" class="body">cartesian_delta</text>
-  <text x="975" y="748" class="body">Non usa la policy.</text>
-  <text x="975" y="773" class="body">Agisce direttamente sul robot.</text>
+  <text x="975" y="578" class="label">VLM retry rule</text>
+  <text x="975" y="608" class="body">Il server apre un attempt PENDING.</text>
+  <text x="975" y="638" class="body">Il VLM riporta SUCCESS o FAILURE.</text>
+  <text x="975" y="668" class="body">Su FAILURE il BT ritenta</text>
+  <text x="975" y="693" class="body">la stessa skill BC da capo.</text>
 
   <rect class="box" x="1080" y="190" width="270" height="165" fill="#dcfce7"/>
   <text x="1105" y="222" class="label">Output 1: risposta al BT</text>
@@ -118,8 +115,8 @@
   <text x="1105" y="422" class="label">Output 2: side effect sul robot</text>
   <text x="1105" y="452" class="body">Skill path:</text>
   <text x="1215" y="452" class="body">azioni predette dalla policy</text>
-  <text x="1105" y="482" class="body">Recovery path:</text>
-  <text x="1245" y="482" class="body">movimenti scriptati</text>
+  <text x="1105" y="482" class="body">VLM failure:</text>
+  <text x="1245" y="482" class="body">retry skill da BT</text>
   <text x="1105" y="512" class="body">In headless mode i side effect vanno</text>
   <text x="1105" y="537" class="body">sul backend dummy, non su hardware reale.</text>
 

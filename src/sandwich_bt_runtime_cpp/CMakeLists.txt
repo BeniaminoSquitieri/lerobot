@@ -66,7 +66,6 @@ set(SANDWICH_BT_TREE_FILES
   trees/sandwich_tree_first_primitive_only.xml
   trees/sandwich_tree_first_real_rest_simulated.xml
   trees/place_first_toast_subtree.xml
-  trees/pour_subtree.xml
   trees/place_second_toast_subtree.xml
 )
 

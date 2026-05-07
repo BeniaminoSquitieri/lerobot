@@ -1,23 +1,17 @@
 """@file vlm_stub.py
-@brief Lightweight VLM simulator that reports verification verdicts.
+@brief Lightweight topic publisher that emulates VLM verification verdicts.
 
-This node allows manual testing of the sandwich BT verification flow without
-running a full VLM verifier. Publish a small JSON string on
-`/sandwich_bt/vlm_sim` and this node will query the server for the latest
-verification attempt for the named skill, then call
-`ReportSkillVerification` with the provided status.
+Publish a small JSON string on `/sandwich_bt/vlm_sim` and this node republishes
+the normalized verdict on `/sandwich_bt/verification_report`, which is the same
+topic a real VLM should use.
 
-Expected message payload (std_msgs/String.data):
+Expected input payload (`std_msgs/String.data`):
   {"skill_name":"place_first_toast","status":"SUCCESS","confidence":0.9,"message":"ok"}
-
-Requirements: source your ROS2 workspace so `rclpy` and
-`sandwich_bt_interfaces` are importable.
 """
 
 from __future__ import annotations
 
 import json
-from typing import Any
 
 import rclpy
 from rclpy.node import Node
@@ -25,30 +19,33 @@ from std_msgs.msg import String
 
 
 class VLMStubNode(Node):
-    """@brief ROS2 node that turns JSON topic messages into verification reports."""
+    """@brief ROS2 node that turns simple JSON messages into verifier reports."""
 
-    def __init__(self, *, topic: str = "/sandwich_bt/vlm_sim") -> None:
-        """@brief Create service clients and subscribe to the fake VLM topic."""
+    def __init__(
+        self,
+        *,
+        input_topic: str = "/sandwich_bt/vlm_sim",
+        report_topic: str = "/sandwich_bt/verification_report",
+    ) -> None:
+        """@brief Subscribe to manual input and publish normalized verifier reports."""
         super().__init__("vlm_stub")
-        self._topic = topic
-        # Service clients
-        from sandwich_bt_interfaces.srv import GetSkillVerification, ReportSkillVerification  # type: ignore
-
-        self._get_service_type = GetSkillVerification
-        self._report_service_type = ReportSkillVerification
-        self._get_client = self.create_client(GetSkillVerification, "/sandwich_bt/get_skill_verification")
-        self._report_client = self.create_client(ReportSkillVerification, "/sandwich_bt/report_skill_verification")
-
-        # Subscriber to receive simple JSON commands
-        self.create_subscription(String, self._topic, self._on_msg, 10)
-        self.get_logger().info(f"VLM stub listening on '{self._topic}' and forwarding to verification services.")
+        self._input_topic = input_topic
+        self._report_topic = report_topic
+        self._report_publisher = self.create_publisher(String, self._report_topic, 10)
+        self.create_subscription(String, self._input_topic, self._on_msg, 10)
+        self.get_logger().info(
+            f"VLM stub listening on '{self._input_topic}' and publishing reports to '{self._report_topic}'."
+        )
 
     def _on_msg(self, msg: String) -> None:
-        """@brief Parse one JSON message and request the latest attempt id."""
+        """@brief Parse one JSON message and publish it to the verifier report topic."""
         try:
             payload = json.loads(msg.data)
         except Exception as exc:  # noqa: BLE001
             self.get_logger().error(f"Failed to parse JSON payload: {exc}: '{msg.data}'")
+            return
+        if not isinstance(payload, dict):
+            self.get_logger().error("Payload must be a JSON object.")
             return
 
         skill_name = str(payload.get("skill_name", ""))
@@ -61,74 +58,23 @@ class VLMStubNode(Node):
             self.get_logger().error("'status' must be 'SUCCESS' or 'FAILURE'.")
             return
 
-        message = str(payload.get("message", ""))
-        confidence = float(payload.get("confidence", 0.0))
-
-        get_req = self._get_service_type.Request()
-        get_req.skill_name = skill_name
-
-        if not self._get_client.wait_for_service(timeout_sec=2.0):
-            self.get_logger().error("GetSkillVerification service not available.")
+        try:
+            report = {
+                "skill_name": skill_name,
+                "attempt_id": int(payload.get("attempt_id", 0)),
+                "status": status,
+                "message": str(payload.get("message", "")),
+                "confidence": float(payload.get("confidence", 0.0)),
+            }
+        except (TypeError, ValueError) as exc:
+            self.get_logger().error(f"Invalid numeric field in payload: {exc}")
             return
-
-        get_future = self._get_client.call_async(get_req)
-        get_future.add_done_callback(
-            lambda future: self._on_get_skill_verification_done(
-                future,
-                skill_name=skill_name,
-                status=status,
-                message=message,
-                confidence=confidence,
-            )
+        out_msg = String()
+        out_msg.data = json.dumps(report, sort_keys=True)
+        self._report_publisher.publish(out_msg)
+        self.get_logger().info(
+            f"Published verification report for skill '{skill_name}' with status '{status}'."
         )
-
-    def _on_get_skill_verification_done(
-        self,
-        future: Any,
-        *,
-        skill_name: str,
-        status: str,
-        message: str,
-        confidence: float,
-    ) -> None:
-        """@brief Continue the async flow after `GetSkillVerification` returns."""
-        try:
-            get_res = future.result()
-        except Exception as exc:  # noqa: BLE001
-            self.get_logger().error(f"Failed to call GetSkillVerification: {exc}")
-            return
-
-        if not getattr(get_res, "has_attempt", False):
-            self.get_logger().warning(f"No verification attempt found for skill '{skill_name}'.")
-            return
-
-        attempt_id = int(get_res.attempt_id)
-
-        report_req = self._report_service_type.Request()
-        report_req.skill_name = skill_name
-        report_req.attempt_id = attempt_id
-        report_req.status = status
-        report_req.message = message
-        report_req.confidence = float(confidence)
-
-        if not self._report_client.wait_for_service(timeout_sec=2.0):
-            self.get_logger().error("ReportSkillVerification service not available.")
-            return
-
-        report_future = self._report_client.call_async(report_req)
-        report_future.add_done_callback(self._on_report_skill_verification_done)
-
-    def _on_report_skill_verification_done(self, future: Any) -> None:
-        """@brief Log the final result of the `ReportSkillVerification` call."""
-        try:
-            report_res = future.result()
-        except Exception as exc:  # noqa: BLE001
-            self.get_logger().error(f"Failed to call ReportSkillVerification: {exc}")
-            return
-
-        accepted = getattr(report_res, "accepted", False)
-        applied = int(getattr(report_res, "applied_attempt_id", 0))
-        self.get_logger().info(f"Report sent: accepted={accepted}, applied_attempt_id={applied}, message='{report_res.message}'.")
 
 
 def main(argv: list[str] | None = None) -> int:

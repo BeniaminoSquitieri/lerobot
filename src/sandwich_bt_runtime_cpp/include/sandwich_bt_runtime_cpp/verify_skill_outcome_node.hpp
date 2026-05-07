@@ -6,8 +6,8 @@
  *
  * @details After a robot skill returns, this BT node repeatedly asks the Python
  * verification registry for the latest result of that skill attempt. A SUCCESS
- * verification lets the tree continue, a FAILURE verification triggers BT
- * recovery/failure logic, and a PENDING verification keeps the node RUNNING.
+ * verification lets the tree continue, a FAILURE verification triggers XML
+ * retry/failure logic, and a PENDING verification keeps the node RUNNING.
  */
 
 #include <memory>

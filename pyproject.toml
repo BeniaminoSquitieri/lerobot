@@ -269,11 +269,8 @@ lerobot-find-joint-limits="lerobot.scripts.lerobot_find_joint_limits:main"
 lerobot-imgtransform-viz="lerobot.scripts.lerobot_imgtransform_viz:main"
 lerobot-edit-dataset="lerobot.scripts.lerobot_edit_dataset:main"
 lerobot-bt-skill-server="sandwich_bt_python.server:main"
-lerobot-bt-skill-sim="sandwich_bt_python.simulation:main"
-lerobot-bt-collaborative-runner="sandwich_bt_supervisor.collaborative_runner:main"
-lerobot-bt-supervisor-probe="sandwich_bt_supervisor.service_probe:main"
-lerobot-bt-supervisor-server="sandwich_bt_supervisor.server:main"
-lerobot-bt-supervisor-sim="sandwich_bt_supervisor.simulation:main"
+lerobot-bt-skill-sim="sandwich_bt_simulation.skill_server:main"
+lerobot-bt-vlm-stub="sandwich_bt_python.vlm_stub:main"
 lerobot-setup-can="lerobot.scripts.lerobot_setup_can:main"
 
 # ---------------- Tool Configurations ----------------

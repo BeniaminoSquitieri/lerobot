@@ -22,8 +22,6 @@ from typing import Any
 __all__ = [
     "ObservationConditionConfig",
     "PrimitiveSkillConfig",
-    "RecoveryConfig",
-    "RecoveryStepConfig",
     "SkillCommandServerConfig",
     "SkillTransitionConfig",
 ]
@@ -46,8 +44,6 @@ def __getattr__(name: str) -> Any:
     from .config import (
         ObservationConditionConfig,
         PrimitiveSkillConfig,
-        RecoveryConfig,
-        RecoveryStepConfig,
         SkillCommandServerConfig,
         SkillTransitionConfig,
     )
@@ -56,8 +52,6 @@ def __getattr__(name: str) -> Any:
     exported = {
         "ObservationConditionConfig": ObservationConditionConfig,
         "PrimitiveSkillConfig": PrimitiveSkillConfig,
-        "RecoveryConfig": RecoveryConfig,
-        "RecoveryStepConfig": RecoveryStepConfig,
         "SkillCommandServerConfig": SkillCommandServerConfig,
         "SkillTransitionConfig": SkillTransitionConfig,
     }

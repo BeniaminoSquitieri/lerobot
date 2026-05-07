@@ -4,20 +4,20 @@
 @brief ROS2 service server for the Python execution layer.
 
 @details
-This module is the runtime boundary between the C++ BehaviorTree.CPP process and
-the Python robot execution process. The C++ side never imports policy or robot
-code directly: it sends a `RunNamedCommand` request, waits for this server to
-finish the command, and then polls the verification services managed here.
+This module is the runtime boundary between the C++ BehaviorTree.CPP process,
+the Python robot execution process, and external scene verifiers. The C++ side
+never imports policy or robot code directly: it sends a `RunNamedCommand`
+request, waits for this server to finish the command, and then polls the
+verification state managed here. VLM/manual verifiers use topics only.
 
 Flow role:
 1. Wait for the C++ BT to send a named command.
-2. Dispatch that command to either:
-   - a learned ACT skill, or
-   - a scripted recovery.
+2. Dispatch that command to a learned ACT skill or a simulated VLM gate.
 3. Return the result to the BT so the tree can continue or retry.
 """
 
 import importlib
+import json
 import logging
 import os
 import sys
@@ -55,9 +55,6 @@ DEFAULT_CONFIG_PATH = Path(__file__).resolve().parent / "sandwich_bt_executor.ya
 
 if TYPE_CHECKING:
     from lerobot.robots.custom_manipulator.custom_manipulator import CustomManipulator
-
-SIMULATED_RECOVERY_KIND = "simulated_recovery"
-"""Command kind that acknowledges a recovery without touching the robot."""
 
 SIMULATED_SKILL_KIND = "simulated_skill"
 """Command kind that acknowledges a skill and auto-resolves verification."""
@@ -188,10 +185,12 @@ def _load_bt_services():
 class SkillCommandServer(Node):
     """@brief ROS2 node that executes BT commands and stores verification state.
 
-    The node owns three services:
+    The node owns three services and two verifier-facing topics:
     - `RunNamedCommand`: command execution requested by BT XML leaf nodes.
     - `GetSkillVerification`: polling endpoint used by `VerifySkillOutcome`.
-    - `ReportSkillVerification`: endpoint used by a VLM/manual verifier.
+    - `ReportSkillVerification`: legacy endpoint kept for compatibility.
+    - `verification_request_topic_name`: published when a scene verdict is needed.
+    - `verification_report_topic_name`: consumed from manual/VLM verifier verdicts.
     """
 
     def __init__(
@@ -207,7 +206,7 @@ class SkillCommandServer(Node):
 
         @param cfg Runtime configuration loaded from YAML.
         @param robot Connected robot object used by the executor backend.
-        @param executor_backend Object that actually runs skills/recoveries.
+        @param executor_backend Object that actually runs learned skills.
         @param robot_action_processor Pipeline that converts policy actions.
         @param robot_observation_processor Pipeline that converts observations.
         @param verification_registry In-memory state machine for skill attempts.
@@ -220,8 +219,10 @@ class SkillCommandServer(Node):
         self.robot_observation_processor = robot_observation_processor
         self.verification_registry = verification_registry
 
-        # ROS2 entrypoints used by the BT runtime and the external verifier.
+        # ROS2 entrypoints used by the BT runtime and verifier-facing topics.
         run_named_command, get_skill_verification, report_skill_verification = _load_bt_services()
+        from std_msgs.msg import String  # type: ignore
+
         self._command_service = self.create_service(run_named_command, cfg.service_name, self._handle_request)
         self._verification_query_service = self.create_service(
             get_skill_verification,
@@ -233,11 +234,24 @@ class SkillCommandServer(Node):
             cfg.verification_report_service_name,
             self._handle_report_skill_verification,
         )
+        self._verification_request_publisher = self.create_publisher(
+            String,
+            cfg.verification_request_topic_name,
+            10,
+        )
+        self._verification_report_subscription = self.create_subscription(
+            String,
+            cfg.verification_report_topic_name,
+            self._handle_verification_report_topic,
+            10,
+        )
         self.get_logger().info(
             "Serving BT commands on "
             f"'{cfg.service_name}', verification queries on "
-            f"'{cfg.verification_query_service_name}', and verification reports on "
-            f"'{cfg.verification_report_service_name}'."
+            f"'{cfg.verification_query_service_name}', legacy verification reports on "
+            f"'{cfg.verification_report_service_name}', verification requests on "
+            f"'{cfg.verification_request_topic_name}', and verifier verdicts from "
+            f"'{cfg.verification_report_topic_name}'."
         )
 
     def _handle_request(self, request, response):
@@ -263,12 +277,6 @@ class SkillCommandServer(Node):
                     robot_observation_processor=self.robot_observation_processor,
                     timeout_override_s=request.timeout_s,
                 )
-            elif request.kind == "recovery":
-                # Real scripted recovery: delegate to deterministic recovery code.
-                result = self.executor_backend.execute_named_recovery(
-                    recovery_name=request.name,
-                    timeout_override_s=request.timeout_s,
-                )
             elif request.kind == SIMULATED_SKILL_KIND:
                 # Bring-up path: act as though a skill ran and verification passed.
                 result = CommandResult(
@@ -284,14 +292,6 @@ class SkillCommandServer(Node):
                     "SUCCESS",
                     0.0,
                     f"Simulated skill '{request.name}' completed and is awaiting external verification.",
-                )
-            elif request.kind == SIMULATED_RECOVERY_KIND:
-                # Bring-up path: recovery is treated as a no-op success.
-                result = CommandResult(
-                    True,
-                    "SUCCESS",
-                    0.0,
-                    f"Simulated recovery '{request.name}' completed without robot execution.",
                 )
             else:
                 result = None
@@ -333,10 +333,18 @@ class SkillCommandServer(Node):
                         f"Verification attempt {verification_snapshot.attempt_id} was auto-resolved as SUCCESS."
                     )
                 else:
+                    publish_request = getattr(self, "_publish_verification_request", None)
+                    if publish_request is not None:
+                        publish_request(verification_snapshot)
+                    verification_request_topic = getattr(
+                        self.cfg,
+                        "verification_request_topic_name",
+                        self.cfg.verification_query_service_name,
+                    )
                     result.message = (
                         f"{result.message} "
                         f"Verification attempt {verification_snapshot.attempt_id} is now pending on "
-                        f"'{self.cfg.verification_query_service_name}'."
+                        f"'{verification_request_topic}'."
                     )
             except Exception as exc:  # noqa: BLE001
                 response.success = False
@@ -424,6 +432,56 @@ class SkillCommandServer(Node):
         log_fn = self.get_logger().info if update.accepted else self.get_logger().warning
         log_fn(response.message)
         return response
+
+    def _publish_verification_request(self, snapshot) -> None:
+        """@brief Publish a topic event asking a VLM/manual verifier for a verdict."""
+        from std_msgs.msg import String  # type: ignore
+
+        payload = {
+            "event": "verification_requested",
+            "skill_name": snapshot.skill_name,
+            "attempt_id": int(snapshot.attempt_id),
+            "status": PENDING_VERIFICATION_STATUS,
+            "message": snapshot.message,
+            "allowed_statuses": ["SUCCESS", "FAILURE"],
+        }
+        msg = String()
+        msg.data = json.dumps(payload, sort_keys=True)
+        self._verification_request_publisher.publish(msg)
+        self.get_logger().info(
+            f"Published verification request for skill '{snapshot.skill_name}' attempt {snapshot.attempt_id}."
+        )
+
+    def _handle_verification_report_topic(self, msg) -> None:
+        """@brief Apply one JSON verifier verdict received from a ROS2 topic."""
+        try:
+            payload = json.loads(msg.data)
+        except Exception as exc:  # noqa: BLE001
+            self.get_logger().error(f"Invalid verification report JSON: {exc}: '{msg.data}'")
+            return
+        if not isinstance(payload, dict):
+            self.get_logger().error("Rejected verification report topic message: payload must be a JSON object.")
+            return
+
+        try:
+            skill_name = str(payload.get("skill_name", ""))
+            status = str(payload.get("status", "")).upper()
+            attempt_id = int(payload.get("attempt_id", 0))
+            message = str(payload.get("message", ""))
+            confidence = float(payload.get("confidence", 0.0))
+            update = self.verification_registry.report(
+                skill_name=skill_name,
+                attempt_id=attempt_id,
+                status=status,
+                message=message,
+                confidence=confidence,
+            )
+        except (TypeError, ValueError) as exc:
+            self.get_logger().error(f"Rejected verification report topic message: {exc}")
+            return
+
+        log_fn = self.get_logger().info if update.accepted else self.get_logger().warning
+        log_fn(update.message)
 
 
 @parser.wrap(config_path=DEFAULT_CONFIG_PATH)

@@ -3,11 +3,9 @@ from __future__ import annotations
 from pathlib import Path
 from xml.etree import ElementTree
 
-
 EXPECTED_TREE_FILES = {
     "place_first_toast_subtree.xml",
     "place_second_toast_subtree.xml",
-    "pour_subtree.xml",
     "sandwich_tree.xml",
     "sandwich_tree_first_primitive_only.xml",
     "sandwich_tree_first_real_rest_simulated.xml",

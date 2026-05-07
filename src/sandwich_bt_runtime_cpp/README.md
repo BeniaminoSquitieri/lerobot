@@ -30,7 +30,7 @@ It does not own:
 
 - policy loading
 - robot connection
-- scripted recovery implementation
+- VLM implementation
 
 Those belong to `sandwich_bt_python`.
 
@@ -44,9 +44,8 @@ Those belong to `sandwich_bt_python`.
 - `trees/sandwich_tree.xml`: full sandwich task tree
 - `trees/sandwich_tree_first_primitive_only.xml`: bring-up tree for only `place_first_toast`
 - `trees/sandwich_tree_first_real_rest_simulated.xml`: bring-up tree that runs `place_first_toast` as real and simulates the remaining primitives
-- `trees/place_first_toast_subtree.xml`: retry/recovery subtree for the first toast step
-- `trees/pour_subtree.xml`: retry/recovery subtree for the pouring step
-- `trees/place_second_toast_subtree.xml`: retry/recovery subtree for the second toast step
+- `trees/place_first_toast_subtree.xml`: retry subtree for the first toast step
+- `trees/place_second_toast_subtree.xml`: retry subtree for the second toast step
 
 ## Execution Model
 
@@ -102,7 +101,9 @@ Its behavior is:
 4. If the Python side reports `FAILURE`, or no attempt exists for that skill,
    the leaf returns BT `FAILURE`.
 
-This is the point where a post-hoc verifier such as a VLM gates the BT.
+This is the point where post-hoc scene verification gates the BT. The C++ node
+polls Python-side state; the VLM/manual implementation itself is decoupled and
+reports verdicts through `/sandwich_bt/verification_report`.
 
 ## XML Contract Used In This Repository
 
@@ -112,14 +113,11 @@ shape:
 - retry behavior lives in XML through `RetryUntilSuccessful`
 - local ordering lives in XML through `Sequence`
 - robot-side effects are always requested through `RunNamedCommand`
-- recoveries and learned skills are both opaque string commands to the C++ side
-
 For example, the usual subtree shape is:
 
-1. run one named recovery
-2. run one named skill
-3. verify the outcome of that skill through `VerifySkillOutcome`
-4. if the sequence fails, let `RetryUntilSuccessful` trigger another attempt
+1. run one named BC skill
+2. verify the outcome of that skill through `VerifySkillOutcome`
+3. if the VLM reports `FAILURE`, let `RetryUntilSuccessful` trigger another attempt
 
 That keeps retry structure visible in the tree instead of hiding it inside the
 Python executor.
@@ -128,8 +126,7 @@ Python executor.
 
 - The leaf expects the port name `command_name`, not `name`.
 - `kind` is forwarded as an opaque string. The Python server currently handles
-  `skill`, `recovery`, `simulated_skill`, `simulated_skill_pending`, and
-  `simulated_recovery`.
+  `skill`, `simulated_skill`, and `simulated_skill_pending`.
 - `timeout_s` is optional and overrides the Python-side default for that one
   leaf execution.
 - `VerifySkillOutcome` expects the port `skill_name`.
@@ -148,4 +145,4 @@ Change this package when you need to:
 - change the XML-level control structure for retries or ordering
 
 Do not modify this package just to point a leaf at a different checkpoint or a
-different recovery sequence. Those changes belong to `sandwich_bt_python`.
+different skill checkpoint. Those changes belong to `sandwich_bt_python`.

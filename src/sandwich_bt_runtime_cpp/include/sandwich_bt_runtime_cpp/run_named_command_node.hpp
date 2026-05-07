@@ -5,7 +5,7 @@
  * @brief Declares the BehaviorTree.CPP leaf that invokes named ROS2 commands.
  *
  * @details The XML tree instantiates this node whenever a robot skill or
- * recovery command must run. The node sends one asynchronous
+ * simulated VLM gate must run. The node sends one asynchronous
  * sandwich_bt_interfaces::srv::RunNamedCommand request to the Python execution
  * server, returns BT::NodeStatus::RUNNING while the request is in flight, and
  * maps the server response back to BT success or failure.
