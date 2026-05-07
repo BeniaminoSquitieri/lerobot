@@ -1,6 +1,6 @@
 from dataclasses import dataclass, field
 
-from ..configs import GripperConfig
+from lerobot.robots.custom_manipulator.configs import GripperConfig
 
 TIPS = ("thumb", "index", "middle", "ring")
 DEFAULT_ACTUATED_TIP_LINK_NAMES = {
@@ -43,9 +43,7 @@ DEFAULT_MOTOR_IDS = tuple(range(16))
 DEFAULT_PORT_CANDIDATES = ("/dev/ttyUSB0", "/dev/ttyUSB1", "COM13")
 DEFAULT_SIDE_TO_SIDE_MOTOR_IDS = (0, 4, 8)
 
-
-def _default_leap_urdf_path() -> str:
-    return "/home/panda-user/dex-urdf/robots/hands/leap_hand/leap_hand_right.urdf"
+DEFAULT_URDF_PATH = "/home/panda-user/dex-urdf/robots/hands/leap_hand/leap_hand_right.urdf"
 
 
 @GripperConfig.register_subclass("leap_hand")
@@ -62,7 +60,7 @@ class LeapHandConfig(GripperConfig):
     ki: int = 0
     kd: int = 200
     curr_lim: int = 350
-    urdf_path: str = _default_leap_urdf_path()
+    urdf_path: str = DEFAULT_URDF_PATH
     root_link_name: str = "base"
     dexpilot_wrist_link_name: str = "base"
     palm_link_name: str = "palm_lower"

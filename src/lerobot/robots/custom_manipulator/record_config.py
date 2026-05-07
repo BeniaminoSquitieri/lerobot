@@ -9,9 +9,6 @@ from lerobot.robots.config import RobotConfig
 from lerobot.teleoperators import TeleoperatorConfig
 from lerobot.teleoperators.metareader import MetaReaderConfig  # noqa: F401
 from lerobot.teleoperators.metaquest.metaquest_rail.metaquest import MetaQuestRailConfig  # noqa: F401
-from lerobot.robots.custom_manipulator.processor.metareader_leap_processor import (  # noqa: F401
-    MetaReaderLeapDexpilot,
-)
 from lerobot.robots.custom_manipulator.processor.metaquest_processor import (  # noqa: F401
     ArmAbsoluteToDelta,
     ClutchProcessor,

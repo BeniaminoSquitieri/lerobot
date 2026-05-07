@@ -1,402 +1,193 @@
 # pyright: reportMissingImports=false
-import sys
-from pathlib import Path
+
+from __future__ import annotations
 
 import numpy as np
 
-from .config_leap_hand import JOINT_ACTIONS, TIPS, LeapHandConfig
-from .leap_hand_debug import LeapHandDebugTools
-
-
-def _require_klampt():
-    try:
-        from klampt import IKObjective, IKSolver, WorldModel
-        from klampt.math import so3, vectorops
-    except ModuleNotFoundError as exc:
-        raise ModuleNotFoundError(
-            "LEAP hand support requires the optional `klampt` package."
-        ) from exc
-
-    return IKObjective, IKSolver, WorldModel, so3, vectorops
-
-
-def _get_leap_runtime():
-    repo_root = Path(__file__).resolve().parents[5]
-    leap_hand_root = repo_root / "leap_hand"
-    if leap_hand_root.is_dir() and str(leap_hand_root) not in sys.path:
-        sys.path.insert(0, str(leap_hand_root))
-
-    try:
-        import dynamixel_sdk  # noqa: F401
-    except ImportError:
-        _append_local_dynamixel_sdk_path(repo_root)
-
-    try:
-        from leap_hand_utils.dynamixel_client import DynamixelClient
-        import leap_hand_utils.leap_hand_utils as leap_utils
-    except ImportError as exc:
-        raise ModuleNotFoundError(
-            "LEAP hand support requires the local `leap_hand/` folder and its runtime dependencies, "
-            "including `dynamixel_sdk`."
-        ) from exc
-
-    return DynamixelClient, leap_utils
-
-
-def _append_local_dynamixel_sdk_path(repo_root: Path) -> None:
-    leap_api_root = repo_root.parent / "LEAP_Hand_API"
-    site_packages_roots = sorted(leap_api_root.glob("env_leap/lib/python*/site-packages"))
-    for site_packages in site_packages_roots:
-        dynamixel_pkg = site_packages / "dynamixel_sdk"
-        if dynamixel_pkg.is_dir() and str(site_packages) not in sys.path:
-            sys.path.append(str(site_packages))
-            return
-
-
-def _resolve_urdf_path(urdf_path: str) -> str:
-    source = Path(urdf_path).expanduser().resolve()
-    source_text = source.read_text()
-    rewritten = source_text.replace("package:///", "")
-    if rewritten == source_text:
-        return str(source)
-
-    resolved = source.with_name(f"{source.stem}.resolved{source.suffix}")
-    if not resolved.exists() or resolved.read_text() != rewritten:
-        resolved.write_text(rewritten)
-    return str(resolved)
+from lerobot.robots.custom_manipulator.grippers.config_leap_hand import LeapHandConfig, TIPS
+from lerobot.robots.custom_manipulator.grippers.leap_hand_dexpilot import (
+    LeapHandDexPilotRetargeter,
+)
+from lerobot.robots.custom_manipulator.grippers.leap_hand_utils import (
+    LeapHandDebugTools,
+    transform_leap_target_positions,
+)
 
 
 class LeapHand:
-    end_effector_transforms = {
-        "dummy": np.eye(4),
-        "panda": np.array(
-            [
-                [1.0, 0.0, 0.0, 0.0455 + 0.065],
-                [0.0, 1.0, 0.0, 0.0],
-                [0.0, 0.0, 1.0, 0.036],
-                [0.0, 0.0, 0.0, 1.0],
-            ],
-            dtype=float,
-        ),
-    }
+    end_effector_transforms = {"panda": np.eye(4, dtype=float), "dummy": np.eye(4, dtype=float)}
 
     def __init__(self, config: LeapHandConfig | None = None):
         self.config = config or LeapHandConfig()
-        self.urdf_path = _resolve_urdf_path(self.config.urdf_path)
-        self.dxl_client = None
 
-        _, _, WorldModel, so3, vectorops = _require_klampt()
-        _, leap_utils = _get_leap_runtime()
+        from klampt import WorldModel
+        from klampt.math import so3, vectorops
 
         self._so3 = so3
         self._vectorops = vectorops
-        self._leap_utils = leap_utils
-        self._palm_center_offset = np.asarray(self.config.palm_center_offset, dtype=float)
+
+        urdf_path = self.config.urdf_path
 
         world = WorldModel()
-        if not world.loadRobot(self.urdf_path):
-            raise RuntimeError(f"Failed to load LEAP hand URDF: {self.urdf_path}")
-        self.model = world.robot(0)
+        ok = world.loadRobot(urdf_path)
+        if not ok:
+            raise RuntimeError(f"Failed to load LEAP hand URDF: {urdf_path}")
         self.world = world
+        self.model = world.robot(0)
 
-        self.joints = {
-            self.model.driver(i).getName(): self.model.driver(i) for i in range(self.model.numDrivers())
-        }
-        self._command_index_by_driver_name = self._resolve_command_index_by_driver_name()
+        self.drivers = {self.model.driver(i).getName(): self.model.driver(i) for i in range(self.model.numDrivers())}
 
-        self.root_frame = self._resolve_link(self.config.root_link_name)
-        self.palm_frame = self._resolve_link(self.config.palm_link_name, fallback="palm_lower")
-        self.tip_points = {
-            tip: self._resolve_link(self.config.tip_point_link_names[tip])
-            for tip in self.config.tip_point_link_names
+        self.root_frame = self.model.link(self.config.root_link_name)
+        self.palm_frame = self.model.link(self.config.palm_link_name)
+        self.tip_point_frames = {
+            tip: self.model.link(self.config.tip_point_link_names[tip]) for tip in self.config.tip_point_link_names
         }
 
-        self._debug = LeapHandDebugTools(
-            urdf_path=self.urdf_path,
-            tip_names=TIPS,
-            tip_scale_factors=self.config.tip_scale_factors,
-            enable_tip_scale_tuner=self.config.enable_tip_scale_tuner,
-            enable_rerun_visualization=self.config.visualize,
-            palm_frame=self.palm_frame,
-            root_frame=self.root_frame,
-            palm_center_offset=self._palm_center_offset,
-            tips=self.tip_points,
-            palm_to_target_rot=PALM_TO_TARGET_ROT,
+        rotation_y = self._so3.rotation([0.0, 1.0, 0.0], np.pi / 2.0)
+        rotation_x = self._so3.rotation([1.0, 0.0, 0.0], -np.pi / 2.0)
+        base_rotation = self._so3.mul(rotation_y, rotation_x)
+        base_rotation_mat = self._so3.matrix(base_rotation)
+        self.root_frame.setParentTransform(base_rotation, [0.0, 0.0, 0.0])
+        self.model.setConfig(self.model.getConfig())
+
+        self.retargeter = LeapHandDexPilotRetargeter(
+            urdf_path=urdf_path,
+            command_index_by_link_name=self.config.command_index_by_link_name,
         )
+
+        palm_r, palm_t = self.palm_frame.getTransform()
+        root_r, root_t = self.root_frame.getTransform()
+        palm_to_root_offset = self._so3.apply(self._so3.inv(palm_r), self._vectorops.sub(root_t, palm_t))
+
+        self.debug = LeapHandDebugTools(
+            urdf_path=urdf_path,
+            enable_rerun_visualization=self.config.visualize,
+            palm_link_name=self.config.palm_link_name,
+            root_link_name=self.config.root_link_name,
+            palm_to_root_offset=palm_to_root_offset,
+            base_rotation=base_rotation_mat,
+        )
+
+        self.qpos = np.zeros(16, dtype=float)
+        if self.config.home_position is not None:
+            self.qpos[:] = np.asarray(self.config.home_position, dtype=float)
+        self._apply_qpos_to_model(self.qpos)
 
     def get_end_effector_transform(self, arm_type: str) -> np.ndarray:
         return self.end_effector_transforms[arm_type].copy()
 
     def connect(self):
-        DynamixelClient, _ = _get_leap_runtime()
-        candidate_ports = [self.config.port] if self.config.port else []
-        candidate_ports.extend(port for port in self.config.port_candidates if port not in candidate_ports)
+        return None
 
-        last_error = None
-        for port in candidate_ports:
-            try:
-                print(f"[leap_hand] Connecting on {port}...", flush=True)
-                self.dxl_client = DynamixelClient(list(self.config.motor_ids), port, self.config.baudrate)
-                self.dxl_client.connect()
-                self._configure_controller()
-                print(f"[leap_hand] Connected on {port}.", flush=True)
-                return
-            except Exception as exc:
-                last_error = exc
-                if self.dxl_client is not None:
-                    try:
-                        self.dxl_client.disconnect()
-                    except Exception:
-                        pass
-                    self.dxl_client = None
-
-        raise RuntimeError(f"Failed to connect LEAP hand on ports {candidate_ports}.") from last_error
+    def reset(self):
+        self.qpos[:] = 0.0
+        if self.config.home_position is not None:
+            self.qpos[:] = np.asarray(self.config.home_position, dtype=float)
+        self._apply_qpos_to_model(self.qpos)
 
     def disconnect(self):
-        if self.dxl_client is not None:
-            self.dxl_client.disconnect()
-        self.dxl_client = None
-        self._debug.close()
+        self.debug.close()
 
     close = disconnect
 
-    def reset(self):
-        home_device_joints = self._home_device_joints()
-        self._set_model_joint_values(self._device_to_model_joint_values(home_device_joints))
-        self._send(self.joints)
+    @property
+    def action_features(self) -> dict:
+        tip_features = {f"action.{tip}.position.{axis}": float for tip in TIPS for axis in "xyz"}
+        wrist_features = {f"action.wrist.position.{axis}": float for axis in "xyz"}
+        return {"action.hand_tracking_valid": float, **wrist_features, **tip_features}
 
-    def _get_fingertips(self, device_joints: list[float] | np.ndarray) -> dict[str, float]:
-        previous_joint_values = {
-            name: self.joints[name].getValue() for name in self._command_index_by_driver_name
-        }
+    @property
+    def features(self) -> dict:
+        return {f"{tip}.position.{axis}": float for tip in TIPS for axis in "xyz"}
 
-        model_joints = self._device_to_model_joint_values(device_joints)
-        for name, idx in self._command_index_by_driver_name.items():
-            self.joints[name].setValue(float(model_joints[idx]))
-        self.model.setConfig(self.model.getConfig())
-
-        palm_r, palm_t = self.palm_frame.getTransform()
-        palm_r_inv = self._so3.inv(palm_r)
-
-        tip_positions = {
-            tip: PALM_TO_TARGET_ROT.T
-            @ np.array(
-                self._so3.apply(
-                    palm_r_inv, self._vectorops.sub(link.getTransform()[1], palm_t)
-                )
-                - self._palm_center_offset
-            )
-            / self.config.tip_scale_factors[tip]
-            for tip, link in self.tip_points.items()
-        }
-
-        fingertips = {
-            f"{tip}.position.{axis}": float(value)
-            for tip, tip_position in tip_positions.items()
-            for axis, value in zip("xyz", tip_position)
-        }
-
-        for name, value in previous_joint_values.items():
-            self.joints[name].setValue(value)
-        self.model.setConfig(self.model.getConfig())
-        return fingertips
+    def get_sensors(self) -> dict[str, float]:
+        return dict(self._get_fingertips_from_current_model_state())
 
     def apply_commands(self, action: dict | None = None, **kwargs):
         del kwargs
         if not action:
             return
 
-        self._debug.poll()
-
-        model_joints = self._extract_model_joint_targets(action)
-        if model_joints is None:
+        if not float(action.get("hand_tracking_valid", 0.0)):
             return
 
-        self._set_model_joint_values(model_joints)
-        fingertip_values = self._get_fingertips_from_current_model_state()
-        self._debug.log_state(self._link_name_to_model_joint_values(model_joints), fingertip_values)
-        self._debug.poll()
-        return self._send(self.joints)
-
-    @property
-    def action_features(self) -> dict:
-        return JOINT_ACTIONS
-
-    @property
-    def features(self) -> dict:
-        return {f"{tip}.position.{axis}": float for tip in TIPS for axis in "xyz"}
-
-    def get_sensors(self):
-        device_joints = self._read()
-        fingertip_values = self._get_fingertips(device_joints)
-
-        self._debug.log_state(
-            self._link_name_to_model_joint_values(self._device_to_model_joint_values(device_joints)),
-            fingertip_values,
+        transformed_targets = transform_leap_target_positions(
+            self._action_to_targets(action),
+            base_rotation=self.debug._base_rotation,
         )
-        self._debug.poll()
-        return fingertip_values
+        self.debug.log_targets(transformed_targets, already_transformed=True)
 
-    def _configure_controller(self):
-        if self.dxl_client is None:
-            raise RuntimeError("LEAP hand is not connected.")
+        self.qpos[:] = self.retargeter.retarget(self._action_with_targets(action, transformed_targets))
+        self._apply_qpos_to_model(self.qpos)
 
-        motor_ids = list(self.config.motor_ids)
-        side_to_side_motor_ids = list(self.config.side_to_side_motor_ids)
+        tip_values, tip_positions = self._get_fingertips_from_current_model_state(return_positions=True)
+        joints = {
+            link_name: float(self.drivers[link_name].getValue())
+            for link_name in self.config.command_index_by_link_name
+            if link_name in self.drivers
+        }
+        self.debug.log_state(joints=joints, tip_positions=tip_positions)
+        return tip_values
 
-        self.dxl_client.sync_write(motor_ids, np.ones(len(motor_ids)) * self.config.control_mode, 11, 1)
-        self.dxl_client.set_torque_enabled(motor_ids, True)
-        self.dxl_client.sync_write(motor_ids, np.ones(len(motor_ids)) * self.config.kp, 84, 2)
-        self.dxl_client.sync_write(
-            side_to_side_motor_ids,
-            np.ones(len(side_to_side_motor_ids)) * (self.config.kp * 0.75),
-            84,
-            2,
-        )
-        self.dxl_client.sync_write(motor_ids, np.ones(len(motor_ids)) * self.config.ki, 82, 2)
-        self.dxl_client.sync_write(motor_ids, np.ones(len(motor_ids)) * self.config.kd, 80, 2)
-        self.dxl_client.sync_write(
-            side_to_side_motor_ids,
-            np.ones(len(side_to_side_motor_ids)) * (self.config.kd * 0.75),
-            80,
-            2,
-        )
-        self.dxl_client.sync_write(motor_ids, np.ones(len(motor_ids)) * self.config.curr_lim, 102, 2)
-        self.dxl_client.write_desired_pos(motor_ids, self._home_device_joints())
-
-    def _resolve_command_index_by_driver_name(self) -> dict[str, int]:
-        command_index_by_driver_name = {}
-        for driver_name, driver in self.joints.items():
-            affected_link = self.model.link(driver.getAffectedLink()).getName()
-            if affected_link in self.config.command_index_by_link_name:
-                command_index_by_driver_name[driver_name] = self.config.command_index_by_link_name[
-                    affected_link
-                ]
-
-        if len(command_index_by_driver_name) == len(self.config.command_index_by_link_name):
-            return command_index_by_driver_name
-
-        for i in self.config.motor_ids:
-            name = str(i)
-            if name in self.joints:
-                command_index_by_driver_name[name] = i
-
-        if len(command_index_by_driver_name) != len(self.config.motor_ids):
-            raise RuntimeError(
-                "Failed to resolve LEAP hand driver ordering from the URDF model. "
-                f"Resolved {len(command_index_by_driver_name)} / {len(self.config.motor_ids)} motors."
-            )
-        return command_index_by_driver_name
-
-    def _resolve_link(self, link_name: str, fallback: str | None = None):
-        link = self.model.link(link_name)
-        if link.getIndex() >= 0:
-            return link
-
-        if fallback is not None:
-            fallback_link = self.model.link(fallback)
-            if fallback_link.getIndex() >= 0:
-                print(
-                    f"[leap_hand] Link {link_name!r} not found, using {fallback!r} instead.",
-                    flush=True,
-                )
-                return fallback_link
-
-        raise RuntimeError(f"Link {link_name!r} was not found in {self.urdf_path}.")
-
-    def _set_model_joint_values(self, model_joints: list[float] | np.ndarray):
-        for name, idx in self._command_index_by_driver_name.items():
-            self.joints[name].setValue(float(model_joints[idx]))
+    def _apply_qpos_to_model(self, qpos: np.ndarray) -> None:
+        for link_name, idx in self.config.command_index_by_link_name.items():
+            if link_name in self.drivers:
+                self.drivers[link_name].setValue(float(qpos[idx]))
         self.model.setConfig(self.model.getConfig())
 
-    def _current_model_joint_values(self) -> np.ndarray:
-        model_joints = np.zeros(len(self.config.motor_ids), dtype=float)
-        for name, idx in self._command_index_by_driver_name.items():
-            model_joints[idx] = float(self.joints[name].getValue())
-        return model_joints
-
-    def _extract_model_joint_targets(self, action: dict[str, float]) -> np.ndarray | None:
-        model_joints = self._current_model_joint_values()
-        has_gripper_command = False
-
-        for link_name, idx in self.config.command_index_by_link_name.items():
-            key = f"gripper.{link_name}"
-            if key not in action:
-                continue
-            model_joints[idx] = float(action[key])
-            has_gripper_command = True
-
-        if not has_gripper_command:
-            return None
-        return model_joints
-
-    def _device_to_model_joint_values(self, device_joints: list[float] | np.ndarray) -> np.ndarray:
-        return np.asarray(self._leap_utils.LEAPhand_to_LEAPsim(device_joints), dtype=float)
-
-    def _model_to_device_joint_values(self, model_joints: list[float] | np.ndarray) -> np.ndarray:
-        return np.asarray(
-            self._leap_utils.angle_safety_clip(self._leap_utils.LEAPsim_to_LEAPhand(model_joints)),
-            dtype=float,
-        )
-
-    def _home_device_joints(self) -> np.ndarray:
-        if self.config.home_position is not None:
-            return np.asarray(self.config.home_position, dtype=float)
-        return np.asarray(
-            self._leap_utils.allegro_to_LEAPhand(np.zeros(len(self.config.motor_ids), dtype=float)),
-            dtype=float,
-        )
-
-    def _link_name_to_model_joint_values(self, model_joints: list[float] | np.ndarray) -> dict[str, float]:
-        return {
-            link_name: float(model_joints[idx])
-            for link_name, idx in self.config.command_index_by_link_name.items()
+    def _action_to_targets(self, action: dict[str, float]) -> dict[str, list[float]]:
+        targets = {
+            "wrist": [float(action[f"wrist.position.{a}"]) for a in "xyz"],
         }
+        for tip in ("thumb", "index", "middle", "ring"):
+            if all(f"{tip}.position.{a}" in action for a in "xyz"):
+                targets[tip] = [float(action[f"{tip}.position.{a}"]) for a in "xyz"]
+        return targets
 
-    def _get_fingertips_from_current_model_state(self) -> dict[str, float]:
+    def _action_with_targets(
+        self,
+        action: dict[str, float],
+        target_positions: dict[str, list[float]],
+    ) -> dict[str, float]:
+        transformed_action = dict(action)
+        for tip_name, pos in target_positions.items():
+            for axis, value in zip("xyz", pos, strict=True):
+                transformed_action[f"{tip_name}.position.{axis}"] = float(value)
+        return transformed_action
+
+    def _get_fingertips_from_current_model_state(self, return_positions: bool = False):
         palm_r, palm_t = self.palm_frame.getTransform()
         palm_r_inv = self._so3.inv(palm_r)
 
-        tip_positions = {
-            tip: PALM_TO_TARGET_ROT.T
-            @ np.array(
-                self._so3.apply(
-                    palm_r_inv, self._vectorops.sub(link.getTransform()[1], palm_t)
-                )
-                - self._palm_center_offset
-            )
-            / self.config.tip_scale_factors[tip]
-            for tip, link in self.tip_points.items()
-        }
+        tip_positions = {}
+        for tip, link in self.tip_point_frames.items():
+            _, tip_t = link.getTransform()
+            rel = self._so3.apply(palm_r_inv, self._vectorops.sub(tip_t, palm_t))
+            tip_positions[tip] = [float(v) for v in rel]
 
-        return {
+        tip_values = {
             f"{tip}.position.{axis}": float(value)
-            for tip, tip_position in tip_positions.items()
-            for axis, value in zip("xyz", tip_position)
+            for tip, pos in tip_positions.items()
+            for axis, value in zip("xyz", pos, strict=True)
         }
 
-    def _send(self, joints) -> None:
-        if self.dxl_client is None:
-            raise RuntimeError("LEAP hand is not connected.")
+        if return_positions:
+            return tip_values, tip_positions
+        return tip_values
 
-        model_joints = np.zeros(len(self.config.motor_ids), dtype=float)
-        for name, joint in joints.items():
-            if name not in self._command_index_by_driver_name:
-                continue
-            model_joints[self._command_index_by_driver_name[name]] = float(joint.getValue())
 
-        # self.dxl_client.write_desired_pos(
-        #     list(self.config.motor_ids), self._model_to_device_joint_values(model_joints)
-        # )
+if __name__ == "__main__":
+    import time
 
-    def _read(self) -> np.ndarray:
-        if self.dxl_client is None:
-            raise RuntimeError("LEAP hand is not connected.")
+    from lerobot.teleoperators.metareader.config_metareader import MetaReaderConfig
+    from lerobot.teleoperators.metareader.metareader import MetaReaderTeleoperator
 
-        obs = np.asarray(self.dxl_client.read_pos(), dtype=float)
-        if obs.shape[0] != len(self.config.motor_ids):
-            raise RuntimeError(
-                "Unexpected LEAP hand observation size: "
-                f"expected {len(self.config.motor_ids)}, got {obs.shape[0]}."
-            )
-        return obs
+    teleop = MetaReaderTeleoperator(MetaReaderConfig())
+    teleop.connect()
+
+    hand = LeapHand(LeapHandConfig(visualize=True))
+
+    while True:
+        action = teleop.get_action()
+        hand.apply_commands(action)
+        time.sleep(0.01)

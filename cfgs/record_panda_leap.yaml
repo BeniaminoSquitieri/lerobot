@@ -44,7 +44,7 @@ dataset:
   rename_map: {}
 
 teleop_action_processor:
-  steps: [clutch_processor, metareader_leap_dexpilot]
+  steps: [clutch_processor]
 
 robot_action_processor:
   steps: []

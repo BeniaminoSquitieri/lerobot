@@ -1,0 +1,14 @@
+policy:
+  type: smolvla
+  repo_id: steb6/smolvla_roboarena_HRII
+#  pretrained_path: steb6/smolvla_roboarena_hrii
+  device: cuda
+  chunk_size: 16
+  n_action_steps: 16
+
+dataset:
+  repo_id: steb6/roboarena_HRII
+  root: steb6/roboarena_HRII
+  revision: main
+  image_transforms:
+    enable: true
