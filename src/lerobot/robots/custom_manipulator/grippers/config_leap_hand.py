@@ -15,8 +15,6 @@ DEFAULT_TIP_POINT_LINK_NAMES = {
     "middle": "middle_tip_head",
     "ring": "ring_tip_head",
 }
-DEFAULT_TARGET_SCALE_FACTORS = {tip: 1.0 for tip in TIPS}
-DEFAULT_TIP_SCALE_FACTORS = {tip: 1.0 for tip in TIPS}
 DEFAULT_PALM_CENTER_OFFSET = (-0.0, -0.0, -0.0)
 DEFAULT_COMMAND_INDEX_BY_LINK_NAME = {
     "pip": 0,
@@ -42,7 +40,6 @@ COMMAND_LINK_NAMES = tuple(
 DEFAULT_DISABLED_JOINTS: tuple[str, ...] = ()
 JOINT_ACTIONS = {f"action.gripper.{link_name}": float for link_name in COMMAND_LINK_NAMES}
 DEFAULT_MOTOR_IDS = tuple(range(16))
-DEFAULT_PORT_CANDIDATES = ("/dev/ttyUSB0", "/dev/ttyUSB1", "COM13")
 DEFAULT_SIDE_TO_SIDE_MOTOR_IDS = (0, 4, 8)
 
 DEFAULT_URDF_PATH = "src/lerobot/robots/custom_manipulator/grippers/urdfs/leap_hand_right.urdf"
@@ -51,8 +48,8 @@ DEFAULT_URDF_PATH = "src/lerobot/robots/custom_manipulator/grippers/urdfs/leap_h
 @GripperConfig.register_subclass("leap_hand")
 @dataclass
 class LeapHandConfig(GripperConfig):
-    port: str | None = None
-    port_candidates: tuple[str, ...] = DEFAULT_PORT_CANDIDATES
+    control: bool = True
+    port: str = "/dev/ttyUSB0"
     baudrate: int = 4_000_000
     motor_ids: tuple[int, ...] = DEFAULT_MOTOR_IDS
     side_to_side_motor_ids: tuple[int, ...] = DEFAULT_SIDE_TO_SIDE_MOTOR_IDS
@@ -72,14 +69,11 @@ class LeapHandConfig(GripperConfig):
     niter: int = 20000
     tip_link_names: dict[str, str] = field(default_factory=lambda: dict(DEFAULT_ACTUATED_TIP_LINK_NAMES))
     tip_point_link_names: dict[str, str] = field(default_factory=lambda: dict(DEFAULT_TIP_POINT_LINK_NAMES))
-    target_scale_factors: dict[str, float] = field(default_factory=lambda: dict(DEFAULT_TARGET_SCALE_FACTORS))
-    tip_scale_factors: dict[str, float] = field(default_factory=lambda: dict(DEFAULT_TIP_SCALE_FACTORS))
     command_index_by_link_name: dict[str, int] = field(
         default_factory=lambda: dict(DEFAULT_COMMAND_INDEX_BY_LINK_NAME)
     )
     disabled_joints: tuple[str, ...] = DEFAULT_DISABLED_JOINTS
     home_position: list[float] | None = None
-    enable_tip_scale_tuner: bool = False
     visualize: bool = False
 
     @property
