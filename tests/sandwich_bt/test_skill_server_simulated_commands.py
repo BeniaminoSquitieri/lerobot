@@ -35,11 +35,39 @@ class _FakeLogger:
 class _RecordingExecutor:
     def __init__(self) -> None:
         self.skill_calls: list[str] = []
+        self.active_vlm_calls: list[dict] = []
+        self.accept_active_vlm_result = False
+        self.next_result = None
 
-    def execute_skill(self, *, skill_name, robot_action_processor, robot_observation_processor, timeout_override_s):
+    def execute_skill(
+        self,
+        *,
+        skill_name,
+        robot_action_processor,
+        robot_observation_processor,
+        timeout_override_s,
+    ):
         del robot_action_processor, robot_observation_processor, timeout_override_s
         self.skill_calls.append(skill_name)
-        return SimpleNamespace(success=True, status="SUCCESS", elapsed_s=0.1, message=f"Skill '{skill_name}' completed.")
+        if self.next_result is not None:
+            return self.next_result
+        return SimpleNamespace(
+            success=True,
+            status="SUCCESS",
+            elapsed_s=0.1,
+            message=f"Skill '{skill_name}' completed.",
+        )
+
+    def report_active_vlm_result(self, *, skill_name, attempt_id, status, message):
+        self.active_vlm_calls.append(
+            {
+                "skill_name": skill_name,
+                "attempt_id": attempt_id,
+                "status": status,
+                "message": message,
+            }
+        )
+        return self.accept_active_vlm_result
 
 
 def _make_server(*, known_skill_names: set[str] | None = None):
@@ -56,6 +84,11 @@ def _make_server(*, known_skill_names: set[str] | None = None):
         robot_observation_processor=object(),
         vlm_check_registry=VlmCheckRegistry(known_skill_names=known_skill_names or set()),
         get_logger=lambda: _FakeLogger(),
+    )
+    from sandwich_bt_python.server import SkillCommandServer
+
+    server._try_report_active_skill_vlm_result = (
+        SkillCommandServer._try_report_active_skill_vlm_result.__get__(server)
     )
     return server, executor
 
@@ -82,10 +115,10 @@ def test_parser_wrap_sees_dataclass_config_annotation() -> None:
     assert argtype is SkillCommandServerConfig
 
 
-def test_simulated_skill_auto_passes_vlm_check_without_touching_executor() -> None:
+def test_no_motion_skill_auto_passes_vlm_check_without_touching_executor() -> None:
     server, executor = _make_server(known_skill_names={"place_first_toast"})
 
-    response = _handle_request(server, _request("simulated_skill", "pour"), _response())
+    response = _handle_request(server, _request("no_motion_skill", "pour"), _response())
     vlm_check = server.vlm_check_registry.get_latest("pour")
 
     assert response.success
@@ -95,12 +128,12 @@ def test_simulated_skill_auto_passes_vlm_check_without_touching_executor() -> No
     assert vlm_check.status == VLM_SUCCESS
 
 
-def test_simulated_skill_pending_waits_for_external_verifier() -> None:
+def test_vlm_gate_pending_waits_for_external_verifier() -> None:
     server, executor = _make_server(known_skill_names={"place_first_toast"})
 
     response = _handle_request(
         server,
-        _request("simulated_skill_pending", "place_second_toast"),
+        _request("vlm_gate_pending", "place_second_toast"),
         _response(),
     )
     vlm_check = server.vlm_check_registry.get_latest("place_second_toast")
@@ -139,6 +172,57 @@ def test_real_skill_kind_still_delegates_to_executor_and_opens_pending_vlm_check
     assert vlm_check.status == VLM_PENDING
 
 
+def test_real_skill_live_vlm_result_opens_resolved_vlm_check() -> None:
+    server, executor = _make_server(known_skill_names={"place_first_toast"})
+    executor.next_result = SimpleNamespace(
+        success=True,
+        status="SUCCESS",
+        elapsed_s=0.2,
+        message="Skill stopped by live verifier.",
+        vlm_status=VLM_SUCCESS,
+        vlm_message="first toast ok",
+    )
+
+    response = _handle_request(server, _request("skill", "place_first_toast"), _response())
+    vlm_check = server.vlm_check_registry.get_latest("place_first_toast")
+
+    assert response.success
+    assert executor.skill_calls == ["place_first_toast"]
+    assert vlm_check is not None
+    assert vlm_check.status == VLM_SUCCESS
+    assert vlm_check.message == "first toast ok"
+
+
+def test_vlm_result_topic_can_stop_active_skill_before_attempt_exists() -> None:
+    server, executor = _make_server(known_skill_names={"place_first_toast"})
+    executor.accept_active_vlm_result = True
+
+    from sandwich_bt_python.server import SkillCommandServer
+
+    SkillCommandServer._handle_vlm_result_topic(
+        server,
+        SimpleNamespace(
+            data=json.dumps(
+                {
+                    "skill_name": "place_first_toast",
+                    "status": "SUCCESS",
+                    "message": "first toast ok",
+                }
+            )
+        ),
+    )
+
+    assert executor.active_vlm_calls == [
+        {
+            "skill_name": "place_first_toast",
+            "attempt_id": 0,
+            "status": VLM_SUCCESS,
+            "message": "first toast ok",
+        }
+    ]
+    assert server.vlm_check_registry.get_latest("place_first_toast") is None
+
+
 def test_vlm_result_topic_resolves_pending_attempt() -> None:
     server, _executor = _make_server(known_skill_names={"place_first_toast"})
     _handle_request(server, _request("skill", "place_first_toast"), _response())
@@ -166,7 +250,7 @@ def test_vlm_result_topic_resolves_pending_attempt() -> None:
 
 def test_vlm_result_topic_accepts_waiting_human_state() -> None:
     server, _executor = _make_server(known_skill_names={"pour_ingredient"})
-    _handle_request(server, _request("simulated_skill_pending", "pour_ingredient"), _response())
+    _handle_request(server, _request("vlm_gate_pending", "pour_ingredient"), _response())
 
     from sandwich_bt_python.server import SkillCommandServer
 

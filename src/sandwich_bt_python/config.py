@@ -163,7 +163,7 @@ class SkillCommandServerConfig:
     reset_robot_on_startup: bool = True
     # Reset the robot immediately before every learned skill rollout, matching
     # the standalone custom_manipulator record/rollout entrypoint.
-    reset_robot_before_skill: bool = False
+    reset_robot_before_skill: bool = True
     # Testing convenience: after a real skill finishes, automatically accept its
     # VLM check attempt as if a VLM had returned SUCCESS.
     auto_pass_vlm_check_for_real_skills: bool = False

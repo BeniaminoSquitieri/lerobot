@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+# ruff: noqa: E402
 
 # Copyright 2025 The HuggingFace Inc. team. All rights reserved.
 #
@@ -16,12 +17,21 @@
 
 import importlib
 import logging
+import sys
 import time
 from dataclasses import asdict
 from pathlib import Path
 from pprint import pformat
 
 from pyparsing import Optional
+
+# When this file is launched directly, Python puts this nested directory on
+# sys.path, not the repository's `src/`. Prefer the current checkout over any
+# editable install that may already exist in the active environment.
+if __package__ in (None, ""):
+    src_dir = Path(__file__).resolve().parents[3]
+    if str(src_dir) not in sys.path[:1]:
+        sys.path.insert(0, str(src_dir))
 
 from scipy.spatial.transform import Rotation as R
 
@@ -390,7 +400,7 @@ def record(cfg: RecordConfig):
         )
         sanity_check_dataset_robot_compatibility(dataset, robot, cfg.dataset.fps, dataset_features)
     else:
-        sanity_check_dataset_name(cfg.dataset.repo_id, cfg.policy, cfg.teleop)
+        sanity_check_dataset_name(cfg.dataset.repo_id, cfg.policy)
         dataset = LeRobotDataset.create(
             cfg.dataset.repo_id,
             cfg.dataset.fps,

@@ -13,7 +13,7 @@
 
 ## Human Or Initial Scene Gate
 
-1. BT runs `RunNamedCommand(kind="simulated_skill_pending")`.
+1. BT runs `RunNamedCommand(kind="vlm_gate_pending")`.
 2. Python opens a `PENDING` VLM check attempt without moving the robot.
 3. BT polls `VerifySkillOutcome`.
 4. VLM reports `RUNNING`/`WAIT_HUMAN` while the scene or human action is still

@@ -13,7 +13,8 @@ This package owns:
 - loading skill configs from `sandwich_bt_executor.yaml`;
 - lazy-loading learned policy runtimes on first use;
 - running BC/ACT policy inference on the robot;
-- opening a `PENDING` VLM check attempt after each successful skill or gate;
+- opening a VLM check attempt after each successful skill or gate;
+- accepting terminal/manual verifier results as live stops for running skills;
 - exposing BT-facing ROS2 services plus verifier-facing ROS2 topics.
 
 This package intentionally does not implement deterministic Panda recovery
@@ -22,8 +23,8 @@ motions. A VLM `FAILURE` is handled by the BT retrying the same BC skill.
 ## Active Command Kinds
 
 - `skill`: run a configured learned primitive.
-- `simulated_skill`: simulate a primitive and auto-resolve the VLM check as `SUCCESS`.
-- `simulated_skill_pending`: open a pending VLM check attempt without robot motion.
+- `no_motion_skill`: skip robot motion and auto-resolve the VLM check as `SUCCESS`.
+- `vlm_gate_pending`: open a pending VLM check attempt without robot motion.
 
 `recovery` and `simulated_recovery` are not part of the active runtime path.
 
@@ -32,9 +33,12 @@ motions. A VLM `FAILURE` is handled by the BT retrying the same BC skill.
 1. `sandwich_bt_runner` calls `/sandwich_bt/run`.
 2. `server.py` dispatches `kind="skill"` to `SkillCommandExecutor.execute_skill`.
 3. The executor runs one policy rollout and returns `CommandResult`.
-4. If the command succeeded, `server.py` creates a VLM check attempt with
-   status `PENDING`.
-5. `server.py` publishes a JSON request on `/sandwich_bt/vlm_request`.
+4. If the command succeeded normally, `server.py` creates a VLM check attempt
+   with status `PENDING` and publishes a JSON request on `/sandwich_bt/vlm_request`.
+5. If a `SUCCESS`, `FAILURE`, `WAIT_HUMAN`, or
+   `MANUAL_INTERVENTION_REQUIRED` result arrives while the skill is running,
+   the executor stops the rollout and `server.py` creates the VLM check attempt
+   already set to that verifier status.
 6. `VerifySkillOutcome` polls `/sandwich_bt/vlm_state` and returns
    BT `RUNNING` while the attempt remains in a waiting state.
 7. A manual tester or VLM publishes JSON on `/sandwich_bt/vlm_result`
@@ -70,6 +74,11 @@ Publish `FAILURE` instead of `SUCCESS` to make the enclosing
 `RetryUntilSuccessful` restart that BT stage. `attempt_id: 0` applies the
 verdict to the latest pending attempt for that skill.
 
+For a real `skill`, a terminal/manual result can also be published while the
+robot is still moving. That live result stops the policy rollout first, then
+the server opens the corresponding VLM check already resolved with the same
+status. `RUNNING` and `PENDING` are ignored as live skill stops.
+
 Publish waiting states to keep the BT blocked:
 
 ```bash
@@ -96,8 +105,10 @@ to disable this automatic timeout.
 ## Current Two-Skill Test
 
 Use `sandwich_tree_two_real_skills_manual_vlm.xml` for the current temporary
-task with two real BC skills and manual VLM verdicts. Wait for each
-`/sandwich_bt/vlm_request` before publishing the corresponding report.
+task with two real BC skills and manual VLM verdicts. For VLM gates, wait for
+`/sandwich_bt/vlm_request` before publishing. For real BC skills, either wait
+for the request after the rollout ends or publish the terminal/manual verdict
+while the skill is moving to stop it immediately.
 
 Expected manual report order:
 

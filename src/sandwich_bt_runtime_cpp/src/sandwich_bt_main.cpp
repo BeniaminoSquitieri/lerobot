@@ -146,18 +146,29 @@ int main(int argc, char** argv)
   // Main BT loop: each tick may trigger one service-backed leaf execution.
   while (rclcpp::ok() && status == BT::NodeStatus::RUNNING) {
     status = tree.tickOnce();
-    rclcpp::spin_some(node);
+    if (rclcpp::ok()) {
+      rclcpp::spin_some(node);
+    }
     rate.sleep();
   }
 
-  rclcpp::spin_some(node);
+  if (rclcpp::ok()) {
+    rclcpp::spin_some(node);
+  }
+  if (!rclcpp::ok() && status == BT::NodeStatus::RUNNING) {
+    return 130;
+  }
   if (status == BT::NodeStatus::SUCCESS) {
     RCLCPP_INFO(node->get_logger(), "Behavior tree completed with SUCCESS.");
-    rclcpp::shutdown();
+    if (rclcpp::ok()) {
+      rclcpp::shutdown();
+    }
     return 0;
   }
 
   RCLCPP_ERROR(node->get_logger(), "Behavior tree completed with FAILURE.");
-  rclcpp::shutdown();
+  if (rclcpp::ok()) {
+    rclcpp::shutdown();
+  }
   return 1;
 }

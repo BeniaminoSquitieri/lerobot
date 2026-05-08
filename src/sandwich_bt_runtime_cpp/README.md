@@ -143,7 +143,7 @@ Python executor.
 
 - The leaf expects the port name `command_name`, not `name`.
 - `kind` is forwarded as an opaque string. The Python server currently handles
-  `skill`, `simulated_skill`, and `simulated_skill_pending`.
+   `skill`, `no_motion_skill`, and `vlm_gate_pending`.
 - `timeout_s` is optional and overrides the Python-side default for that one
   leaf execution.
 - `VerifySkillOutcome`, `WaitForVLMDecision`, and `VLMReplanningDecision` expect

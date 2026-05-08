@@ -45,8 +45,8 @@ _ACTION_KEYS = (
     "orientation.z",
 )
 
-SIMULATED_SKILL_KIND = "simulated_skill"
-SIMULATED_SKILL_PENDING_KIND = "simulated_skill_pending"
+NO_MOTION_SKILL_KIND = "no_motion_skill"
+VLM_GATE_PENDING_KIND = "vlm_gate_pending"
 
 _NEXT_ACTION_TO_STATUS = {
     "CONTINUE": "SUCCESS",
@@ -59,8 +59,8 @@ _NEXT_ACTION_TO_STATUS = {
 
 _COMMAND_KINDS_THAT_OPEN_VLM_CHECK = {
     "skill",
-    SIMULATED_SKILL_KIND,
-    SIMULATED_SKILL_PENDING_KIND,
+    NO_MOTION_SKILL_KIND,
+    VLM_GATE_PENDING_KIND,
 }
 
 
@@ -510,21 +510,21 @@ class MockRunNamedCommandService:
 
         if request.kind == "skill":
             result = self.executor.execute_skill(request.name, timeout_override_s=request.timeout_s)
-        elif request.kind == SIMULATED_SKILL_KIND:
+        elif request.kind == NO_MOTION_SKILL_KIND:
             self.vlm_check_registry.register_skill_name(request.name)
             result = CommandResult(
                 True,
                 "SUCCESS",
                 0.0,
-                f"Simulated skill '{request.name}' completed without mock robot execution.",
+                f"No-motion skill '{request.name}' completed without mock robot execution.",
             )
-        elif request.kind == SIMULATED_SKILL_PENDING_KIND:
+        elif request.kind == VLM_GATE_PENDING_KIND:
             self.vlm_check_registry.register_skill_name(request.name)
             result = CommandResult(
                 True,
                 "SUCCESS",
                 0.0,
-                f"Simulated skill '{request.name}' completed and is awaiting a VLM result.",
+                f"VLM gate '{request.name}' opened and is awaiting a VLM result.",
             )
         else:
             result = CommandResult(
@@ -668,9 +668,9 @@ def build_ros2_demo_stack(
 def default_command_sequence() -> list[MockRunNamedCommandRequest]:
     """@brief Return the default VLM-gated sequence for a full sandwich."""
     return [
-        MockRunNamedCommandRequest(kind=SIMULATED_SKILL_PENDING_KIND, name="initial_scene_ready"),
+        MockRunNamedCommandRequest(kind=VLM_GATE_PENDING_KIND, name="initial_scene_ready"),
         MockRunNamedCommandRequest(kind="skill", name="place_first_toast"),
-        MockRunNamedCommandRequest(kind=SIMULATED_SKILL_PENDING_KIND, name="pour_ingredient"),
+        MockRunNamedCommandRequest(kind=VLM_GATE_PENDING_KIND, name="pour_ingredient"),
         MockRunNamedCommandRequest(kind="skill", name="place_second_toast"),
     ]
 
@@ -684,7 +684,7 @@ def parse_command_spec(spec: str) -> MockRunNamedCommandRequest:
     kind, name = parts[0].strip(), parts[1].strip()
     timeout_s = float(parts[2]) if len(parts) == 3 and parts[2].strip() else 0.0
 
-    valid_kinds = {"skill", SIMULATED_SKILL_KIND, SIMULATED_SKILL_PENDING_KIND}
+    valid_kinds = {"skill", NO_MOTION_SKILL_KIND, VLM_GATE_PENDING_KIND}
     if kind not in valid_kinds:
         raise argparse.ArgumentTypeError(f"kind must be one of {sorted(valid_kinds)}.")
     if not name:

@@ -62,9 +62,9 @@ def test_two_real_skills_manual_vlm_tree_matches_current_task() -> None:
     ]
 
     assert commands == [
-        ("simulated_skill_pending", "initial_scene_ready"),
+        ("vlm_gate_pending", "initial_scene_ready"),
         ("skill", "place_first_toast"),
-        ("simulated_skill_pending", "pour_ingredient"),
+        ("vlm_gate_pending", "pour_ingredient"),
         ("skill", "place_second_toast"),
     ]
     assert vlm_check_nodes == [

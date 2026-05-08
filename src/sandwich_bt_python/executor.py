@@ -35,9 +35,19 @@ from lerobot.utils.visualization_utils import log_rerun_data
 
 from .conditions import evaluate_all, evaluate_any
 from .config import PrimitiveSkillConfig, SkillCommandServerConfig
+from .verification import VLM_FAILURE, VLM_NEEDS_MANUAL_HELP, VLM_SUCCESS, VLM_WAIT_HUMAN
 
 if TYPE_CHECKING:
     from lerobot.robots.custom_manipulator.custom_manipulator import CustomManipulator
+
+
+_ACTIVE_SKILL_STOP_STATUSES = {
+    VLM_SUCCESS,
+    VLM_FAILURE,
+    VLM_WAIT_HUMAN,
+    VLM_NEEDS_MANUAL_HELP,
+}
+"""VLM/manual statuses that should stop a live policy rollout immediately."""
 
 
 @dataclass
@@ -105,6 +115,23 @@ class CommandResult:
 
     message: str
     """Human-readable operator/debug message."""
+
+    vlm_status: str | None = None
+    """Verifier status that ended the command, if a live VLM/manual result stopped it."""
+
+    vlm_message: str = ""
+    """Verifier message paired with `vlm_status`."""
+
+
+@dataclass(frozen=True)
+class ActiveSkillVlmResult:
+    """@brief External verifier result accepted while a skill is still running."""
+
+    status: str
+    """VLM/manual status that should be applied to the post-skill attempt."""
+
+    message: str
+    """Human-readable verifier message."""
 
 
 def _build_skill_runtime(
@@ -199,6 +226,80 @@ class SkillCommandExecutor:
         self.skills: dict[str, SkillRuntime] = {}
         # Only one command at a time should touch the real robot.
         self._command_lock = threading.Lock()
+        self._active_lock = threading.Lock()
+        self._active_skill_name: str | None = None
+        self._active_vlm_result: ActiveSkillVlmResult | None = None
+
+    def report_active_vlm_result(
+        self,
+        *,
+        skill_name: str,
+        status: str,
+        message: str = "",
+        attempt_id: int = 0,
+    ) -> bool:
+        """@brief Stop the currently running skill from an external VLM/manual result.
+
+        @details Post-skill VLM results normally apply to an already-open
+        registry attempt. During real robot bring-up, operators may also need
+        to say "this skill is done now" while the policy is still rolling out.
+        In that case there is no attempt id yet, so only `attempt_id=0` can
+        target the active command.
+        """
+        if attempt_id != 0 or status not in _ACTIVE_SKILL_STOP_STATUSES:
+            return False
+
+        with self._active_lock:
+            if self._active_skill_name != skill_name:
+                return False
+            if self._active_vlm_result is not None:
+                return False
+            self._active_vlm_result = ActiveSkillVlmResult(status=status, message=message)
+            return True
+
+    def _begin_active_skill(self, skill_name: str) -> None:
+        """@brief Mark a skill as externally stoppable."""
+        with self._active_lock:
+            self._active_skill_name = skill_name
+            self._active_vlm_result = None
+
+    def _clear_active_skill(self, skill_name: str) -> None:
+        """@brief Clear active skill state after the rollout returns."""
+        with self._active_lock:
+            if self._active_skill_name == skill_name:
+                self._active_skill_name = None
+                self._active_vlm_result = None
+
+    def _get_active_vlm_result(self, skill_name: str) -> ActiveSkillVlmResult | None:
+        """@brief Return the live verifier result for this skill, if one arrived."""
+        with self._active_lock:
+            if self._active_skill_name != skill_name:
+                return None
+            return self._active_vlm_result
+
+    def _command_result_from_active_vlm(
+        self,
+        *,
+        skill_name: str,
+        elapsed_s: float,
+        vlm_result: ActiveSkillVlmResult,
+    ) -> CommandResult:
+        """@brief Convert a live VLM/manual stop into a BT command result."""
+        message = (
+            f"Skill '{skill_name}' stopped after {elapsed_s:.2f}s by external VLM status "
+            f"{vlm_result.status}."
+        )
+        if vlm_result.message:
+            message = f"{message} {vlm_result.message}"
+        logging.info(message)
+        return CommandResult(
+            True,
+            "SUCCESS",
+            elapsed_s,
+            message,
+            vlm_status=vlm_result.status,
+            vlm_message=vlm_result.message,
+        )
 
     def _get_skill_runtime(
         self,
@@ -244,19 +345,27 @@ class SkillCommandExecutor:
         with self._command_lock:
             start_t = time.perf_counter()
             try:
+                skill = self._get_skill_runtime(
+                    skill_name,
+                    robot_action_processor,
+                    robot_observation_processor,
+                )
                 if self.cfg.reset_robot_before_skill:
-                    # Optional safety posture before each rollout.
+                    # Match custom_manipulator/record.py: load runtime first,
+                    # then bring the robot home immediately before rollout.
                     logging.info("Resetting robot before skill '%s'.", skill_name)
                     self.robot.reset()
                     logging.info("Robot reset before skill '%s' complete.", skill_name)
-                    start_t = time.perf_counter()
 
-                skill = self._get_skill_runtime(skill_name, robot_action_processor, robot_observation_processor)
                 skill.reset()
+                robot_action_processor.reset()
+                robot_observation_processor.reset()
                 if skill.cfg.settle_time_s > 0:
                     # Give robot/camera state time to settle before inference starts.
                     time.sleep(skill.cfg.settle_time_s)
 
+                start_t = time.perf_counter()
+                self._begin_active_skill(skill_name)
                 target_dt_s = 1 / self.cfg.fps
                 timeout_s = (
                     None
@@ -267,6 +376,15 @@ class SkillCommandExecutor:
                 step_idx = 0
                 while True:
                     loop_t = time.perf_counter()
+                    active_vlm_result = self._get_active_vlm_result(skill_name)
+                    if active_vlm_result is not None:
+                        elapsed_s = time.perf_counter() - start_t
+                        return self._command_result_from_active_vlm(
+                            skill_name=skill_name,
+                            elapsed_s=elapsed_s,
+                            vlm_result=active_vlm_result,
+                        )
+
                     # Live rollout: read observation -> evaluate status -> maybe predict action.
                     obs = self.robot.get_observation()
                     obs_processed = robot_observation_processor(obs)
@@ -281,6 +399,15 @@ class SkillCommandExecutor:
                         message = f"Skill '{skill_name}' failed after {elapsed_s:.2f}s."
                         logging.error(message)
                         return CommandResult(False, status, elapsed_s, message)
+
+                    active_vlm_result = self._get_active_vlm_result(skill_name)
+                    if active_vlm_result is not None:
+                        elapsed_s = time.perf_counter() - start_t
+                        return self._command_result_from_active_vlm(
+                            skill_name=skill_name,
+                            elapsed_s=elapsed_s,
+                            vlm_result=active_vlm_result,
+                        )
 
                     self._run_skill_step(skill, obs, obs_processed, robot_action_processor, step_idx=step_idx)
                     step_idx += 1
@@ -301,6 +428,8 @@ class SkillCommandExecutor:
                 message = f"Skill '{skill_name}' crashed with error: {exc}"
                 logging.exception(message)
                 return CommandResult(False, "ERROR", elapsed_s, message)
+            finally:
+                self._clear_active_skill(skill_name)
 
     def _skill_status(
         self,
@@ -325,7 +454,10 @@ class SkillCommandExecutor:
         if transition.mode == "timeout":
             return "SUCCESS" if elapsed_s >= timeout_s else "RUNNING"
 
-        if elapsed_s >= transition.min_duration_s and evaluate_all(transition.success_conditions, obs_processed):
+        if elapsed_s >= transition.min_duration_s and evaluate_all(
+            transition.success_conditions,
+            obs_processed,
+        ):
             return "SUCCESS"
 
         if transition.mode == "until_success":

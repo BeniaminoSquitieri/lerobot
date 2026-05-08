@@ -15,7 +15,7 @@
       <!-- Stage 0: wait until the VLM confirms the initial scene is ready. -->
       <RetryUntilSuccessful name="retry_initial_scene_until_vlm_success" num_attempts="-1">
         <Sequence name="initial_scene_vlm_replanning_gate">
-          <RunNamedCommand kind="simulated_skill_pending" command_name="initial_scene_ready"/>
+          <RunNamedCommand kind="vlm_gate_pending" command_name="initial_scene_ready"/>
           <WaitForVLMDecision name="wait_initial_scene_ready_or_manual_intervention" skill_name="initial_scene_ready"/>
         </Sequence>
       </RetryUntilSuccessful>
@@ -33,7 +33,7 @@
       <!-- Stage 2: human pouring is represented as a VLM verification gate. -->
       <RetryUntilSuccessful name="retry_human_pouring_until_vlm_success" num_attempts="-1">
         <Sequence name="human_pouring_wait_or_manual_intervention_gate">
-          <RunNamedCommand kind="simulated_skill_pending" command_name="pour_ingredient"/>
+          <RunNamedCommand kind="vlm_gate_pending" command_name="pour_ingredient"/>
           <WaitForVLMDecision
             name="wait_human_pouring_running_success_or_manual_intervention"
             skill_name="pour_ingredient"/>

@@ -17,7 +17,7 @@ There is no separate planning supervisor in the active runtime path.
 The BT XML represents both robot actions and VLM gates:
 
 - robot actions use `kind="skill"`;
-- non-robot gates use `kind="simulated_skill_pending"`.
+- non-robot gates use `kind="vlm_gate_pending"`.
 
 There are no deterministic Panda recovery motions in the active runtime path.
 If the VLM reports `FAILURE`, the XML-level `RetryUntilSuccessful` node starts

@@ -31,6 +31,7 @@ fps: 10
 display_data: false
 play_sounds: false
 reset_robot_on_startup: false
+reset_robot_before_skill: true
 rename_map: {}
 
 # Robot-side processors used before sending actions / after reading observations.
@@ -47,7 +48,7 @@ skills:
     policy:
       type: act
       device: cpu
-      pretrained_path: "HSP-IIT/act_toast_pick_and_place"
+      pretrained_path: "HSP-IIT/act_Panda_Toast_Pick_and_Place"
       n_action_steps: 4
       chunk_size: 16
     transition:

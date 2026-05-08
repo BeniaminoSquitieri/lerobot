@@ -18,7 +18,7 @@ vlm_request_topic: "/sandwich_bt/vlm_request"
 vlm_result_topic: "/sandwich_bt/vlm_result"
 # If the VLM/manual verifier does not report SUCCESS before this deadline,
 # the attempt is marked FAILURE and the BT retry wrapper reruns the skill.
-vlm_timeout_s: 30.0
+vlm_timeout_s: 0.0
 
 # Real robot hardware configuration used by the Python server.
 robot:
@@ -52,8 +52,8 @@ fps: 10
 display_data: true
 play_sounds: true
 # Robot reset behavior before server startup and before individual skills.
-reset_robot_on_startup: false
-reset_robot_before_skill: false
+reset_robot_on_startup: true
+reset_robot_before_skill: true
 # In real mode, VLM/manual results must explicitly resolve each skill.
 auto_pass_vlm_check_for_real_skills: false
 # Optional mapping from policy feature names to connected robot feature names.
@@ -71,7 +71,7 @@ skills:
   - name: place_first_toast
     # Matches cfgs/rollout_panda_robotiq.yaml. With metadata_source=robot,
     # this id is only a label; features are built from the connected robot like record.py.
-    dataset_repo_id: "HSP-IIT/eval_toast_pick_and_place"
+    dataset_repo_id: "HSP-IIT/eval_act_toast_pick_and_place"
     metadata_source: robot
     task: "Pick the toast upon the table."
     policy:
@@ -86,14 +86,18 @@ skills:
     settle_time_s: 0.0
 
   - name: place_second_toast
-    # Placeholder dataset/policy path for a future top-toast placement primitive.
-    dataset_repo_id: "<hf_user>/toast_skill_2_dataset"
+    # Matches the real top-toast placement primitive. With metadata_source=robot,
+    # this id is only a label; features are built from the connected robot like record.py.
+    dataset_repo_id: "HSP-IIT/eval_act_pick_place_2nd"
+    metadata_source: robot
     task: "Pick the second toast and place it on top of the prepared sandwich."
     policy:
       type: act
       device: cuda
-      pretrained_path: "outputs/train/place_second_toast/checkpoints/last/pretrained_model"
+      pretrained_path: "HSP-IIT/act_pick_place_2nd"
+      n_action_steps: 16
+      chunk_size: 16
     transition:
       mode: timeout
-      max_duration_s: 10.0
-    settle_time_s: 0.5
+      max_duration_s: 12000.0
+    settle_time_s: 0.0

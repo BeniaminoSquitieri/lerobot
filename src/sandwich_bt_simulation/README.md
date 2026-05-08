@@ -25,5 +25,5 @@ The default sequence is:
 initial_scene_ready -> place_first_toast -> pour_ingredient -> place_second_toast
 ```
 
-`initial_scene_ready` and `pour_ingredient` are `simulated_skill_pending` gates.
+`initial_scene_ready` and `pour_ingredient` are `vlm_gate_pending` gates.
 The robot skills are mocked, and no deterministic recovery motions are executed.

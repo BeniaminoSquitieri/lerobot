@@ -12,7 +12,7 @@ VLM check state managed here. VLM/manual verifiers use topics only.
 
 Flow role:
 1. Wait for the C++ BT to send a named command.
-2. Dispatch that command to a learned ACT skill or a simulated VLM gate.
+2. Dispatch that command to a learned ACT skill or a no-motion VLM gate.
 3. Return the result to the BT so the tree can continue or retry.
 """
 
@@ -27,6 +27,8 @@ from pprint import pformat
 from typing import TYPE_CHECKING, Any
 
 import rclpy
+from rclpy.callback_groups import MutuallyExclusiveCallbackGroup, ReentrantCallbackGroup
+from rclpy.executors import MultiThreadedExecutor
 from rclpy.node import Node
 
 from lerobot.common.control_utils import is_headless
@@ -61,19 +63,19 @@ DEFAULT_CONFIG_PATH = Path(__file__).resolve().parent / "sandwich_bt_executor.ya
 if TYPE_CHECKING:
     from lerobot.robots.custom_manipulator.custom_manipulator import CustomManipulator
 
-SIMULATED_SKILL_KIND = "simulated_skill"
+NO_MOTION_SKILL_KIND = "no_motion_skill"
 """Command kind that acknowledges a skill and auto-resolves the VLM check."""
 
-SIMULATED_SKILL_PENDING_KIND = "simulated_skill_pending"
-"""Command kind that acknowledges a skill but leaves the VLM check pending."""
+VLM_GATE_PENDING_KIND = "vlm_gate_pending"
+"""Command kind that acknowledges a gate but leaves the VLM check pending."""
 
 _COMMAND_KINDS_THAT_OPEN_VLM_CHECK = {
     "skill",
-    SIMULATED_SKILL_KIND,
-    SIMULATED_SKILL_PENDING_KIND,
+    NO_MOTION_SKILL_KIND,
+    VLM_GATE_PENDING_KIND,
 }
 _COMMAND_KINDS_THAT_AUTO_PASS_VLM_CHECK = {
-    SIMULATED_SKILL_KIND,
+    NO_MOTION_SKILL_KIND,
 }
 
 _NEXT_ACTION_TO_STATUS = {
@@ -260,6 +262,8 @@ class SkillCommandServer(Node):
         self.robot_action_processor = robot_action_processor
         self.robot_observation_processor = robot_observation_processor
         self.vlm_check_registry = vlm_check_registry
+        self._command_callback_group = MutuallyExclusiveCallbackGroup()
+        self._vlm_callback_group = ReentrantCallbackGroup()
 
         # ROS2 entrypoints used by the BT runtime and verifier-facing topics.
         bt_command_service_type, vlm_state_service_type, legacy_vlm_result_service_type = _load_bt_services()
@@ -269,16 +273,19 @@ class SkillCommandServer(Node):
             bt_command_service_type,
             cfg.bt_command_service,
             self._handle_request,
+            callback_group=self._command_callback_group,
         )
         self._vlm_state_server = self.create_service(
             vlm_state_service_type,
             cfg.vlm_state_service,
             self._handle_get_vlm_state,
+            callback_group=self._vlm_callback_group,
         )
         self._legacy_vlm_result_server = self.create_service(
             legacy_vlm_result_service_type,
             cfg.legacy_vlm_result_service,
             self._handle_legacy_vlm_result,
+            callback_group=self._vlm_callback_group,
         )
         self._vlm_request_publisher = self.create_publisher(
             String,
@@ -290,6 +297,7 @@ class SkillCommandServer(Node):
             cfg.vlm_result_topic,
             self._handle_vlm_result_topic,
             10,
+            callback_group=self._vlm_callback_group,
         )
         self.get_logger().info(
             "Serving BT commands on "
@@ -323,7 +331,7 @@ class SkillCommandServer(Node):
                     robot_observation_processor=self.robot_observation_processor,
                     timeout_override_s=request.timeout_s,
                 )
-            elif request.kind == SIMULATED_SKILL_KIND:
+            elif request.kind == NO_MOTION_SKILL_KIND:
                 # Bring-up path: act as though a skill ran and the VLM check passed.
                 result = CommandResult(
                     True,
@@ -331,7 +339,7 @@ class SkillCommandServer(Node):
                     0.0,
                     f"Simulated skill '{request.name}' completed without robot execution.",
                 )
-            elif request.kind == SIMULATED_SKILL_PENDING_KIND:
+            elif request.kind == VLM_GATE_PENDING_KIND:
                 # VLM-flow test path: open an attempt but do not resolve it.
                 result = CommandResult(
                     True,
@@ -359,14 +367,26 @@ class SkillCommandServer(Node):
 
         if request.kind in _COMMAND_KINDS_THAT_OPEN_VLM_CHECK and result.success:
             try:
-                if request.kind in {SIMULATED_SKILL_KIND, SIMULATED_SKILL_PENDING_KIND}:
+                if request.kind in {NO_MOTION_SKILL_KIND, VLM_GATE_PENDING_KIND}:
                     # Simulated skill names may not exist in the real skill config.
                     self.vlm_check_registry.register_skill_name(request.name)
                 vlm_check_attempt = self.vlm_check_registry.begin_attempt(request.name)
-                should_auto_pass_vlm_check = request.kind in _COMMAND_KINDS_THAT_AUTO_PASS_VLM_CHECK or (
+                live_vlm_status = getattr(result, "vlm_status", None)
+                if live_vlm_status:
+                    self.vlm_check_registry.report(
+                        skill_name=request.name,
+                        attempt_id=vlm_check_attempt.attempt_id,
+                        status=live_vlm_status,
+                        message=getattr(result, "vlm_message", "") or result.message,
+                    )
+                    result.message = (
+                        f"{result.message} "
+                        f"VLM check attempt {vlm_check_attempt.attempt_id} was resolved as "
+                        f"{live_vlm_status} from the live verifier result."
+                    )
+                elif request.kind in _COMMAND_KINDS_THAT_AUTO_PASS_VLM_CHECK or (
                     request.kind == "skill" and self.cfg.auto_pass_vlm_check_for_real_skills
-                )
-                if should_auto_pass_vlm_check:
+                ):
                     self.vlm_check_registry.report(
                         skill_name=request.name,
                         attempt_id=vlm_check_attempt.attempt_id,
@@ -440,7 +460,8 @@ class SkillCommandServer(Node):
         response.message = snapshot.message
         if snapshot.status in VLM_WAITING_STATUSES:
             self.get_logger().debug(
-                f"VLM check for skill '{snapshot.skill_name}' attempt {snapshot.attempt_id} is {snapshot.status}."
+                f"VLM check for skill '{snapshot.skill_name}' attempt {snapshot.attempt_id} "
+                f"is {snapshot.status}."
             )
         return response
 
@@ -453,6 +474,20 @@ class SkillCommandServer(Node):
             was applied.
         @return The filled ROS2 response object.
         """
+        if self._try_report_active_skill_vlm_result(
+            skill_name=request.skill_name,
+            attempt_id=int(request.attempt_id),
+            status=request.status,
+            message=request.message,
+        ):
+            response.accepted = True
+            response.applied_attempt_id = 0
+            response.message = (
+                f"Accepted VLM status {request.status} as live stop for active skill "
+                f"'{request.skill_name}'."
+            )
+            return response
+
         try:
             update = self.vlm_check_registry.report(
                 skill_name=request.skill_name,
@@ -473,6 +508,33 @@ class SkillCommandServer(Node):
         log_fn = self.get_logger().info if update.accepted else self.get_logger().warning
         log_fn(response.message)
         return response
+
+    def _try_report_active_skill_vlm_result(
+        self,
+        *,
+        skill_name: str,
+        attempt_id: int,
+        status: str,
+        message: str,
+    ) -> bool:
+        """@brief Offer a verifier result to the currently running skill first."""
+        report_active = getattr(self.executor_backend, "report_active_vlm_result", None)
+        if report_active is None:
+            return False
+
+        accepted = bool(
+            report_active(
+                skill_name=skill_name,
+                attempt_id=attempt_id,
+                status=status,
+                message=message,
+            )
+        )
+        if accepted:
+            self.get_logger().info(
+                f"Accepted VLM status {status} as live stop for active skill '{skill_name}'."
+            )
+        return accepted
 
     def _publish_vlm_request(self, snapshot) -> None:
         """@brief Publish a topic event asking a VLM/manual verifier for a verdict."""
@@ -502,7 +564,9 @@ class SkillCommandServer(Node):
         msg = String()
         msg.data = json.dumps(payload, sort_keys=True)
         self._vlm_request_publisher.publish(msg)
-        self.get_logger().info(f"Published VLM request for skill '{snapshot.skill_name}' attempt {snapshot.attempt_id}.")
+        self.get_logger().info(
+            f"Published VLM request for skill '{snapshot.skill_name}' attempt {snapshot.attempt_id}."
+        )
 
     def _handle_vlm_result_topic(self, msg) -> None:
         """@brief Apply one JSON verifier verdict received from a ROS2 topic."""
@@ -520,6 +584,13 @@ class SkillCommandServer(Node):
             status = _vlm_status_from_payload(payload)
             attempt_id = int(payload.get("attempt_id", 0))
             message = _vlm_message_from_payload(payload, status=status)
+            if self._try_report_active_skill_vlm_result(
+                skill_name=skill_name,
+                attempt_id=attempt_id,
+                status=status,
+                message=message,
+            ):
+                return
             update = self.vlm_check_registry.report(
                 skill_name=skill_name,
                 attempt_id=attempt_id,
@@ -598,6 +669,8 @@ def run(cfg: SkillCommandServerConfig) -> None:
     )
     logging.info("ROS2 skill command service node is ready.")
 
+    ros_executor = MultiThreadedExecutor(num_threads=4)
+    ros_executor.add_node(server_node)
     try:
         # Robot-facing startup happens before we start accepting BT commands.
         logging.info("Connecting robot.")
@@ -608,8 +681,12 @@ def run(cfg: SkillCommandServerConfig) -> None:
             robot.reset()
             logging.info("Robot startup reset complete.")
         logging.info("Spinning skill command server.")
-        rclpy.spin(server_node)
+        ros_executor.spin()
     finally:
+        try:
+            ros_executor.shutdown()
+        except Exception:  # noqa: BLE001
+            logging.exception("Best-effort ROS2 executor shutdown failed.")
         try:
             robot.disconnect()
         except Exception:  # noqa: BLE001
