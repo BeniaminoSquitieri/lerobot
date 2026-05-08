@@ -174,6 +174,22 @@ pour_ingredient
 place_second_toast
 ```
 
+### Optional Groot2 monitor
+
+Open Groot2 already configured for the BT.CPP monitor endpoint:
+
+```bash
+lerobot-bt-groot2
+```
+
+This writes Groot2's local settings to `Mode=Monitor`, `Host=localhost`, and
+`Port=1667` before launching the GUI. If Groot2 is installed somewhere custom,
+pass its path explicitly:
+
+```bash
+lerobot-bt-groot2 --app ~/Applications/Groot2-v1.9.0-x86_64.AppImage
+```
+
 ### Terminale 3: manual VLM
 
 Watch the verifier requests emitted by the skill server:
