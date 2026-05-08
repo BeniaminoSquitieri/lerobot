@@ -1,164 +1,105 @@
-# pyright: reportMissingImports=false
+# Portions of this file are derived from LEAP_Hand_API:
+#   https://github.com/leap-hand/LEAP_Hand_API
+#
+# Original copyright:
+#   Copyright (c) 2023 Kenny Shaw, Deepak Pathak
+#
+# License:
+#   Creative Commons Attribution-NonCommercial 4.0 International
+#   SPDX-License-Identifier: CC-BY-NC-4.0
+#   License text: https://creativecommons.org/licenses/by-nc/4.0/
+#
+# Changes:
+#   None. This file is copied unchanged.
+#
+# Note:
+#   This file, or the portions derived from LEAP_Hand_API, may not be used
+#   for commercial purposes under the CC BY-NC 4.0 license.
 
-from __future__ import annotations
-
-from lerobot.robots.custom_manipulator.rerun_blueprint_utils import (
-    send_leap_hand_blueprint,
-)
-
-
-def transform_leap_target_positions(
-    target_positions: dict[str, list[float]],
-    *,
-    base_rotation: list[list[float]] | None = None,
-) -> dict[str, list[float]]:
-    if not target_positions:
-        return {}
-
-    transformed = {name: [float(v) for v in pos] for name, pos in target_positions.items()}
-
-    if "wrist" in transformed:
-        wrist = transformed["wrist"]
-        transformed = {
-            name: [float(v - w) for v, w in zip(pos, wrist, strict=True)]
-            for name, pos in transformed.items()
-        }
-
-    if base_rotation is not None:
-        rot_t = [
-            [float(base_rotation[row][col]) for row in range(3)]
-            for col in range(3)
-        ]
-        transformed = {
-            name: [
-                float(sum(rot_t[row][col] * pos[col] for col in range(3)))
-                for row in range(3)
-            ]
-            for name, pos in transformed.items()
-        }
-
-    y_neg_90 = (
-        (0.0, 0.0, -1.0),
-        (0.0, 1.0, 0.0),
-        (1.0, 0.0, 0.0),
-    )
-    return {
-        name: [
-            float(sum(y_neg_90[row][col] * pos[col] for col in range(3)))
-            for row in range(3)
-        ]
-        for name, pos in transformed.items()
-    }
+'''
+Some utilities for LEAP Hand that help with converting joint angles between each convention.
+'''
+from re import L
+import numpy as np
 
 
-class LeapHandDebugTools:
-    def __init__(
-        self,
-        urdf_path: str,
-        enable_rerun_visualization: bool,
-        palm_link_name: str,
-        root_link_name: str,
-        palm_to_root_offset: list[float] | tuple[float, float, float] | None = None,
-        base_rotation: list[list[float]] | None = None,
-    ):
-        self.enable_rerun_visualization = enable_rerun_visualization
-        self.step = 0
-        self.root_entity_path = f"/leap_hand/{root_link_name}"
-        self.palm_frame_id = f"tf#/leap_hand/{palm_link_name}"
-        self.root_frame_id = f"tf#/leap_hand/{root_link_name}"
-        self._palm_to_root_offset = [float(v) for v in (palm_to_root_offset or (0.0, 0.0, 0.0))]
-        self._base_rotation = [[float(v) for v in row] for row in base_rotation] if base_rotation is not None else None
-        self.urdf_tree = None
-        self.rr = None
+'''
+Embodiments:
 
-        if not self.enable_rerun_visualization:
-            return
+LEAPhand: Real LEAP hand (180 for the motor is actual zero)
+LEAPsim:  Leap hand in sim (has allegro-like zero positions)
+one_range: [-1, 1] for all joints to facilitate RL
+allegro:  Allegro hand in real or sim
+'''
 
-        import rerun as rr
-        from rerun.urdf import UrdfTree
+#Safety clips all joints so nothing unsafe can happen. Highly recommend using this before commanding
+def angle_safety_clip(joints):
+    sim_min, sim_max = LEAPsim_limits()
+    real_min = LEAPsim_to_LEAPhand(sim_min)
+    real_max = LEAPsim_to_LEAPhand(sim_max)
+    return np.clip(joints, real_min, real_max)
 
-        self.rr = rr
+###Sometimes it's useful to constrain the thumb more heavily(you have to implement here), but regular usually works good.
+def LEAPsim_limits(type = "regular"):
+    if type == "regular":
+        sim_min = np.array([-1.047, -0.314, -0.506, -0.366, -1.047, -0.314, -0.506, -0.366, -1.047, -0.314, -0.506, -0.366, -0.349, -0.47, -1.20, -1.34])
+        sim_max = np.array([1.047,    2.23,  1.885,  2.042,  1.047,   2.23,  1.885,  2.042,  1.047,   2.23,  1.885,  2.042,  2.094,  2.443, 1.90,  1.88])
+    return sim_min, sim_max
 
-        if not rr.is_enabled():
-            rr.init("leap_hand_debug", spawn=True)
+#this goes from [-1, 1] to [lower, upper]
+def scale(x, lower, upper):
+    return (0.5 * (x + 1.0) * (upper - lower) + lower)
+#this goes from [lower, upper] to [-1, 1]
+def unscale(x, lower, upper):
+    return (2.0 * x - upper - lower)/(upper - lower)
 
-        self.urdf_tree = UrdfTree.from_file_path(
-            urdf_path,
-            entity_path_prefix="leap_hand",
-            frame_prefix="tf#/leap_hand/",
-        )
-        self.urdf_tree.log_urdf_to_recording()
-        if base_rotation is not None:
-            rr.log(
-                self.root_entity_path,
-                rr.Transform3D(
-                    translation=[0.0, 0.0, 0.0],
-                    mat3x3=base_rotation,
-                    relation=rr.TransformRelation.ParentFromChild,
-                ),
-                static=True,
-            )
-        # Set the initial view so +X is up, +Y points toward the viewer, +Z points right.
-        rr.log(self.root_entity_path, rr.ViewCoordinates.UBR, static=True)
-        send_leap_hand_blueprint(
-            hand_view_name="LeapHand",
-            hand_contents=["/leap_hand/**", "/leap_targets/**", "/leap_tips/**"],
-            hand_target_frame=self.root_frame_id,
-        )
+#-----------------------------------------------------------------------------------
+#Isaac has custom ranges from -1 to 1 so we convert that to LEAPHand real world
+def sim_ones_to_LEAPhand(joints, hack_thumb = False):
+    sim_min, sim_max = LEAPsim_limits(type = hack_thumb)
+    joints = scale(joints, sim_min, sim_max)
+    joints = LEAPsim_to_LEAPhand(joints)
+    return joints
+#LEAPHand real world to Isaac has custom ranges from -1 to 1
+def LEAPhand_to_sim_ones(joints, hack_thumb = False):  
+    joints = LEAPhand_to_LEAPsim(joints)
+    sim_min, sim_max = LEAPsim_limits(type = hack_thumb)
+    joints = unscale(joints, sim_min, sim_max)
+    return joints
 
-    def close(self):
-        return None
+#-----------------------------------------------------------------------------------
+###Sim LEAP hand to real leap hand  Sim is allegro-like but all 16 joints are usable.
+def LEAPsim_to_LEAPhand(joints):
+    joints = np.array(joints)
+    ret_joints = joints + 3.14159
+    return ret_joints
+###Real LEAP hand to sim leap hand  Sim is allegro-like but all 16 joints are usable.
+def LEAPhand_to_LEAPsim(joints):
+    joints = np.array(joints)
+    ret_joints = joints - 3.14159
+    return ret_joints
 
-    def log_state(self, joints: dict[str, float], tip_positions: dict[str, list[float]]):
-        if not self.enable_rerun_visualization or self.urdf_tree is None or self.rr is None:
-            return
-
-        rr = self.rr
-
-        self.step += 1
-        rr.set_time("step", sequence=self.step)
-
-        for i, joint in enumerate(self.urdf_tree.joints()):
-            if joint.child_link not in joints:
-                continue
-            value = joints[joint.child_link]
-            rr.log("leap_hand/transforms", joint.compute_transform(float(value)))
-            rr.log(f"/leap_hand/joints/{i}", rr.Scalars([float(value)]))
-
-        if tip_positions:
-            rr.log(
-                "/leap_tips",
-                rr.Points3D(
-                    [tip_positions[name] for name in tip_positions],
-                    labels=[f"tip_{name}" for name in tip_positions],
-                    radii=0.005,
-                    colors=[80, 170, 255],
-                ),
-                rr.CoordinateFrame(self.palm_frame_id),
-            )
-
-    def log_targets(self, target_positions: dict[str, list[float]], already_transformed: bool = False):
-        if not self.enable_rerun_visualization or self.urdf_tree is None or self.rr is None:
-            return
-
-        rr = self.rr
-
-        if not target_positions:
-            return
-
-        if not already_transformed:
-            target_positions = transform_leap_target_positions(
-                target_positions,
-                base_rotation=self._base_rotation,
-            )
-
-        rr.log(
-            "/leap_targets",
-            rr.Points3D(
-                [target_positions[name] for name in target_positions],
-                labels=[f"target_{name}" for name in target_positions],
-                radii=0.006,
-                colors=[255, 80, 80],
-            ),
-            rr.CoordinateFrame(self.root_frame_id),
-        )
+#-----------------------------------------------------------------------------------
+#Converts allegrohand radians to LEAP (radians)
+#Only converts the joints that match, all 4 of the thumb and the outer 3 for each of the other fingers
+#All the clockwise/counterclockwise signs are the same between the two hands.  Just the offset (mostly 180 degrees off)
+def allegro_to_LEAPhand(joints, teleop = False, zeros = True):
+    joints = np.array(joints)
+    ret_joints = joints + 3.14159
+    if zeros:
+        ret_joints[0] = ret_joints[4] = ret_joints[8] = 3.14
+    if teleop:
+        ret_joints[12] = joints[12] + 0.2 
+        ret_joints[14] = joints[14] - 0.2   
+    return ret_joints
+# Converts LEAP to allegrohand (radians)
+def LEAPhand_to_allegro(joints, teleop = False, zeros = True):
+    joints = np.array(joints)
+    ret_joints = joints - 3.14159
+    if zeros:
+        ret_joints[0] = ret_joints[4] = ret_joints[8] = 0
+    if teleop:
+        ret_joints[12] = joints[12] - 0.2
+        ret_joints[14] = joints[14] + 0.2    
+    return ret_joints
+#-----------------------------------------------------------------------------------

@@ -15,9 +15,6 @@ robot:
     command_rate_hz: 100
     command_interp_duration_s: 0.04
     disabled_joints: [pip, pip_2, pip_3]
-    # Scale MetaQuest fingertip targets before IK / visualization.
-    target_scale_factors: {thumb: 1.2, index: 1.2, middle: 1.2, ring: 1.2}
-    enable_tip_scale_tuner: true
     visualize: true
   # cameras:
   #   wrist:
