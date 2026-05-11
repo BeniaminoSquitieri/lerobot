@@ -78,11 +78,46 @@ _NEXT_ACTION_TO_STATUS = {
 }
 
 
+def _truthy_payload_value(value: Any) -> bool:
+    """@brief Return true for boolean-like values coming from simple VLM topics."""
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, str):
+        return value.strip().lower() in {"1", "true", "yes", "y"}
+    return False
+
+
+def _normalize_vlm_status_token(token: str) -> str:
+    """@brief Map scene-gate tokens onto the registry status vocabulary."""
+    normalized = token.upper()
+    if not normalized:
+        return ""
+    if normalized.startswith("SCENE_") and normalized.endswith("_READY"):
+        return VLM_SUCCESS
+    if normalized == "TASK_COMPLETE":
+        return VLM_SUCCESS
+    if normalized == "ANOMALY_DETECTED":
+        return VLM_FAILURE
+    if normalized == "HUMAN_HELP_REQUIRED":
+        return VLM_NEEDS_MANUAL_HELP
+    return normalized
+
+
 def _vlm_status_from_payload(payload: dict[str, Any]) -> str:
     """@brief Resolve VLM status/next_action fields into the BT-facing status."""
-    status = str(payload.get("status", "")).upper()
+    if _truthy_payload_value(payload.get("human_help_required", False)):
+        return VLM_NEEDS_MANUAL_HELP
+    if _truthy_payload_value(payload.get("anomaly_detected", False)):
+        return VLM_FAILURE
+    if _truthy_payload_value(payload.get("scene_ready", False)):
+        return VLM_SUCCESS
+
+    status = _normalize_vlm_status_token(str(payload.get("status", "")))
     if status:
         return status
+    scene_id = _normalize_vlm_status_token(str(payload.get("scene_id", "")))
+    if scene_id:
+        return scene_id
     next_action = str(payload.get("next_action", "")).upper()
     if next_action in _NEXT_ACTION_TO_STATUS:
         return _NEXT_ACTION_TO_STATUS[next_action]
@@ -95,7 +130,16 @@ def _vlm_message_from_payload(payload: dict[str, Any], *, status: str) -> str:
     message = str(payload.get("message", ""))
     if message:
         message_parts.append(message)
-    for key in ("failure_reason", "scene_state", "required_human_action", "next_action"):
+    for key in (
+        "scene_id",
+        "scene_ready",
+        "anomaly_detected",
+        "human_help_required",
+        "failure_reason",
+        "scene_state",
+        "required_human_action",
+        "next_action",
+    ):
         value = payload.get(key)
         if value not in (None, ""):
             message_parts.append(f"{key}={value}")

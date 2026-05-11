@@ -1,0 +1,92 @@
+# @file make_coffee_executor.yaml
+# @brief Real-robot Python execution config for make_coffee.xml.
+#
+# To connect real BC models, replace only the policy.pretrained_path values in
+# the skill entries below. Skill names must stay aligned with the BT XML.
+
+bt_command_service: "/sandwich_bt/run"
+vlm_state_service: "/sandwich_bt/vlm_state"
+legacy_vlm_result_service: "/sandwich_bt/vlm_result_legacy"
+vlm_request_topic: "/sandwich_bt/vlm_request"
+vlm_result_topic: "/sandwich_bt/vlm_result"
+vlm_timeout_s: 0.0
+
+robot:
+  arm:
+    type: panda
+    visualize: true
+  gripper:
+    type: robotiq
+  cameras:
+    wrist:
+      type: intelrealsense
+      serial_number_or_name: "909522060544"
+      use_depth: false
+      width: 640
+      height: 480
+      fps: 30
+    left:
+      type: intelrealsense
+      serial_number_or_name: "123622270882"
+      use_depth: false
+      width: 640
+      height: 480
+      fps: 30
+
+fps: 10
+display_data: true
+play_sounds: true
+reset_robot_on_startup: true
+reset_robot_before_skill: true
+rename_map: {}
+
+robot_action_processor:
+  steps: []
+robot_observation_processor:
+  steps: []
+
+skills:
+  - name: place_cup_under_dispenser
+    dataset_repo_id: "scene-transition/place_cup_under_dispenser"
+    metadata_source: robot
+    task: "Pick the cup and place it under the coffee dispenser."
+    policy:
+      type: act
+      device: cuda
+      pretrained_path: "TODO_MODEL_PLACE_CUP_UNDER_DISPENSER"
+      n_action_steps: 16
+      chunk_size: 16
+    transition:
+      mode: timeout
+      max_duration_s: 60.0
+    settle_time_s: 0.0
+
+  - name: pick_and_insert_capsule
+    dataset_repo_id: "scene-transition/pick_and_insert_capsule"
+    metadata_source: robot
+    task: "Pick the coffee capsule and insert it into the capsule slot."
+    policy:
+      type: act
+      device: cuda
+      pretrained_path: "TODO_MODEL_PICK_AND_INSERT_CAPSULE"
+      n_action_steps: 16
+      chunk_size: 16
+    transition:
+      mode: timeout
+      max_duration_s: 60.0
+    settle_time_s: 0.0
+
+  - name: press_start_button
+    dataset_repo_id: "scene-transition/press_start_button"
+    metadata_source: robot
+    task: "Press the coffee machine start button."
+    policy:
+      type: act
+      device: cuda
+      pretrained_path: "TODO_MODEL_PRESS_START_BUTTON"
+      n_action_steps: 16
+      chunk_size: 16
+    transition:
+      mode: timeout
+      max_duration_s: 30.0
+    settle_time_s: 0.0

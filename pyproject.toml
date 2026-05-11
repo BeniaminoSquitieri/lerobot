@@ -275,6 +275,7 @@ lerobot-setup-can="lerobot.scripts.lerobot_setup_can:main"
 # ---------------- Tool Configurations ----------------
 [tool.setuptools.package-data]
 lerobot = ["envs/*.json"]
+sandwich_bt_python = ["*.yaml"]
 
 [tool.setuptools.packages.find]
 where = ["src"]

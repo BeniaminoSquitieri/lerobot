@@ -234,6 +234,72 @@ def test_vlm_result_topic_resolves_pending_attempt() -> None:
     assert vlm_check.message == "scene ok"
 
 
+def test_vlm_result_topic_accepts_scene_ready_status_token() -> None:
+    server, _executor = _make_server(known_skill_names={"pick_and_dispose_trash"})
+    _handle_request(server, _request("skill", "pick_and_dispose_trash"), _response())
+
+    from sandwich_bt_python.server import SkillCommandServer
+
+    SkillCommandServer._handle_vlm_result_topic(
+        server,
+        SimpleNamespace(
+            data=json.dumps(
+                {
+                    "skill_name": "pick_and_dispose_trash",
+                    "status": "scene_1_ready",
+                    "message": "trash phase complete",
+                }
+            )
+        ),
+    )
+    vlm_check = server.vlm_check_registry.get_latest("pick_and_dispose_trash")
+
+    assert vlm_check is not None
+    assert vlm_check.status == VLM_SUCCESS
+    assert vlm_check.message == "trash phase complete"
+
+
+def test_vlm_result_topic_maps_scene_flags_to_bt_statuses() -> None:
+    server, _executor = _make_server(known_skill_names={"clear_plate", "bag_soft_or_fragile_item"})
+    _handle_request(server, _request("skill", "clear_plate"), _response())
+    _handle_request(server, _request("skill", "bag_soft_or_fragile_item"), _response())
+
+    from sandwich_bt_python.server import SkillCommandServer
+
+    SkillCommandServer._handle_vlm_result_topic(
+        server,
+        SimpleNamespace(
+            data=json.dumps(
+                {
+                    "skill_name": "clear_plate",
+                    "anomaly_detected": True,
+                    "message": "plate fell",
+                }
+            )
+        ),
+    )
+    anomaly = server.vlm_check_registry.get_latest("clear_plate")
+    assert anomaly is not None
+    assert anomaly.status == VLM_FAILURE
+
+    SkillCommandServer._handle_vlm_result_topic(
+        server,
+        SimpleNamespace(
+            data=json.dumps(
+                {
+                    "skill_name": "bag_soft_or_fragile_item",
+                    "human_help_required": True,
+                    "required_human_action": "reopen bag",
+                }
+            )
+        ),
+    )
+    manual = server.vlm_check_registry.get_latest("bag_soft_or_fragile_item")
+    assert manual is not None
+    assert manual.status == VLM_NEEDS_MANUAL_HELP
+    assert "required_human_action=reopen bag" in manual.message
+
+
 def test_vlm_result_topic_accepts_waiting_human_state() -> None:
     server, _executor = _make_server(known_skill_names={"pour_ingredient"})
     _handle_request(server, _request("vlm_gate_pending", "pour_ingredient"), _response())

@@ -176,7 +176,7 @@ outputs/
 *.stl
 # *.urdf
 *.xml
-!src/sandwich_bt_runtime_cpp/trees/makesandwitch.xml
+!src/sandwich_bt_runtime_cpp/trees/*.xml
 *.part
 src/lerobot/robots/ergocub/ergocub_hand_left/
 src/lerobot/robots/ergocub/ergocub_hand_right/

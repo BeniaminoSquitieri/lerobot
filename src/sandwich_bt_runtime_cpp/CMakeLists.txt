@@ -62,9 +62,17 @@ install(DIRECTORY include/
 
 # Explicit tree list prevents accidentally installing scratch or duplicate XML.
 set(SANDWICH_BT_TREE_FILES
+  trees/grocery_bagging.xml
+  trees/items_in_drawer.xml
+  trees/lunch_table_bussing.xml
+  trees/make_coffee.xml
   trees/makesandwitch.xml
 )
 set(SANDWICH_BT_CONFIG_FILES
+  config/grocery_bagging_bt.yaml
+  config/items_in_drawer_bt.yaml
+  config/lunch_table_bussing_bt.yaml
+  config/make_coffee_bt.yaml
   config/makesandwitch_bt.yaml
 )
 

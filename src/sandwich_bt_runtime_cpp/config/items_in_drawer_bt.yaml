@@ -1,0 +1,15 @@
+# @file items_in_drawer_bt.yaml
+# @brief ROS2 parameters that configure items_in_drawer.xml blackboard values.
+
+sandwich_bt_runner:
+  ros__parameters:
+    bt:
+      initial_scene_ready_gate: "items_in_drawer.scene_0_ready"
+      open_drawer_skill: "open_drawer"
+      open_drawer_timeout_s: 60.0
+      pick_object_for_drawer_skill: "pick_object_for_drawer"
+      pick_object_for_drawer_timeout_s: 60.0
+      insert_object_in_drawer_skill: "insert_object_in_drawer"
+      insert_object_in_drawer_timeout_s: 60.0
+      close_drawer_skill: "close_drawer"
+      close_drawer_timeout_s: 60.0

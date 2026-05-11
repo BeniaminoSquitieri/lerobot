@@ -58,6 +58,63 @@ std::string default_tree_xml_path()
   return ament_index_cpp::get_package_share_directory("sandwich_bt_runtime_cpp") + "/trees/makesandwitch.xml";
 }
 
+template <typename ParameterT>
+ParameterT declareOrGetParameter(
+  const rclcpp::Node::SharedPtr& node,
+  const std::string& name,
+  const ParameterT& default_value)
+{
+  if (!node->has_parameter(name)) {
+    node->declare_parameter<ParameterT>(name, default_value);
+  }
+  return node->get_parameter(name).get_value<ParameterT>();
+}
+
+void setBtBlackboardEntries(
+  const rclcpp::Node::SharedPtr& node,
+  const std::shared_ptr<BT::Blackboard>& blackboard)
+{
+  const auto bt_parameters = node->list_parameters({"bt"}, 10);
+  int loaded_count = 0;
+
+  for (const auto& parameter_name : bt_parameters.names) {
+    constexpr const char* bt_prefix = "bt.";
+    if (parameter_name.rfind(bt_prefix, 0) != 0) {
+      continue;
+    }
+
+    const auto blackboard_key = parameter_name.substr(std::string(bt_prefix).size());
+    const auto parameter = node->get_parameter(parameter_name);
+    switch (parameter.get_type()) {
+      case rclcpp::ParameterType::PARAMETER_STRING:
+        blackboard->set(blackboard_key, parameter.as_string());
+        ++loaded_count;
+        break;
+      case rclcpp::ParameterType::PARAMETER_DOUBLE:
+        blackboard->set(blackboard_key, parameter.as_double());
+        ++loaded_count;
+        break;
+      case rclcpp::ParameterType::PARAMETER_INTEGER:
+        blackboard->set(blackboard_key, static_cast<int>(parameter.as_int()));
+        ++loaded_count;
+        break;
+      case rclcpp::ParameterType::PARAMETER_BOOL:
+        blackboard->set(blackboard_key, parameter.as_bool());
+        ++loaded_count;
+        break;
+      default:
+        RCLCPP_WARN(
+          node->get_logger(),
+          "Skipping unsupported BT parameter '%s' of type '%s'.",
+          parameter_name.c_str(),
+          parameter.get_type_name().c_str());
+        break;
+    }
+  }
+
+  RCLCPP_INFO(node->get_logger(), "Loaded %d BT blackboard parameter(s) from the 'bt.*' namespace.", loaded_count);
+}
+
 }  // namespace
 
 /**
@@ -77,34 +134,25 @@ int main(int argc, char** argv)
   // - where the BT polls VLM state
   // - BT tick period
   // - whether to publish to Groot
-  auto node = std::make_shared<rclcpp::Node>("sandwich_bt_runner");
-  node->declare_parameter<std::string>("tree_xml_path", default_tree_xml_path());
-  node->declare_parameter<std::string>("bt_command_service", "/sandwich_bt/run");
-  node->declare_parameter<std::string>("vlm_state_service", "/sandwich_bt/vlm_state");
-  node->declare_parameter<int>("tick_ms", 100);
-  node->declare_parameter<bool>("enable_groot_publisher", true);
-  node->declare_parameter<int>("groot_publisher_port", 1667);
-  node->declare_parameter<std::string>("bt.initial_scene_ready_gate", "initial_scene_ready");
-  node->declare_parameter<std::string>("bt.place_first_toast_skill", "place_first_toast");
-  node->declare_parameter<double>("bt.place_first_toast_timeout_s", 120.0);
-  node->declare_parameter<std::string>("bt.pour_ingredient_gate", "pour_ingredient");
-  node->declare_parameter<std::string>("bt.second_toast_ready_gate", "second_toast_ready");
-  node->declare_parameter<std::string>("bt.place_second_toast_skill", "place_second_toast");
-  node->declare_parameter<double>("bt.place_second_toast_timeout_s", 30.0);
+  const auto node_options = rclcpp::NodeOptions()
+                              .allow_undeclared_parameters(true)
+                              .automatically_declare_parameters_from_overrides(true);
+  auto node = std::make_shared<rclcpp::Node>("sandwich_bt_runner", node_options);
+  const auto tree_xml_path = declareOrGetParameter<std::string>(node, "tree_xml_path", default_tree_xml_path());
+  const auto bt_command_service = declareOrGetParameter<std::string>(node, "bt_command_service", "/sandwich_bt/run");
+  const auto vlm_state_service = declareOrGetParameter<std::string>(node, "vlm_state_service", "/sandwich_bt/vlm_state");
+  const auto tick_ms = declareOrGetParameter<int>(node, "tick_ms", 100);
+  const auto enable_groot = declareOrGetParameter<bool>(node, "enable_groot_publisher", true);
+  const auto groot_port = declareOrGetParameter<int>(node, "groot_publisher_port", 1667);
 
-  const auto tree_xml_path = node->get_parameter("tree_xml_path").as_string();
-  const auto bt_command_service = node->get_parameter("bt_command_service").as_string();
-  const auto vlm_state_service = node->get_parameter("vlm_state_service").as_string();
-  const auto tick_ms = node->get_parameter("tick_ms").as_int();
-  const auto enable_groot = node->get_parameter("enable_groot_publisher").as_bool();
-  const auto groot_port = node->get_parameter("groot_publisher_port").as_int();
-  const auto initial_scene_ready_gate = node->get_parameter("bt.initial_scene_ready_gate").as_string();
-  const auto place_first_toast_skill = node->get_parameter("bt.place_first_toast_skill").as_string();
-  const auto place_first_toast_timeout_s = node->get_parameter("bt.place_first_toast_timeout_s").as_double();
-  const auto pour_ingredient_gate = node->get_parameter("bt.pour_ingredient_gate").as_string();
-  const auto second_toast_ready_gate = node->get_parameter("bt.second_toast_ready_gate").as_string();
-  const auto place_second_toast_skill = node->get_parameter("bt.place_second_toast_skill").as_string();
-  const auto place_second_toast_timeout_s = node->get_parameter("bt.place_second_toast_timeout_s").as_double();
+  // Keep default sandwich values available when no params file is passed.
+  declareOrGetParameter<std::string>(node, "bt.initial_scene_ready_gate", "initial_scene_ready");
+  declareOrGetParameter<std::string>(node, "bt.place_first_toast_skill", "place_first_toast");
+  declareOrGetParameter<double>(node, "bt.place_first_toast_timeout_s", 120.0);
+  declareOrGetParameter<std::string>(node, "bt.pour_ingredient_gate", "pour_ingredient");
+  declareOrGetParameter<std::string>(node, "bt.second_toast_ready_gate", "second_toast_ready");
+  declareOrGetParameter<std::string>(node, "bt.place_second_toast_skill", "place_second_toast");
+  declareOrGetParameter<double>(node, "bt.place_second_toast_timeout_s", 30.0);
 
   // Register each custom XML tag with a lambda that injects the already-created
   // ROS2 node and service name into the BT node constructor.
@@ -192,26 +240,7 @@ int main(int argc, char** argv)
     });
 
   auto blackboard = BT::Blackboard::create();
-  blackboard->set("initial_scene_ready_gate", initial_scene_ready_gate);
-  blackboard->set("place_first_toast_skill", place_first_toast_skill);
-  blackboard->set("place_first_toast_timeout_s", place_first_toast_timeout_s);
-  blackboard->set("pour_ingredient_gate", pour_ingredient_gate);
-  blackboard->set("second_toast_ready_gate", second_toast_ready_gate);
-  blackboard->set("place_second_toast_skill", place_second_toast_skill);
-  blackboard->set("place_second_toast_timeout_s", place_second_toast_timeout_s);
-
-  RCLCPP_INFO(
-    node->get_logger(),
-    "Loaded BT task parameters: initial_scene_ready_gate='%s', place_first_toast_skill='%s', "
-    "place_first_toast_timeout_s=%.2f, pour_ingredient_gate='%s', second_toast_ready_gate='%s', "
-    "place_second_toast_skill='%s', place_second_toast_timeout_s=%.2f.",
-    initial_scene_ready_gate.c_str(),
-    place_first_toast_skill.c_str(),
-    place_first_toast_timeout_s,
-    pour_ingredient_gate.c_str(),
-    second_toast_ready_gate.c_str(),
-    place_second_toast_skill.c_str(),
-    place_second_toast_timeout_s);
+  setBtBlackboardEntries(node, blackboard);
 
   // Loading from file keeps the BT topology editable without recompiling this
   // executable; malformed XML or missing node tags will fail at this point.

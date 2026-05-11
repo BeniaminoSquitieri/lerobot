@@ -44,7 +44,11 @@ Those belong to `sandwich_bt_python`.
 - `src/verify_skill_outcome_node.cpp`: BT leaf that polls VLM check state
 - `include/sandwich_bt_runtime_cpp/verify_skill_outcome_node.hpp`: VLM check leaf declaration
 - `trees/makesandwitch.xml`: active two-real-skill sandwich task with manual/VLM topic gates
-- `config/makesandwitch_bt.yaml`: task-level names and timeouts loaded into the BT blackboard
+- `trees/lunch_table_bussing.xml`: scene-gated lunch table cleanup task
+- `trees/grocery_bagging.xml`: scene-gated grocery bagging task
+- `trees/items_in_drawer.xml`: scene-gated drawer insertion task
+- `trees/make_coffee.xml`: scene-gated coffee preparation task
+- `config/*_bt.yaml`: task-level gate names, skill names, and timeouts loaded into the BT blackboard
 
 ## Execution Model
 
@@ -72,6 +76,11 @@ That makes the process exit code usable as a high-level integration signal.
 On `Ctrl+C`, it halts the active BT, destroys the Groot/ZMQ publisher, and then
 returns `130`. If the Groot port is already occupied, the runner logs a warning
 and continues without monitor publishing instead of aborting.
+
+The task XMLs use blackboard placeholders for skill names, gate names, and
+timeouts. Pass the matching `config/*_bt.yaml` profile together with
+`tree_xml_path`. The Python execution config must still define each referenced
+BC skill before the tree can execute on the robot.
 
 ## Command-Start Leaf Lifecycle
 
@@ -171,11 +180,12 @@ for example:
 
 ```bash
 ros2 run sandwich_bt_runtime_cpp sandwich_bt_runner --ros-args \
-  --params-file src/sandwich_bt_runtime_cpp/config/makesandwitch_bt.yaml
+  --params-file src/sandwich_bt_runtime_cpp/config/makesandwitch_bt.yaml \
+  -p tree_xml_path:="$(pwd)/src/sandwich_bt_runtime_cpp/trees/makesandwitch.xml"
 ```
 
 Use XML for control structure changes: order, retry boundaries, and which node
-types appear. Use a `config/*.yaml` profile for task-level values: checkpoint
+types appear. Use a `config/*_bt.yaml` profile for task-level values: gate
 names, skill names, and skill timeouts.
 
 ## When To Modify This Package

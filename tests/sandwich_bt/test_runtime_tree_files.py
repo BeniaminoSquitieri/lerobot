@@ -4,6 +4,10 @@ from pathlib import Path
 from xml.etree import ElementTree
 
 EXPECTED_TREE_FILES = {
+    "grocery_bagging.xml",
+    "items_in_drawer.xml",
+    "lunch_table_bussing.xml",
+    "make_coffee.xml",
     "makesandwitch.xml",
 }
 VERDICT_NODE_TAGS = {"WaitForGateVerdict", "WaitForSkillVerdict"}
@@ -16,10 +20,74 @@ EXPECTED_BT_PROFILE = {
     "place_second_toast_skill": "place_second_toast",
     "place_second_toast_timeout_s": 30.0,
 }
+EXPECTED_SCENE_TASK_SKILLS = {
+    "lunch_table_bussing.xml": [
+        "pick_and_dispose_trash",
+        "clear_plate",
+        "pick_and_store_cutlery",
+        "pick_and_store_dishware",
+    ],
+    "grocery_bagging.xml": [
+        "bag_rigid_or_cylindrical_item",
+        "bag_flat_or_long_item",
+        "bag_soft_or_fragile_item",
+    ],
+    "items_in_drawer.xml": [
+        "open_drawer",
+        "pick_object_for_drawer",
+        "insert_object_in_drawer",
+        "close_drawer",
+    ],
+    "make_coffee.xml": [
+        "place_cup_under_dispenser",
+        "pick_and_insert_capsule",
+        "press_start_button",
+    ],
+}
+EXPECTED_SCENE_TASK_GATES = {
+    "lunch_table_bussing.xml": ["lunch_table_bussing.scene_0_ready"],
+    "grocery_bagging.xml": ["grocery_bagging.scene_0_ready"],
+    "items_in_drawer.xml": ["items_in_drawer.scene_0_ready"],
+    "make_coffee.xml": ["make_coffee.scene_0_ready", "make_coffee.scene_4_ready"],
+}
+EXPECTED_SCENE_TASK_BT_PROFILES = {
+    "lunch_table_bussing.xml": "lunch_table_bussing_bt.yaml",
+    "grocery_bagging.xml": "grocery_bagging_bt.yaml",
+    "items_in_drawer.xml": "items_in_drawer_bt.yaml",
+    "make_coffee.xml": "make_coffee_bt.yaml",
+}
+EXPECTED_SCENE_TASK_EXECUTOR_PROFILES = {
+    "lunch_table_bussing.xml": "lunch_table_bussing_executor.yaml",
+    "grocery_bagging.xml": "grocery_bagging_executor.yaml",
+    "items_in_drawer.xml": "items_in_drawer_executor.yaml",
+    "make_coffee.xml": "make_coffee_executor.yaml",
+}
 
 
 def _runtime_dir() -> Path:
     return Path(__file__).resolve().parents[2] / "src" / "sandwich_bt_runtime_cpp"
+
+
+def _python_dir() -> Path:
+    return Path(__file__).resolve().parents[2] / "src" / "sandwich_bt_python"
+
+
+def _load_executor_profile_skill_names(profile_path: Path) -> list[str]:
+    skill_names: list[str] = []
+    for line in profile_path.read_text(encoding="utf-8").splitlines():
+        stripped = line.strip()
+        if stripped.startswith("- name:"):
+            skill_names.append(stripped.split(":", 1)[1].strip().strip('"'))
+    return skill_names
+
+
+def _load_executor_profile_pretrained_paths(profile_path: Path) -> list[str]:
+    pretrained_paths: list[str] = []
+    for line in profile_path.read_text(encoding="utf-8").splitlines():
+        stripped = line.strip()
+        if stripped.startswith("pretrained_path:"):
+            pretrained_paths.append(stripped.split(":", 1)[1].strip().strip('"'))
+    return pretrained_paths
 
 
 def _load_simple_bt_profile(profile_path: Path) -> dict[str, float | str]:
@@ -52,6 +120,25 @@ def _load_simple_bt_profile(profile_path: Path) -> dict[str, float | str]:
             values[key] = float(raw_value)
 
     return values
+
+
+def _resolve_bt_refs(refs: list[str], profile: dict[str, float | str]) -> list[str]:
+    resolved_refs: list[str] = []
+    for ref in refs:
+        if ref.startswith("{") and ref.endswith("}"):
+            resolved_refs.append(str(profile[ref[1:-1]]))
+        else:
+            resolved_refs.append(ref)
+    return resolved_refs
+
+
+def _tree_placeholders(root) -> set[str]:
+    return {
+        value[1:-1]
+        for node in root.iter()
+        for value in node.attrib.values()
+        if value.startswith("{") and value.endswith("}")
+    }
 
 
 def test_runtime_tree_directory_contains_only_supported_xml_files() -> None:
@@ -127,6 +214,36 @@ def test_makesandwitch_tree_matches_current_task() -> None:
         "STAGE 3 - Second toast ready",
         "STAGE 4 - Place second toast",
     ]
+
+
+def test_scene_gated_task_trees_match_expected_task_order() -> None:
+    tree_dir = _runtime_dir() / "trees"
+    config_dir = _runtime_dir() / "config"
+
+    for filename, expected_skills in EXPECTED_SCENE_TASK_SKILLS.items():
+        root = ElementTree.parse(tree_dir / filename).getroot()
+        profile = _load_simple_bt_profile(config_dir / EXPECTED_SCENE_TASK_BT_PROFILES[filename])
+
+        skill_refs = [node.attrib["skill_name"] for node in root.iter("RunRobotSkill")]
+        gate_refs = [node.attrib["gate_name"] for node in root.iter("OpenVLMGate")]
+
+        assert _resolve_bt_refs(skill_refs, profile) == expected_skills
+        assert _resolve_bt_refs(gate_refs, profile) == EXPECTED_SCENE_TASK_GATES[filename]
+        assert _tree_placeholders(root) <= set(profile)
+
+
+def test_scene_gated_executor_profiles_cover_xml_skill_names() -> None:
+    profile_dir = _python_dir()
+
+    for filename, profile_name in EXPECTED_SCENE_TASK_EXECUTOR_PROFILES.items():
+        profile_path = profile_dir / profile_name
+        expected_skills = EXPECTED_SCENE_TASK_SKILLS[filename]
+
+        assert profile_path.exists()
+        pretrained_paths = _load_executor_profile_pretrained_paths(profile_path)
+        assert _load_executor_profile_skill_names(profile_path) == expected_skills
+        assert len(pretrained_paths) == len(expected_skills)
+        assert all(pretrained_paths)
 
 
 def test_makesandwitch_profile_matches_current_robot_task() -> None:

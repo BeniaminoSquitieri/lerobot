@@ -50,6 +50,18 @@ motions. A VLM `FAILURE` is handled by the BT retrying the same BC skill.
 - `executor.py`: learned skill executor.
 - `server.py`: ROS2 service node for command execution and VLM check relay.
 - `verification.py`: in-memory registry for VLM pending/success/failure verdicts.
+- `sandwich_bt_executor.yaml`: active sandwich skill profile.
+- `lunch_table_bussing_executor.yaml`: lunch table bussing skill profile template.
+- `grocery_bagging_executor.yaml`: grocery bagging skill profile template.
+- `items_in_drawer_executor.yaml`: drawer insertion skill profile template.
+- `make_coffee_executor.yaml`: coffee task skill profile template.
+
+The scene-task profile templates follow the same structure as the sandwich
+profile. Keep the `name` fields aligned with the BT XML and replace only each
+`policy.pretrained_path` with the real local checkpoint path or Hugging Face
+model id. Because these templates use `metadata_source: robot`, their
+`dataset_repo_id` values are labels for logging/metadata identity; the live
+robot feature schema is used during rollout.
 
 ## Manual VLM Result
 
@@ -120,3 +132,25 @@ place_second_toast SUCCESS -> completes the BT
 Any `FAILURE` verdict for a requested stage makes the XML retry block rerun that
 same gate or skill. The future real VLM should publish the same JSON reports on
 the same topic, so the BT does not change when manual CLI publishing is replaced.
+
+## Scene Task Profiles
+
+For the additional scene-gated tasks, start the Python server with the matching
+executor profile and start the C++ runner with the matching XML tree plus BT
+profile, for example:
+
+```bash
+lerobot-bt-skill-server --config_path src/sandwich_bt_python/grocery_bagging_executor.yaml
+```
+
+```bash
+ros2 run sandwich_bt_runtime_cpp sandwich_bt_runner --ros-args \
+  --params-file src/sandwich_bt_runtime_cpp/config/grocery_bagging_bt.yaml \
+  -p tree_xml_path:="$(pwd)/src/sandwich_bt_runtime_cpp/trees/grocery_bagging.xml"
+```
+
+The same pairing applies to:
+
+- `lunch_table_bussing_executor.yaml` with `lunch_table_bussing_bt.yaml` and `lunch_table_bussing.xml`
+- `items_in_drawer_executor.yaml` with `items_in_drawer_bt.yaml` and `items_in_drawer.xml`
+- `make_coffee_executor.yaml` with `make_coffee_bt.yaml` and `make_coffee.xml`

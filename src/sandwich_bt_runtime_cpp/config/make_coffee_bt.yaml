@@ -1,0 +1,14 @@
+# @file make_coffee_bt.yaml
+# @brief ROS2 parameters that configure make_coffee.xml blackboard values.
+
+sandwich_bt_runner:
+  ros__parameters:
+    bt:
+      initial_scene_ready_gate: "make_coffee.scene_0_ready"
+      place_cup_under_dispenser_skill: "place_cup_under_dispenser"
+      place_cup_under_dispenser_timeout_s: 60.0
+      pick_and_insert_capsule_skill: "pick_and_insert_capsule"
+      pick_and_insert_capsule_timeout_s: 60.0
+      press_start_button_skill: "press_start_button"
+      press_start_button_timeout_s: 30.0
+      coffee_complete_gate: "make_coffee.scene_4_ready"
