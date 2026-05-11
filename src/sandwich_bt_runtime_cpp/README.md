@@ -48,7 +48,7 @@ Those belong to `sandwich_bt_python`.
 - `trees/grocery_bagging.xml`: scene-gated grocery bagging task
 - `trees/items_in_drawer.xml`: scene-gated drawer insertion task
 - `trees/make_coffee.xml`: scene-gated coffee preparation task
-- `config/*_bt.yaml`: task-level gate names, skill names, and timeouts loaded into the BT blackboard
+- `config/*_bt.yaml`: task-level gate names, skill names, timeouts, and retry limits loaded into the BT blackboard
 
 ## Execution Model
 
@@ -77,8 +77,8 @@ On `Ctrl+C`, it halts the active BT, destroys the Groot/ZMQ publisher, and then
 returns `130`. If the Groot port is already occupied, the runner logs a warning
 and continues without monitor publishing instead of aborting.
 
-The task XMLs use blackboard placeholders for skill names, gate names, and
-timeouts. Pass the matching `config/*_bt.yaml` profile together with
+The task XMLs use blackboard placeholders for skill names, gate names, retry
+limits, and timeouts. Pass the matching `config/*_bt.yaml` profile together with
 `tree_xml_path`. The Python execution config must still define each referenced
 BC skill before the tree can execute on the robot.
 
@@ -186,7 +186,7 @@ ros2 run sandwich_bt_runtime_cpp sandwich_bt_runner --ros-args \
 
 Use XML for control structure changes: order, retry boundaries, and which node
 types appear. Use a `config/*_bt.yaml` profile for task-level values: gate
-names, skill names, and skill timeouts.
+names, skill names, retry limits, and skill timeouts.
 
 ## When To Modify This Package
 

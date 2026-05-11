@@ -5,11 +5,18 @@ sandwich_bt_runner:
   ros__parameters:
     bt:
       initial_scene_ready_gate: "lunch_table_bussing.scene_0_ready"
+      initial_scene_ready_max_attempts: -1
       pick_and_dispose_trash_skill: "pick_and_dispose_trash"
       pick_and_dispose_trash_timeout_s: 120.0
+      pick_and_dispose_trash_max_attempts: 3
       clear_plate_skill: "clear_plate"
       clear_plate_timeout_s: 120.0
+      clear_plate_max_attempts: 3
       pick_and_store_cutlery_skill: "pick_and_store_cutlery"
       pick_and_store_cutlery_timeout_s: 120.0
+      pick_and_store_cutlery_max_attempts: 4
       pick_and_store_dishware_skill: "pick_and_store_dishware"
       pick_and_store_dishware_timeout_s: 120.0
+      pick_and_store_dishware_max_attempts: 3
+      task_complete_gate: "lunch_table_bussing.task_complete"
+      task_complete_max_attempts: -1

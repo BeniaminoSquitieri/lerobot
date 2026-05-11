@@ -314,3 +314,12 @@ Legacy service path for a VLM/manual verdict. New tools should prefer the
 ros2 service call /sandwich_bt/vlm_result_legacy sandwich_bt_interfaces/srv/ReportSkillVerification \
   "{skill_name: 'place_first_toast', attempt_id: 0, status: 'SUCCESS', message: 'first toast ok'}"
 ```
+
+## Additional BT command guides
+
+The same command format is documented for the additional scene-gated BTs:
+
+- [Lunch Table Bussing](sandwich_bt_lunch_table_bussing_README.md)
+- [Grocery Bagging](sandwich_bt_grocery_bagging_README.md)
+- [Items In Drawer](sandwich_bt_items_in_drawer_README.md)
+- [Make Coffee](sandwich_bt_make_coffee_README.md)

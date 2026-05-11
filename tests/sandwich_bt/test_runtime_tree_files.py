@@ -13,12 +13,19 @@ EXPECTED_TREE_FILES = {
 VERDICT_NODE_TAGS = {"WaitForGateVerdict", "WaitForSkillVerdict"}
 EXPECTED_BT_PROFILE = {
     "initial_scene_ready_gate": "initial_scene_ready",
+    "initial_scene_ready_max_attempts": -1.0,
     "place_first_toast_skill": "place_first_toast",
     "place_first_toast_timeout_s": 120.0,
+    "place_first_toast_max_attempts": -1.0,
     "pour_ingredient_gate": "pour_ingredient",
+    "pour_ingredient_max_attempts": -1.0,
     "second_toast_ready_gate": "second_toast_ready",
+    "second_toast_ready_max_attempts": -1.0,
     "place_second_toast_skill": "place_second_toast",
     "place_second_toast_timeout_s": 30.0,
+    "place_second_toast_max_attempts": -1.0,
+    "task_complete_gate": "makesandwitch.task_complete",
+    "task_complete_max_attempts": -1.0,
 }
 EXPECTED_SCENE_TASK_SKILLS = {
     "lunch_table_bussing.xml": [
@@ -45,10 +52,10 @@ EXPECTED_SCENE_TASK_SKILLS = {
     ],
 }
 EXPECTED_SCENE_TASK_GATES = {
-    "lunch_table_bussing.xml": ["lunch_table_bussing.scene_0_ready"],
-    "grocery_bagging.xml": ["grocery_bagging.scene_0_ready"],
-    "items_in_drawer.xml": ["items_in_drawer.scene_0_ready"],
-    "make_coffee.xml": ["make_coffee.scene_0_ready", "make_coffee.scene_4_ready"],
+    "lunch_table_bussing.xml": ["lunch_table_bussing.scene_0_ready", "lunch_table_bussing.task_complete"],
+    "grocery_bagging.xml": ["grocery_bagging.scene_0_ready", "grocery_bagging.task_complete"],
+    "items_in_drawer.xml": ["items_in_drawer.scene_0_ready", "items_in_drawer.task_complete"],
+    "make_coffee.xml": ["make_coffee.scene_0_ready", "make_coffee.task_complete"],
 }
 EXPECTED_SCENE_TASK_BT_PROFILES = {
     "lunch_table_bussing.xml": "lunch_table_bussing_bt.yaml",
@@ -199,6 +206,7 @@ def test_makesandwitch_tree_matches_current_task() -> None:
         ("OpenVLMGate", "{pour_ingredient_gate}"),
         ("PrepareSecondToast", "{second_toast_ready_gate}"),
         ("PlaceSecondToast", "{place_second_toast_skill}"),
+        ("OpenVLMGate", "{task_complete_gate}"),
     ]
     assert verdict_nodes == [
         ("WaitForGateVerdict", "{initial_scene_ready_gate}"),
@@ -206,6 +214,7 @@ def test_makesandwitch_tree_matches_current_task() -> None:
         ("WaitForGateVerdict", "{pour_ingredient_gate}"),
         ("WaitForGateVerdict", "{second_toast_ready_gate}"),
         ("WaitForSkillVerdict", "{place_second_toast_skill}"),
+        ("WaitForGateVerdict", "{task_complete_gate}"),
     ]
     assert retry_nodes == [
         "STAGE 0 - Initial scene ready",
@@ -213,6 +222,7 @@ def test_makesandwitch_tree_matches_current_task() -> None:
         "STAGE 2 - Human pours ingredient",
         "STAGE 3 - Second toast ready",
         "STAGE 4 - Place second toast",
+        "TASK COMPLETE - Sandwich ready",
     ]
 
 
@@ -266,11 +276,18 @@ def test_makesandwitch_tree_placeholders_are_defined_in_profile() -> None:
 
     assert placeholders == {
         "initial_scene_ready_gate",
+        "initial_scene_ready_max_attempts",
         "place_first_toast_skill",
         "place_first_toast_timeout_s",
+        "place_first_toast_max_attempts",
         "pour_ingredient_gate",
+        "pour_ingredient_max_attempts",
         "second_toast_ready_gate",
+        "second_toast_ready_max_attempts",
         "place_second_toast_skill",
         "place_second_toast_timeout_s",
+        "place_second_toast_max_attempts",
+        "task_complete_gate",
+        "task_complete_max_attempts",
     }
     assert placeholders <= profile_keys
