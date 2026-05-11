@@ -63,6 +63,14 @@ model id. Because these templates use `metadata_source: robot`, their
 `dataset_repo_id` values are labels for logging/metadata identity; the live
 robot feature schema is used during rollout.
 
+The server performs strict startup validation:
+
+- every `expected_skill_names` entry must exist in `skills`
+- every skill name must be unique
+- every `policy.pretrained_path` must be a real path or Hub id, not a
+  `TODO_MODEL...` placeholder
+- every `required_cameras` entry must exist in `robot.cameras`
+
 ## Manual VLM Result
 
 Watch the verifier requests emitted by the server:
@@ -126,7 +134,8 @@ place_first_toast SUCCESS -> opens the human pouring gate
 pour_ingredient WAIT_HUMAN/RUNNING -> BT keeps waiting
 pour_ingredient SUCCESS -> opens the second-toast positioning gate
 second_toast_ready SUCCESS -> starts place_second_toast
-place_second_toast SUCCESS -> completes the BT
+place_second_toast SUCCESS -> opens the final task-complete gate
+makesandwitch.task_complete SUCCESS -> final task gate succeeds
 ```
 
 Any `FAILURE` verdict for a requested stage makes the XML retry block rerun that
@@ -147,6 +156,13 @@ lerobot-bt-skill-server --config_path src/sandwich_bt_python/grocery_bagging_exe
 ros2 run sandwich_bt_runtime_cpp sandwich_bt_runner --ros-args \
   --params-file src/sandwich_bt_runtime_cpp/config/grocery_bagging_bt.yaml \
   -p tree_xml_path:="$(pwd)/src/sandwich_bt_runtime_cpp/trees/grocery_bagging.xml"
+```
+
+After installing or sourcing the ROS2 workspace, the runner can also be started
+with the task launch file:
+
+```bash
+ros2 launch sandwich_bt_runtime_cpp grocery_bagging.launch.py
 ```
 
 The same pairing applies to:

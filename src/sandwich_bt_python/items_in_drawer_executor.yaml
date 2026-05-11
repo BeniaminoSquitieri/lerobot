@@ -11,6 +11,16 @@ vlm_request_topic: "/sandwich_bt/vlm_request"
 vlm_result_topic: "/sandwich_bt/vlm_result"
 vlm_timeout_s: 0.0
 
+expected_skill_names:
+  - open_drawer
+  - pick_object_for_drawer
+  - insert_object_in_drawer
+  - close_drawer
+
+required_cameras:
+  - wrist
+  - left
+
 robot:
   arm:
     type: panda

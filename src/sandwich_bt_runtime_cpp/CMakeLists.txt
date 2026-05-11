@@ -86,5 +86,10 @@ install(FILES ${SANDWICH_BT_CONFIG_FILES}
   DESTINATION share/${PROJECT_NAME}/config
 )
 
+# Install launch files for one-command BT runner startup.
+install(DIRECTORY launch/
+  DESTINATION share/${PROJECT_NAME}/launch
+)
+
 # Register this package and its installed resources with the ament index.
 ament_package()

@@ -48,6 +48,9 @@ second_toast_ready
 place_second_toast
   -> BC skill
   -> VLM/manual result
+
+makesandwitch.task_complete
+  -> final VLM/manual task gate
 ```
 
 The BT never advances past a gate while the VLM check is a waiting status:
@@ -161,6 +164,14 @@ lerobot-bt-skill-server \
 Start the C++ BT runner with the active real-robot tree and its task parameter
 profile. Start this after the skill server is ready.
 
+Preferred launch command:
+
+```bash
+ros2 launch sandwich_bt_runtime_cpp makesandwitch.launch.py
+```
+
+Equivalent direct runner command:
+
 ```bash
 ros2 run sandwich_bt_runtime_cpp sandwich_bt_runner --ros-args \
   --params-file "$(pwd)/src/sandwich_bt_runtime_cpp/config/makesandwitch_bt.yaml" \
@@ -176,6 +187,7 @@ place_first_toast
 pour_ingredient
 second_toast_ready
 place_second_toast
+makesandwitch.task_complete
 ```
 
 For a new BT, make a new XML if the order changes. If only checkpoint names,
@@ -258,6 +270,13 @@ ros2 topic pub --once /sandwich_bt/vlm_result std_msgs/msg/String \
   "{data: '{\"skill_name\":\"place_second_toast\",\"attempt_id\":0,\"status\":\"SUCCESS\",\"message\":\"second toast ok\"}'}"
 ```
 
+Task complete:
+
+```bash
+ros2 topic pub --once /sandwich_bt/vlm_result std_msgs/msg/String \
+  "{data: '{\"skill_name\":\"makesandwitch.task_complete\",\"attempt_id\":0,\"status\":\"SUCCESS\",\"message\":\"sandwich task complete\"}'}"
+```
+
 Force a retry for the current stage:
 
 ```bash
@@ -286,10 +305,10 @@ WAIT_HUMAN -> WAIT_HUMAN
 REQUEST_MANUAL_INTERVENTION -> MANUAL_INTERVENTION_REQUIRED
 ```
 
-The real-robot config currently has `vlm_timeout_s: 30.0`, so a pending VLM
-attempt becomes `FAILURE` if no `SUCCESS` arrives within 30 seconds. Increase
-that value or set it to `0` in `sandwich_bt_executor.yaml` for slower manual
-tests.
+The real-robot config currently has `vlm_timeout_s: 0.0`, so pending VLM
+attempts do not automatically become `FAILURE` while you are doing slower
+manual tests. Set a positive value in the executor YAML when you want automatic
+timeout-to-retry behavior.
 
 ### Useful inspection commands
 
@@ -319,6 +338,7 @@ ros2 service call /sandwich_bt/vlm_result_legacy sandwich_bt_interfaces/srv/Repo
 
 The same command format is documented for the additional scene-gated BTs:
 
+- [VLM, BT, and BC conventions](sandwich_bt_vlm_conventions_README.md)
 - [Lunch Table Bussing](sandwich_bt_lunch_table_bussing_README.md)
 - [Grocery Bagging](sandwich_bt_grocery_bagging_README.md)
 - [Items In Drawer](sandwich_bt_items_in_drawer_README.md)

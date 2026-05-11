@@ -20,6 +20,16 @@ vlm_result_topic: "/sandwich_bt/vlm_result"
 # the attempt is marked FAILURE and the BT retry wrapper reruns the skill.
 vlm_timeout_s: 0.0
 
+# Startup validation: these BT-requested skill names must exist below.
+expected_skill_names:
+  - place_first_toast
+  - place_second_toast
+
+# Startup validation: these camera entries must exist in robot.cameras.
+required_cameras:
+  - wrist
+  - left
+
 # Real robot hardware configuration used by the Python server.
 robot:
   # Franka Panda arm backend configured through LeRobot.

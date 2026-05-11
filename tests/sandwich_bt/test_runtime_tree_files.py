@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from pathlib import Path
 from xml.etree import ElementTree
 
@@ -69,10 +70,47 @@ EXPECTED_SCENE_TASK_EXECUTOR_PROFILES = {
     "items_in_drawer.xml": "items_in_drawer_executor.yaml",
     "make_coffee.xml": "make_coffee_executor.yaml",
 }
+EXPECTED_LAUNCH_FILES = {
+    "makesandwitch.launch.py": ("makesandwitch.xml", "makesandwitch_bt.yaml"),
+    "lunch_table_bussing.launch.py": ("lunch_table_bussing.xml", "lunch_table_bussing_bt.yaml"),
+    "grocery_bagging.launch.py": ("grocery_bagging.xml", "grocery_bagging_bt.yaml"),
+    "items_in_drawer.launch.py": ("items_in_drawer.xml", "items_in_drawer_bt.yaml"),
+    "make_coffee.launch.py": ("make_coffee.xml", "make_coffee_bt.yaml"),
+}
+EXPECTED_TASK_READMES = {
+    "sandwich_bt_README.md": {
+        "initial_scene_ready",
+        "place_first_toast",
+        "pour_ingredient",
+        "second_toast_ready",
+        "place_second_toast",
+        "makesandwitch.task_complete",
+    },
+    "sandwich_bt_lunch_table_bussing_README.md": {
+        *EXPECTED_SCENE_TASK_SKILLS["lunch_table_bussing.xml"],
+        *EXPECTED_SCENE_TASK_GATES["lunch_table_bussing.xml"],
+    },
+    "sandwich_bt_grocery_bagging_README.md": {
+        *EXPECTED_SCENE_TASK_SKILLS["grocery_bagging.xml"],
+        *EXPECTED_SCENE_TASK_GATES["grocery_bagging.xml"],
+    },
+    "sandwich_bt_items_in_drawer_README.md": {
+        *EXPECTED_SCENE_TASK_SKILLS["items_in_drawer.xml"],
+        *EXPECTED_SCENE_TASK_GATES["items_in_drawer.xml"],
+    },
+    "sandwich_bt_make_coffee_README.md": {
+        *EXPECTED_SCENE_TASK_SKILLS["make_coffee.xml"],
+        *EXPECTED_SCENE_TASK_GATES["make_coffee.xml"],
+    },
+}
 
 
 def _runtime_dir() -> Path:
     return Path(__file__).resolve().parents[2] / "src" / "sandwich_bt_runtime_cpp"
+
+
+def _src_dir() -> Path:
+    return Path(__file__).resolve().parents[2] / "src"
 
 
 def _python_dir() -> Path:
@@ -95,6 +133,32 @@ def _load_executor_profile_pretrained_paths(profile_path: Path) -> list[str]:
         if stripped.startswith("pretrained_path:"):
             pretrained_paths.append(stripped.split(":", 1)[1].strip().strip('"'))
     return pretrained_paths
+
+
+def _load_top_level_list(profile_path: Path, key: str) -> list[str]:
+    values: list[str] = []
+    in_list = False
+    list_indent = 0
+
+    for line in profile_path.read_text(encoding="utf-8").splitlines():
+        stripped = line.strip()
+        if not stripped or stripped.startswith("#"):
+            continue
+
+        indent = len(line) - len(line.lstrip(" "))
+        if in_list:
+            if indent <= list_indent and not stripped.startswith("- "):
+                in_list = False
+            else:
+                if stripped.startswith("- "):
+                    values.append(stripped[2:].strip().strip('"'))
+                continue
+
+        if stripped == f"{key}:":
+            in_list = True
+            list_indent = indent
+
+    return values
 
 
 def _load_simple_bt_profile(profile_path: Path) -> dict[str, float | str]:
@@ -146,6 +210,13 @@ def _tree_placeholders(root) -> set[str]:
         for value in node.attrib.values()
         if value.startswith("{") and value.endswith("}")
     }
+
+
+def _readme_vlm_skill_names(readme_path: Path) -> set[str]:
+    text = readme_path.read_text(encoding="utf-8")
+    names = set(re.findall(r'\\"skill_name\\":\\"([^\\"]+)\\"', text))
+    names.update(re.findall(r"skill_name:\s*'([^']+)'", text))
+    return names
 
 
 def test_runtime_tree_directory_contains_only_supported_xml_files() -> None:
@@ -252,8 +323,47 @@ def test_scene_gated_executor_profiles_cover_xml_skill_names() -> None:
         assert profile_path.exists()
         pretrained_paths = _load_executor_profile_pretrained_paths(profile_path)
         assert _load_executor_profile_skill_names(profile_path) == expected_skills
+        assert _load_top_level_list(profile_path, "expected_skill_names") == expected_skills
+        assert _load_top_level_list(profile_path, "required_cameras") == ["wrist", "left"]
         assert len(pretrained_paths) == len(expected_skills)
         assert all(pretrained_paths)
+
+
+def test_makesandwitch_executor_profile_covers_xml_skill_names() -> None:
+    profile_path = _python_dir() / "sandwich_bt_executor.yaml"
+
+    assert _load_executor_profile_skill_names(profile_path) == [
+        "place_first_toast",
+        "place_second_toast",
+    ]
+    assert _load_top_level_list(profile_path, "expected_skill_names") == [
+        "place_first_toast",
+        "place_second_toast",
+    ]
+    assert _load_top_level_list(profile_path, "required_cameras") == ["wrist", "left"]
+
+
+def test_task_readmes_document_only_configured_vlm_names() -> None:
+    src_dir = _src_dir()
+
+    for readme_name, expected_names in EXPECTED_TASK_READMES.items():
+        documented_names = _readme_vlm_skill_names(src_dir / readme_name)
+
+        assert documented_names <= expected_names
+        assert expected_names <= documented_names
+
+
+def test_launch_files_cover_all_runtime_profiles() -> None:
+    launch_dir = _runtime_dir() / "launch"
+
+    assert {path.name for path in launch_dir.glob("*.launch.py")} == set(EXPECTED_LAUNCH_FILES)
+
+    for launch_name, (tree_name, profile_name) in EXPECTED_LAUNCH_FILES.items():
+        launch_text = (launch_dir / launch_name).read_text(encoding="utf-8")
+
+        assert tree_name in launch_text
+        assert profile_name in launch_text
+        assert "sandwich_bt_runner" in launch_text
 
 
 def test_makesandwitch_profile_matches_current_robot_task() -> None:

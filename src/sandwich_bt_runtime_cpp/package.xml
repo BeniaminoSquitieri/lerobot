@@ -21,6 +21,8 @@
 
   <!-- BehaviorTree.CPP dependency used by sandwich_bt_runner. -->
   <depend>behaviortree_cpp</depend>
+  <exec_depend>launch</exec_depend>
+  <exec_depend>launch_ros</exec_depend>
 
   <!-- Tell ament this package is built with CMake. -->
   <export>

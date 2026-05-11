@@ -10,6 +10,7 @@ The comments below annotate every field and validation to make the contract
 explicit for maintainers and integrators.
 """
 
+from collections import Counter
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -121,10 +122,21 @@ class PrimitiveSkillConfig:
         # The skill must reference a pretrained model path (either local folder
         # or a Hugging Face Hub id). This prevents accidental runtime failures
         # where a skill is declared but has no model to run.
-        if self.policy.pretrained_path is None:
+        pretrained_path = self.policy.pretrained_path
+        if pretrained_path is None:
             raise ValueError(
                 f"Skill '{self.name}' requires a pretrained checkpoint. "
                 "Set skill.policy.pretrained_path to a local checkpoint or Hub model."
+            )
+        pretrained_path_str = str(pretrained_path).strip()
+        if not pretrained_path_str:
+            raise ValueError(
+                f"Skill '{self.name}' requires a non-empty pretrained checkpoint path."
+            )
+        if pretrained_path_str.upper().startswith("TODO_MODEL"):
+            raise ValueError(
+                f"Skill '{self.name}' still uses placeholder checkpoint "
+                f"{pretrained_path_str!r}. Replace it with a real local path or Hub model id."
             )
 
 
@@ -140,6 +152,12 @@ class SkillCommandServerConfig:
     robot: CustomManipulatorConfig
     # List of learned skills available to the BT runtime.
     skills: list[PrimitiveSkillConfig]
+    # Optional startup contract: every name here must exist in `skills`.
+    # This catches a BT/executor mismatch before ROS2 starts accepting commands.
+    expected_skill_names: list[str] = field(default_factory=list)
+    # Camera names required by this execution profile. Empty means only "at
+    # least one camera" is enforced.
+    required_cameras: list[str] = field(default_factory=list)
     # ROS2 service name the server will advertise.
     bt_command_service: str = "/sandwich_bt/run"
     # ROS2 service name used by the BT runtime to query VLM check state.
@@ -176,6 +194,43 @@ class SkillCommandServerConfig:
         # Ensure at least one skill is configured to avoid running an empty server.
         if not self.skills:
             raise ValueError("At least one skill must be configured.")
+        skill_names = [skill.name for skill in self.skills]
+        empty_skill_names = [index for index, name in enumerate(skill_names) if not name]
+        if empty_skill_names:
+            raise ValueError(f"Skill entries at indexes {empty_skill_names} have empty names.")
+        duplicate_skill_names = sorted(
+            name for name, count in Counter(skill_names).items() if count > 1
+        )
+        if duplicate_skill_names:
+            raise ValueError(
+                "Duplicate skill names in server config: "
+                f"{duplicate_skill_names}. Every BT skill must map to one policy entry."
+            )
+        duplicate_expected_names = sorted(
+            name for name, count in Counter(self.expected_skill_names).items() if count > 1
+        )
+        if duplicate_expected_names:
+            raise ValueError(f"Duplicate expected_skill_names entries: {duplicate_expected_names}.")
+        missing_expected_skills = sorted(set(self.expected_skill_names) - set(skill_names))
+        if missing_expected_skills:
+            raise ValueError(
+                "The executor config is missing BT-required skill entries: "
+                f"{missing_expected_skills}."
+            )
+        cameras = getattr(self.robot, "cameras", None) or {}
+        if not cameras:
+            raise ValueError("At least one robot camera must be configured.")
+        duplicate_required_cameras = sorted(
+            name for name, count in Counter(self.required_cameras).items() if count > 1
+        )
+        if duplicate_required_cameras:
+            raise ValueError(f"Duplicate required_cameras entries: {duplicate_required_cameras}.")
+        missing_cameras = sorted(set(self.required_cameras) - set(cameras))
+        if missing_cameras:
+            raise ValueError(
+                "The robot config is missing required camera entries: "
+                f"{missing_cameras}. Available cameras: {sorted(cameras)}."
+            )
         # Validate the frame rate is positive.
         if self.fps <= 0:
             raise ValueError("fps must be > 0.")

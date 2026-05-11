@@ -15,12 +15,23 @@ source install/setup.bash
 
 ## Terminal 1: skill server
 
+Before launching this server, replace every `TODO_MODEL...` value in
+`grocery_bagging_executor.yaml` with the real BC checkpoint path or Hub id.
+
 ```bash
 lerobot-bt-skill-server \
   --config_path "$(pwd)/src/sandwich_bt_python/grocery_bagging_executor.yaml"
 ```
 
 ## Terminal 2: BT runner
+
+Preferred launch command:
+
+```bash
+ros2 launch sandwich_bt_runtime_cpp grocery_bagging.launch.py
+```
+
+Equivalent direct runner command:
 
 ```bash
 ros2 run sandwich_bt_runtime_cpp sandwich_bt_runner \

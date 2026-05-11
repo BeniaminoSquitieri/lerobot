@@ -49,6 +49,7 @@ Those belong to `sandwich_bt_python`.
 - `trees/items_in_drawer.xml`: scene-gated drawer insertion task
 - `trees/make_coffee.xml`: scene-gated coffee preparation task
 - `config/*_bt.yaml`: task-level gate names, skill names, timeouts, and retry limits loaded into the BT blackboard
+- `launch/*.launch.py`: one-command runner startup for each task profile
 
 ## Execution Model
 
@@ -179,10 +180,12 @@ come from C++ parameters and can be overridden by passing a ROS2 params file,
 for example:
 
 ```bash
-ros2 run sandwich_bt_runtime_cpp sandwich_bt_runner --ros-args \
-  --params-file src/sandwich_bt_runtime_cpp/config/makesandwitch_bt.yaml \
-  -p tree_xml_path:="$(pwd)/src/sandwich_bt_runtime_cpp/trees/makesandwitch.xml"
+ros2 launch sandwich_bt_runtime_cpp makesandwitch.launch.py
 ```
+
+The launch files pass the matching `config/*_bt.yaml` profile and XML tree to
+`sandwich_bt_runner`. For debugging, you can still run the executable directly
+and override `tree_xml_path` by hand.
 
 Use XML for control structure changes: order, retry boundaries, and which node
 types appear. Use a `config/*_bt.yaml` profile for task-level values: gate
