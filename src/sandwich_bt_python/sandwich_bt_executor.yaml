@@ -54,8 +54,6 @@ play_sounds: true
 # Robot reset behavior before server startup and before individual skills.
 reset_robot_on_startup: true
 reset_robot_before_skill: true
-# In real mode, VLM/manual results must explicitly resolve each skill.
-auto_pass_vlm_check_for_real_skills: false
 # Optional mapping from policy feature names to connected robot feature names.
 rename_map: {}
 

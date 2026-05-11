@@ -12,7 +12,7 @@ VLM check state managed here. VLM/manual verifiers use topics only.
 
 Flow role:
 1. Wait for the C++ BT to send a named command.
-2. Dispatch that command to a learned ACT skill or a no-motion VLM gate.
+2. Dispatch that command to a learned ACT skill or a VLM/manual gate.
 3. Return the result to the BT so the tree can continue or retry.
 """
 
@@ -63,20 +63,8 @@ DEFAULT_CONFIG_PATH = Path(__file__).resolve().parent / "sandwich_bt_executor.ya
 if TYPE_CHECKING:
     from lerobot.robots.custom_manipulator.custom_manipulator import CustomManipulator
 
-NO_MOTION_SKILL_KIND = "no_motion_skill"
-"""Command kind that acknowledges a skill and auto-resolves the VLM check."""
-
 VLM_GATE_PENDING_KIND = "vlm_gate_pending"
 """Command kind that acknowledges a gate but leaves the VLM check pending."""
-
-_COMMAND_KINDS_THAT_OPEN_VLM_CHECK = {
-    "skill",
-    NO_MOTION_SKILL_KIND,
-    VLM_GATE_PENDING_KIND,
-}
-_COMMAND_KINDS_THAT_AUTO_PASS_VLM_CHECK = {
-    NO_MOTION_SKILL_KIND,
-}
 
 _NEXT_ACTION_TO_STATUS = {
     "CONTINUE": VLM_SUCCESS,
@@ -331,21 +319,13 @@ class SkillCommandServer(Node):
                     robot_observation_processor=self.robot_observation_processor,
                     timeout_override_s=request.timeout_s,
                 )
-            elif request.kind == NO_MOTION_SKILL_KIND:
-                # Bring-up path: act as though a skill ran and the VLM check passed.
-                result = CommandResult(
-                    True,
-                    "SUCCESS",
-                    0.0,
-                    f"Simulated skill '{request.name}' completed without robot execution.",
-                )
             elif request.kind == VLM_GATE_PENDING_KIND:
-                # VLM-flow test path: open an attempt but do not resolve it.
+                # Human/VLM gate: open an attempt but do not resolve it.
                 result = CommandResult(
                     True,
                     "SUCCESS",
                     0.0,
-                    f"Simulated skill '{request.name}' completed and is awaiting a VLM result.",
+                    f"VLM gate '{request.name}' opened and is awaiting a VLM result.",
                 )
             else:
                 result = None
@@ -365,10 +345,10 @@ class SkillCommandServer(Node):
             self.get_logger().error(response.message)
             return response
 
-        if request.kind in _COMMAND_KINDS_THAT_OPEN_VLM_CHECK and result.success:
+        if request.kind in {"skill", VLM_GATE_PENDING_KIND} and result.success:
             try:
-                if request.kind in {NO_MOTION_SKILL_KIND, VLM_GATE_PENDING_KIND}:
-                    # Simulated skill names may not exist in the real skill config.
+                if request.kind == VLM_GATE_PENDING_KIND:
+                    # Gate names do not need to exist in the real skill config.
                     self.vlm_check_registry.register_skill_name(request.name)
                 vlm_check_attempt = self.vlm_check_registry.begin_attempt(request.name)
                 live_vlm_status = getattr(result, "vlm_status", None)
@@ -383,19 +363,6 @@ class SkillCommandServer(Node):
                         f"{result.message} "
                         f"VLM check attempt {vlm_check_attempt.attempt_id} was resolved as "
                         f"{live_vlm_status} from the live verifier result."
-                    )
-                elif request.kind in _COMMAND_KINDS_THAT_AUTO_PASS_VLM_CHECK or (
-                    request.kind == "skill" and self.cfg.auto_pass_vlm_check_for_real_skills
-                ):
-                    self.vlm_check_registry.report(
-                        skill_name=request.name,
-                        attempt_id=vlm_check_attempt.attempt_id,
-                        status=VLM_SUCCESS,
-                        message=f"Simulated verifier accepted skill '{request.name}'.",
-                    )
-                    result.message = (
-                        f"{result.message} "
-                        f"VLM check attempt {vlm_check_attempt.attempt_id} was auto-resolved as SUCCESS."
                     )
                 else:
                     publish_vlm_request = getattr(self, "_publish_vlm_request", None)

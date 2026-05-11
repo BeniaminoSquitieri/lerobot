@@ -18,7 +18,7 @@ again from the beginning.
 | Package | Role |
 | --- | --- |
 | `sandwich_bt_runtime_cpp` | Loads/ticks BT XML and bridges BT leaves to ROS2 services. |
-| `sandwich_bt_python` | Executes real BC skills, manages VLM check attempts, and provides the mock simulator entrypoint. |
+| `sandwich_bt_python` | Executes real BC skills and manages VLM check attempts. |
 | `sandwich_bt_interfaces` | Generates the three ROS2 service contracts used by the stack. |
 
 ## Active Flow
@@ -66,8 +66,6 @@ The Python server exposes:
 The readable BT command leaves map to these Python command kinds:
 
 - `RunRobotSkill`: runs one configured BC skill on the robot.
-- `SimulateRobotSkill`: skips robot motion and auto-marks the VLM check as
-  `SUCCESS`.
 - `OpenVLMGate`: opens a VLM/manual check attempt without robot motion.
 
 `/sandwich_bt/vlm_result` is the VLM/manual input boundary. It may report:
@@ -309,26 +307,4 @@ Legacy service path for a VLM/manual verdict. New tools should prefer the
 ```bash
 ros2 service call /sandwich_bt/vlm_result_legacy sandwich_bt_interfaces/srv/ReportSkillVerification \
   "{skill_name: 'place_first_toast', attempt_id: 0, status: 'SUCCESS', message: 'first toast ok'}"
-```
-
-### Optional mock/server commands
-
-Hardware-free mock server:
-
-```bash
-lerobot-bt-skill-sim --ros2-service
-```
-
-Optional topic-to-topic VLM stub. It listens on `/sandwich_bt/vlm_sim` and
-publishes normalized reports to `/sandwich_bt/vlm_result`:
-
-```bash
-lerobot-bt-vlm-stub
-```
-
-Example input for the stub:
-
-```bash
-ros2 topic pub --once /sandwich_bt/vlm_sim std_msgs/msg/String \
-  "{data: '{\"skill_name\":\"place_first_toast\",\"attempt_id\":0,\"status\":\"SUCCESS\",\"message\":\"first toast ok\"}'}"
 ```

@@ -75,7 +75,6 @@ def _make_server(*, known_skill_names: set[str] | None = None):
     server = SimpleNamespace(
         cfg=SimpleNamespace(
             play_sounds=False,
-            auto_pass_vlm_check_for_real_skills=False,
             vlm_state_service="/sandwich_bt/vlm_state",
             vlm_request_topic="/sandwich_bt/vlm_request",
         ),
@@ -113,19 +112,6 @@ def test_parser_wrap_sees_dataclass_config_annotation() -> None:
     argtype = inspect.getfullargspec(run.__wrapped__).annotations["cfg"]
 
     assert argtype is SkillCommandServerConfig
-
-
-def test_no_motion_skill_auto_passes_vlm_check_without_touching_executor() -> None:
-    server, executor = _make_server(known_skill_names={"place_first_toast"})
-
-    response = _handle_request(server, _request("no_motion_skill", "pour"), _response())
-    vlm_check = server.vlm_check_registry.get_latest("pour")
-
-    assert response.success
-    assert response.status == "SUCCESS"
-    assert executor.skill_calls == []
-    assert vlm_check is not None
-    assert vlm_check.status == VLM_SUCCESS
 
 
 def test_vlm_gate_pending_waits_for_external_verifier() -> None:

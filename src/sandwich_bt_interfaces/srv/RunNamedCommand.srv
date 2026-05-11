@@ -4,7 +4,6 @@
 # Request fields:
 # kind selects the command path:
 #   - "skill"            -> run one learned primitive
-#   - "no_motion_skill"  -> skip robot motion and auto-pass the VLM check
 #   - "vlm_gate_pending" -> open one gate and wait for a VLM result
 string kind
 # name must match one configured command entry on the Python side.

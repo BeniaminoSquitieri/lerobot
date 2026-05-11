@@ -35,7 +35,7 @@ namespace sandwich_bt_runtime_cpp
  *
  * @details The node is intentionally thin: BehaviorTree.CPP owns ticking and
  * halting, ROS2 owns service transport, and the Python server owns the actual
- * robot or simulated command execution.
+ * robot command execution or VLM/manual gate handling.
  */
 class RunNamedCommandNode : public BT::StatefulActionNode
 {
@@ -123,21 +123,6 @@ class OpenVLMGateNode : public RunNamedCommandNode
 {
 public:
   OpenVLMGateNode(
-    const std::string& name,
-    const BT::NodeConfiguration& config,
-    const rclcpp::Node::SharedPtr& ros_node,
-    const std::string& bt_command_service);
-
-  static BT::PortsList providedPorts();
-};
-
-/**
- * @brief BT leaf for bring-up trees that mark a skill as completed without motion.
- */
-class SimulateRobotSkillNode : public RunNamedCommandNode
-{
-public:
-  SimulateRobotSkillNode(
     const std::string& name,
     const BT::NodeConfiguration& config,
     const rclcpp::Node::SharedPtr& ros_node,

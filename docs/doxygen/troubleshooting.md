@@ -26,8 +26,6 @@ ros2 topic pub --once /sandwich_bt/vlm_result std_msgs/msg/String \
 The active server supports:
 
 - `skill`
-- `no_motion_skill`
 - `vlm_gate_pending`
 
-`recovery` and `simulated_recovery` are intentionally unsupported in the active
-runtime path.
+`recovery` is intentionally unsupported in the active runtime path.

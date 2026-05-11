@@ -7,7 +7,7 @@ This package only generates service bindings. It does not run nodes.
 ## Services
 
 - `RunNamedCommand.srv`: C++ BT runtime asks the Python server to run one skill
-  or open one simulated VLM gate.
+  or open one VLM/manual gate.
 - `GetSkillVerification.srv`: C++ BT runtime polls the latest VLM check state
   for one skill/gate. The default endpoint is `/sandwich_bt/vlm_state`.
 - `ReportSkillVerification.srv`: legacy compatibility path for reporting

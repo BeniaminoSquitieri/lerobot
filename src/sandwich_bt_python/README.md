@@ -23,10 +23,7 @@ motions. A VLM `FAILURE` is handled by the BT retrying the same BC skill.
 ## Active Command Kinds
 
 - `skill`: run a configured learned primitive.
-- `no_motion_skill`: skip robot motion and auto-resolve the VLM check as `SUCCESS`.
 - `vlm_gate_pending`: open a pending VLM check attempt without robot motion.
-
-`recovery` and `simulated_recovery` are not part of the active runtime path.
 
 ## Request Lifecycle
 
@@ -52,9 +49,7 @@ motions. A VLM `FAILURE` is handled by the BT retrying the same BC skill.
 - `config.py`: draccus config dataclasses for skills and server options.
 - `executor.py`: learned skill executor.
 - `server.py`: ROS2 service node for command execution and VLM check relay.
-- `simulation.py`: compatibility wrapper for `sandwich_bt_simulation.skill_server`.
 - `verification.py`: in-memory registry for VLM pending/success/failure verdicts.
-- `vlm_stub.py`: optional topic-to-topic helper for manual VLM testing.
 
 ## Manual VLM Result
 

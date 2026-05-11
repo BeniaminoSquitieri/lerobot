@@ -45,7 +45,7 @@ RunNamedCommandNode::RunNamedCommandNode(
 }
 
 /**
- * @brief Defines the input ports read from legacy command XML elements.
+ * @brief Defines the input ports read by the generic command node.
  */
 BT::PortsList RunNamedCommandNode::providedPorts()
 {
@@ -86,22 +86,6 @@ BT::PortsList OpenVLMGateNode::providedPorts()
 {
   return {
     BT::InputPort<std::string>("gate_name"),
-  };
-}
-
-SimulateRobotSkillNode::SimulateRobotSkillNode(
-  const std::string& name,
-  const BT::NodeConfiguration& config,
-  const rclcpp::Node::SharedPtr& ros_node,
-  const std::string& bt_command_service)
-: RunNamedCommandNode(name, config, ros_node, bt_command_service, "no_motion_skill", "skill_name", "")
-{
-}
-
-BT::PortsList SimulateRobotSkillNode::providedPorts()
-{
-  return {
-    BT::InputPort<std::string>("skill_name"),
   };
 }
 

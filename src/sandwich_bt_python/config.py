@@ -164,9 +164,6 @@ class SkillCommandServerConfig:
     # Reset the robot immediately before every learned skill rollout, matching
     # the standalone custom_manipulator record/rollout entrypoint.
     reset_robot_before_skill: bool = True
-    # Testing convenience: after a real skill finishes, automatically accept its
-    # VLM check attempt as if a VLM had returned SUCCESS.
-    auto_pass_vlm_check_for_real_skills: bool = False
     # Map of feature/key renames to align dataset keys with live robot keys.
     rename_map: dict[str, str] = field(default_factory=dict)
     # Processor pipeline applied to actions before they reach the robot.

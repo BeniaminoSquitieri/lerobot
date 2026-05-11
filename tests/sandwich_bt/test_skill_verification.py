@@ -2,12 +2,6 @@ from __future__ import annotations
 
 import pytest
 
-from sandwich_bt_python.simulation import (
-    MockLegacyVlmResultRequest,
-    MockRunNamedCommandRequest,
-    MockVlmStateRequest,
-    build_demo_stack,
-)
 from sandwich_bt_python.verification import (
     VLM_FAILURE,
     VLM_NEEDS_MANUAL_HELP,
@@ -122,32 +116,3 @@ def test_vlm_check_registry_times_out_waiting_attempt_as_failure() -> None:
     assert not late_success.accepted
     assert late_success.snapshot is not None
     assert late_success.snapshot.status == VLM_FAILURE
-
-
-def test_mock_service_exposes_pending_then_successful_vlm_check() -> None:
-    service = build_demo_stack()
-
-    skill_response = service.handle_request(
-        MockRunNamedCommandRequest(kind="skill", name="place_first_toast")
-    )
-    pending = service.handle_get_vlm_state(
-        MockVlmStateRequest(skill_name="place_first_toast")
-    )
-    report = service.handle_legacy_vlm_result(
-        MockLegacyVlmResultRequest(
-            skill_name="place_first_toast",
-            status=VLM_SUCCESS,
-            message="scene looks correct",
-        )
-    )
-    resolved = service.handle_get_vlm_state(
-        MockVlmStateRequest(skill_name="place_first_toast")
-    )
-
-    assert skill_response.success
-    assert pending.has_attempt
-    assert pending.status == VLM_PENDING
-    assert report.accepted
-    assert report.applied_attempt_id == pending.attempt_id
-    assert resolved.status == VLM_SUCCESS
-    assert resolved.message == "scene looks correct"

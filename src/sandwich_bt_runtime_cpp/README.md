@@ -21,7 +21,7 @@ It owns:
 
 - loading BT XML trees
 - registering readable command-start leaves: `OpenVLMGate`, `RunRobotSkill`,
-  and `SimulateRobotSkill`
+  and task-specific aliases
 - registering readable VLM-wait leaves: `WaitForGateVerdict` and
   `WaitForSkillVerdict`
 - ticking the tree until success or failure
@@ -56,8 +56,8 @@ At startup it:
 2. reads the runtime parameters `tree_xml_path`, `bt_command_service`,
    `vlm_state_service`, `tick_ms`, `enable_groot_publisher`, and
    `groot_publisher_port`
-3. registers `OpenVLMGate`, `RunRobotSkill`, `SimulateRobotSkill`, and the
-   task-specific aliases as custom BT builders
+3. registers `OpenVLMGate`, `RunRobotSkill`, and the task-specific aliases as
+   custom BT builders
 4. registers `WaitForGateVerdict` and `WaitForSkillVerdict` as VLM-check-node
    builders
 5. loads the XML tree from disk
@@ -73,9 +73,8 @@ and continues without monitor publishing instead of aborting.
 
 ## Command-Start Leaf Lifecycle
 
-`OpenVLMGate`, `RunRobotSkill`, `SimulateRobotSkill`, and the task-specific
-aliases are thin BT wrappers
-around the same ROS2 command service. They are implemented as
+`OpenVLMGate`, `RunRobotSkill`, and the task-specific aliases are thin BT
+wrappers around the same ROS2 command service. They are implemented as
 `BT::StatefulActionNode`, not synchronous actions, because the service reply
 may arrive after multiple tree ticks.
 
@@ -93,8 +92,7 @@ Its behavior is:
 
 `PrepareInitialScene` and `PrepareSecondToast` use the same behavior as
 `OpenVLMGate`. `PlaceFirstToast` and `PlaceSecondToast` use the same behavior
-as `RunRobotSkill`. `RunNamedCommand` and `RunSkillOrVLMGate` are still
-registered as legacy aliases for older Groot/XML files.
+as `RunRobotSkill`.
 
 ## Verdict-Wait Leaf Lifecycle
 
@@ -105,7 +103,7 @@ behavior:
 
 - `WaitForGateVerdict`: used for scene/human gates such as initial scene ready
   or human pouring.
-- `WaitForSkillVerdict`: used after a robot/simulated skill, where a VLM
+- `WaitForSkillVerdict`: used after a robot skill, where a VLM
   `FAILURE` means "retry this same skill from the beginning."
 
 The wrappers exist so Groot shows the intent of each VLM check point. They do
@@ -158,7 +156,6 @@ Python executor.
 - `RunRobotSkill` expects `skill_name`; `timeout_s` is optional.
 - `PlaceFirstToast` and `PlaceSecondToast` expect `skill_name`; `timeout_s` is
   optional.
-- `SimulateRobotSkill` expects `skill_name`.
 - `WaitForGateVerdict` expects `gate_name`.
 - `WaitForSkillVerdict` expects `skill_name`.
 

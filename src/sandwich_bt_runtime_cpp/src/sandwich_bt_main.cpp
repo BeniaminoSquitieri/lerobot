@@ -93,14 +93,6 @@ int main(int argc, char** argv)
   // Register each custom XML tag with a lambda that injects the already-created
   // ROS2 node and service name into the BT node constructor.
   BT::BehaviorTreeFactory factory;
-  const auto command_builder =
-    [node, bt_command_service](const std::string& instance_name, const BT::NodeConfiguration& config) {
-      return std::make_unique<sandwich_bt_runtime_cpp::RunNamedCommandNode>(
-        instance_name,
-        config,
-        node,
-        bt_command_service);
-    };
   const auto robot_skill_builder =
     [node, bt_command_service](const std::string& instance_name, const BT::NodeConfiguration& config) {
       return std::make_unique<sandwich_bt_runtime_cpp::RunRobotSkillNode>(
@@ -117,23 +109,12 @@ int main(int argc, char** argv)
         node,
         bt_command_service);
     };
-  const auto simulated_skill_builder =
-    [node, bt_command_service](const std::string& instance_name, const BT::NodeConfiguration& config) {
-      return std::make_unique<sandwich_bt_runtime_cpp::SimulateRobotSkillNode>(
-        instance_name,
-        config,
-        node,
-        bt_command_service);
-    };
   factory.registerBuilder<sandwich_bt_runtime_cpp::RunRobotSkillNode>(
     "RunRobotSkill",
     robot_skill_builder);
   factory.registerBuilder<sandwich_bt_runtime_cpp::OpenVLMGateNode>(
     "OpenVLMGate",
     vlm_gate_builder);
-  factory.registerBuilder<sandwich_bt_runtime_cpp::SimulateRobotSkillNode>(
-    "SimulateRobotSkill",
-    simulated_skill_builder);
   factory.registerBuilder<sandwich_bt_runtime_cpp::OpenVLMGateNode>(
     "PrepareInitialScene",
     vlm_gate_builder);
@@ -146,13 +127,6 @@ int main(int argc, char** argv)
   factory.registerBuilder<sandwich_bt_runtime_cpp::RunRobotSkillNode>(
     "PlaceSecondToast",
     robot_skill_builder);
-  factory.registerBuilder<sandwich_bt_runtime_cpp::RunNamedCommandNode>(
-    "RunSkillOrVLMGate",
-    command_builder);
-  // Keep the old XML tag valid for older saved Groot trees.
-  factory.registerBuilder<sandwich_bt_runtime_cpp::RunNamedCommandNode>(
-    "RunNamedCommand",
-    command_builder);
   factory.registerBuilder<sandwich_bt_runtime_cpp::VerifySkillOutcomeNode>(
     "VerifySkillOutcome",
     [node, vlm_state_service](const std::string& instance_name, const BT::NodeConfiguration& config) {
