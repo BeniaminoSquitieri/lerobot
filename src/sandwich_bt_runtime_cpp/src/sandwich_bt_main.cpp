@@ -6,6 +6,7 @@
  * and exposes optional Groot monitoring when supported.
  */
 #include <chrono>
+#include <exception>
 #include <memory>
 #include <string>
 
@@ -24,6 +25,7 @@
 #include <behaviortree_cpp/loggers/groot2_publisher.h>
 using GrootPublisherT = BT::Groot2Publisher;
 #define SANDWICH_BT_HAS_GROOT 1
+#define SANDWICH_BT_HAS_GROOT2_PUBLISHER 1
 #elif __has_include(<behaviortree_cpp/loggers/bt_zmq_publisher.h>)
 #include <behaviortree_cpp/loggers/bt_zmq_publisher.h>
 using GrootPublisherT = BT::PublisherZMQ;
@@ -34,6 +36,10 @@ using GrootPublisherT = BT::PublisherZMQ;
 #define SANDWICH_BT_HAS_GROOT 1
 #else
 #define SANDWICH_BT_HAS_GROOT 0
+#endif
+
+#ifndef SANDWICH_BT_HAS_GROOT2_PUBLISHER
+#define SANDWICH_BT_HAS_GROOT2_PUBLISHER 0
 #endif
 
 #include "sandwich_bt_runtime_cpp/run_named_command_node.hpp"
@@ -47,7 +53,7 @@ namespace
  */
 std::string default_tree_xml_path()
 {
-  return ament_index_cpp::get_package_share_directory("sandwich_bt_runtime_cpp") + "/trees/sandwich_tree.xml";
+  return ament_index_cpp::get_package_share_directory("sandwich_bt_runtime_cpp") + "/trees/makesandwitch.xml";
 }
 
 }  // namespace
@@ -75,29 +81,100 @@ int main(int argc, char** argv)
   node->declare_parameter<std::string>("vlm_state_service", "/sandwich_bt/vlm_state");
   node->declare_parameter<int>("tick_ms", 100);
   node->declare_parameter<bool>("enable_groot_publisher", true);
+  node->declare_parameter<int>("groot_publisher_port", 1667);
 
   const auto tree_xml_path = node->get_parameter("tree_xml_path").as_string();
   const auto bt_command_service = node->get_parameter("bt_command_service").as_string();
   const auto vlm_state_service = node->get_parameter("vlm_state_service").as_string();
   const auto tick_ms = node->get_parameter("tick_ms").as_int();
   const auto enable_groot = node->get_parameter("enable_groot_publisher").as_bool();
+  const auto groot_port = node->get_parameter("groot_publisher_port").as_int();
 
   // Register each custom XML tag with a lambda that injects the already-created
   // ROS2 node and service name into the BT node constructor.
   BT::BehaviorTreeFactory factory;
-  factory.registerBuilder<sandwich_bt_runtime_cpp::RunNamedCommandNode>(
-    "RunNamedCommand",
+  const auto command_builder =
     [node, bt_command_service](const std::string& instance_name, const BT::NodeConfiguration& config) {
       return std::make_unique<sandwich_bt_runtime_cpp::RunNamedCommandNode>(
         instance_name,
         config,
         node,
         bt_command_service);
-    });
+    };
+  const auto robot_skill_builder =
+    [node, bt_command_service](const std::string& instance_name, const BT::NodeConfiguration& config) {
+      return std::make_unique<sandwich_bt_runtime_cpp::RunRobotSkillNode>(
+        instance_name,
+        config,
+        node,
+        bt_command_service);
+    };
+  const auto vlm_gate_builder =
+    [node, bt_command_service](const std::string& instance_name, const BT::NodeConfiguration& config) {
+      return std::make_unique<sandwich_bt_runtime_cpp::OpenVLMGateNode>(
+        instance_name,
+        config,
+        node,
+        bt_command_service);
+    };
+  const auto simulated_skill_builder =
+    [node, bt_command_service](const std::string& instance_name, const BT::NodeConfiguration& config) {
+      return std::make_unique<sandwich_bt_runtime_cpp::SimulateRobotSkillNode>(
+        instance_name,
+        config,
+        node,
+        bt_command_service);
+    };
+  factory.registerBuilder<sandwich_bt_runtime_cpp::RunRobotSkillNode>(
+    "RunRobotSkill",
+    robot_skill_builder);
+  factory.registerBuilder<sandwich_bt_runtime_cpp::OpenVLMGateNode>(
+    "OpenVLMGate",
+    vlm_gate_builder);
+  factory.registerBuilder<sandwich_bt_runtime_cpp::SimulateRobotSkillNode>(
+    "SimulateRobotSkill",
+    simulated_skill_builder);
+  factory.registerBuilder<sandwich_bt_runtime_cpp::OpenVLMGateNode>(
+    "PrepareInitialScene",
+    vlm_gate_builder);
+  factory.registerBuilder<sandwich_bt_runtime_cpp::OpenVLMGateNode>(
+    "PrepareSecondToast",
+    vlm_gate_builder);
+  factory.registerBuilder<sandwich_bt_runtime_cpp::RunRobotSkillNode>(
+    "PlaceFirstToast",
+    robot_skill_builder);
+  factory.registerBuilder<sandwich_bt_runtime_cpp::RunRobotSkillNode>(
+    "PlaceSecondToast",
+    robot_skill_builder);
+  factory.registerBuilder<sandwich_bt_runtime_cpp::RunNamedCommandNode>(
+    "RunSkillOrVLMGate",
+    command_builder);
+  // Keep the old XML tag valid for older saved Groot trees.
+  factory.registerBuilder<sandwich_bt_runtime_cpp::RunNamedCommandNode>(
+    "RunNamedCommand",
+    command_builder);
   factory.registerBuilder<sandwich_bt_runtime_cpp::VerifySkillOutcomeNode>(
     "VerifySkillOutcome",
     [node, vlm_state_service](const std::string& instance_name, const BT::NodeConfiguration& config) {
       return std::make_unique<sandwich_bt_runtime_cpp::VerifySkillOutcomeNode>(
+        instance_name,
+        config,
+        node,
+        vlm_state_service);
+    });
+  factory.registerBuilder<sandwich_bt_runtime_cpp::WaitForGateVerdictNode>(
+    "WaitForGateVerdict",
+    [node, vlm_state_service](const std::string& instance_name, const BT::NodeConfiguration& config) {
+      return std::make_unique<sandwich_bt_runtime_cpp::WaitForGateVerdictNode>(
+        instance_name,
+        config,
+        node,
+        vlm_state_service);
+    });
+  factory.registerBuilder<sandwich_bt_runtime_cpp::WaitForSkillVerdictNode>(
+    "WaitForSkillVerdict",
+    [node, vlm_state_service](const std::string& instance_name, const BT::NodeConfiguration& config) {
+      return std::make_unique<sandwich_bt_runtime_cpp::WaitForSkillVerdictNode>(
         instance_name,
         config,
         node,
@@ -131,8 +208,25 @@ int main(int argc, char** argv)
 #if SANDWICH_BT_HAS_GROOT
   std::unique_ptr<GrootPublisherT> groot_publisher;
   if (enable_groot) {
-    groot_publisher = std::make_unique<GrootPublisherT>(tree);
-    RCLCPP_INFO(node->get_logger(), "Groot publisher enabled.");
+    try {
+#if SANDWICH_BT_HAS_GROOT2_PUBLISHER
+      groot_publisher = std::make_unique<GrootPublisherT>(tree, static_cast<unsigned>(groot_port));
+      RCLCPP_INFO(node->get_logger(), "Groot publisher enabled on port %d.", groot_port);
+#else
+      groot_publisher = std::make_unique<GrootPublisherT>(tree);
+      RCLCPP_INFO(
+        node->get_logger(),
+        "Groot publisher enabled. The 'groot_publisher_port' parameter is only supported with Groot2Publisher.");
+#endif
+    } catch (const std::exception& exc) {
+      RCLCPP_WARN(
+        node->get_logger(),
+        "Could not start Groot publisher: %s. Continuing without Groot monitoring. "
+        "If this says 'Address already in use', another sandwich_bt_runner may still be running "
+        "or the port is occupied; stop it or pass '-p enable_groot_publisher:=false'.",
+        exc.what());
+      groot_publisher.reset();
+    }
   }
 #else
   if (enable_groot) {
@@ -143,32 +237,64 @@ int main(int argc, char** argv)
   BT::NodeStatus status = BT::NodeStatus::RUNNING;
   rclcpp::WallRate rate{std::chrono::milliseconds(tick_ms)};
 
-  // Main BT loop: each tick may trigger one service-backed leaf execution.
-  while (rclcpp::ok() && status == BT::NodeStatus::RUNNING) {
-    status = tree.tickOnce();
+  const auto cleanup = [&](const char* reason) {
+    const bool ros_context_active = rclcpp::ok();
+    if (ros_context_active) {
+      RCLCPP_INFO(node->get_logger(), "Stopping behavior tree runner: %s", reason);
+    }
+    try {
+      tree.haltTree();
+    } catch (const std::exception& exc) {
+      if (ros_context_active) {
+        RCLCPP_WARN(node->get_logger(), "Exception while halting behavior tree: %s", exc.what());
+      }
+    }
+
+#if SANDWICH_BT_HAS_GROOT
+    try {
+      groot_publisher.reset();
+    } catch (const std::exception& exc) {
+      if (ros_context_active) {
+        RCLCPP_WARN(node->get_logger(), "Exception while stopping Groot publisher: %s", exc.what());
+      }
+    }
+#endif
+
+    if (rclcpp::ok()) {
+      rclcpp::shutdown();
+    }
+  };
+
+  try {
+    // Main BT loop: each tick may trigger one service-backed leaf execution.
+    while (rclcpp::ok() && status == BT::NodeStatus::RUNNING) {
+      status = tree.tickOnce();
+      if (rclcpp::ok()) {
+        rclcpp::spin_some(node);
+      }
+      rate.sleep();
+    }
+
     if (rclcpp::ok()) {
       rclcpp::spin_some(node);
     }
-    rate.sleep();
+  } catch (const std::exception& exc) {
+    RCLCPP_ERROR(node->get_logger(), "Behavior tree runner caught exception: %s", exc.what());
+    cleanup("exception");
+    return 1;
   }
 
-  if (rclcpp::ok()) {
-    rclcpp::spin_some(node);
-  }
   if (!rclcpp::ok() && status == BT::NodeStatus::RUNNING) {
+    cleanup("interrupt requested");
     return 130;
   }
   if (status == BT::NodeStatus::SUCCESS) {
     RCLCPP_INFO(node->get_logger(), "Behavior tree completed with SUCCESS.");
-    if (rclcpp::ok()) {
-      rclcpp::shutdown();
-    }
+    cleanup("tree completed with SUCCESS");
     return 0;
   }
 
   RCLCPP_ERROR(node->get_logger(), "Behavior tree completed with FAILURE.");
-  if (rclcpp::ok()) {
-    rclcpp::shutdown();
-  }
+  cleanup("tree completed with FAILURE");
   return 1;
 }

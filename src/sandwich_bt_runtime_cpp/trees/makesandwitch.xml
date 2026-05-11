@@ -1,0 +1,99 @@
+<!--
+  @file makesandwitch.xml
+  @brief Active sandwich behavior tree with two real BC skills and manual/VLM topic gates.
+
+  This tree matches the current real-robot sandwich task:
+  1. wait for the scene-ready verdict,
+  2. run the first real toast skill,
+  3. wait for human pouring to be verified,
+  4. wait for the second toast to be positioned by the human,
+  5. run the second real toast skill.
+
+  The verifier can be a real VLM or a human publishing the same JSON verdicts
+  on /sandwich_bt/vlm_result. The BT does not depend on who publishes.
+  Named retry and VLM verdict nodes are used so Groot exposes the replanning
+  structure during bring-up.
+-->
+<root BTCPP_format="4" main_tree_to_execute="MainTree">
+  <BehaviorTree ID="MainTree">
+    <Sequence name="Make sandwitch - two real skills + manual VLM">
+      <!-- Stage 0: no robot motion; wait until the initial scene is ready. -->
+      <RetryUntilSuccessful name="STAGE 0 - Initial scene ready" num_attempts="-1">
+        <Sequence name="Open VLM gate, then wait for ready scene">
+          <PrepareInitialScene name="Prepare initial scene" gate_name="initial_scene_ready"/>
+          <WaitForGateVerdict name="Wait verdict - scene ready" gate_name="initial_scene_ready"/>
+        </Sequence>
+      </RetryUntilSuccessful>
+
+      <!-- Stage 1: first real BC primitive, then VLM/manual verification. -->
+      <RetryUntilSuccessful name="STAGE 1 - Place first toast" num_attempts="-1">
+        <Sequence name="Run real skill, then verify first toast">
+          <PlaceFirstToast name="Place first toast" skill_name="place_first_toast" timeout_s="120.0"/>
+          <WaitForSkillVerdict
+            name="Wait skill verdict - first toast"
+            skill_name="place_first_toast"/>
+        </Sequence>
+      </RetryUntilSuccessful>
+
+      <!-- Stage 2: human pouring; the gate succeeds only after topic verification. -->
+      <RetryUntilSuccessful name="STAGE 2 - Human pours ingredient" num_attempts="-1">
+        <Sequence name="Open human-step gate, then wait for poured ingredient">
+          <OpenVLMGate name="Open VLM/manual check - human pouring" gate_name="pour_ingredient"/>
+          <WaitForGateVerdict
+            name="Wait verdict - pouring complete"
+            gate_name="pour_ingredient"/>
+        </Sequence>
+      </RetryUntilSuccessful>
+
+      <!-- Stage 3: human positions the second toast before the robot picks it. -->
+      <RetryUntilSuccessful name="STAGE 3 - Second toast ready" num_attempts="-1">
+        <Sequence name="Open second-toast gate, then wait for ready toast">
+          <PrepareSecondToast name="Prepare second toast" gate_name="second_toast_ready"/>
+          <WaitForGateVerdict
+            name="Wait verdict - second toast ready"
+            gate_name="second_toast_ready"/>
+        </Sequence>
+      </RetryUntilSuccessful>
+
+      <!-- Stage 4: second real BC primitive, then final VLM/manual verification. -->
+      <RetryUntilSuccessful name="STAGE 4 - Place second toast" num_attempts="-1">
+        <Sequence name="Run real skill, then verify closed sandwich">
+          <PlaceSecondToast name="Place second toast" skill_name="place_second_toast" timeout_s="30.0"/>
+          <WaitForSkillVerdict
+            name="Wait skill verdict - second toast"
+            skill_name="place_second_toast"/>
+        </Sequence>
+      </RetryUntilSuccessful>
+    </Sequence>
+  </BehaviorTree>
+
+  <TreeNodesModel>
+    <Action ID="OpenVLMGate">
+      <input_port name="gate_name"/>
+    </Action>
+    <Action ID="RunRobotSkill">
+      <input_port name="skill_name"/>
+      <input_port name="timeout_s"/>
+    </Action>
+    <Action ID="PrepareInitialScene">
+      <input_port name="gate_name"/>
+    </Action>
+    <Action ID="PrepareSecondToast">
+      <input_port name="gate_name"/>
+    </Action>
+    <Action ID="PlaceFirstToast">
+      <input_port name="skill_name"/>
+      <input_port name="timeout_s"/>
+    </Action>
+    <Action ID="PlaceSecondToast">
+      <input_port name="skill_name"/>
+      <input_port name="timeout_s"/>
+    </Action>
+    <Action ID="WaitForGateVerdict">
+      <input_port name="gate_name"/>
+    </Action>
+    <Action ID="WaitForSkillVerdict">
+      <input_port name="skill_name"/>
+    </Action>
+  </TreeNodesModel>
+</root>

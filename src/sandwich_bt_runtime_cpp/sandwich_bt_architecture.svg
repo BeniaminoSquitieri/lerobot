@@ -31,7 +31,7 @@
   <text class="h1" x="110" y="215">BehaviorTree.CPP</text>
   <text class="mono" x="110" y="250">sandwich_bt_runner</text>
   <text class="small" x="110" y="282">Sequence + RetryUntilSuccessful</text>
-  <text class="small" x="110" y="310">RunNamedCommand, VerifySkillOutcome</text>
+  <text class="small" x="110" y="310">OpenVLMGate / RunRobotSkill, then wait verdict</text>
 
   <rect class="box green" x="610" y="150" width="420" height="220"/>
   <text class="h1" x="640" y="195">Python Skill Server</text>
@@ -57,7 +57,7 @@
   <text class="small" x="110" y="623">Reports waiting, success, failure, or next_action.</text>
 
   <path class="arrow" d="M460 250 C520 250 545 250 610 250"/>
-  <text class="mono" x="488" y="235">RunNamedCommand</text>
+  <text class="mono" x="488" y="235">RunRobotSkill / OpenVLMGate</text>
   <path class="arrow" d="M1030 250 C1085 250 1120 250 1180 250"/>
   <text class="mono" x="1062" y="235">BC actions</text>
   <path class="arrow" d="M820 370 C820 430 820 470 820 515"/>

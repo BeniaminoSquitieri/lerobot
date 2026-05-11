@@ -7,6 +7,7 @@
 #include <chrono>
 #include <exception>
 #include <future>
+#include <utility>
 
 namespace sandwich_bt_runtime_cpp
 {
@@ -19,10 +20,21 @@ VerifySkillOutcomeNode::VerifySkillOutcomeNode(
   const BT::NodeConfiguration& config,
   const rclcpp::Node::SharedPtr& ros_node,
   const std::string& vlm_state_service)
+: VerifySkillOutcomeNode(name, config, ros_node, vlm_state_service, "skill_name")
+{
+}
+
+VerifySkillOutcomeNode::VerifySkillOutcomeNode(
+  const std::string& name,
+  const BT::NodeConfiguration& config,
+  const rclcpp::Node::SharedPtr& ros_node,
+  const std::string& vlm_state_service,
+  std::string check_name_port)
 : BT::StatefulActionNode(name, config),
   ros_node_(ros_node),
   client_(ros_node_->create_client<ServiceT>(vlm_state_service)),
-  vlm_state_service_(vlm_state_service)
+  vlm_state_service_(vlm_state_service),
+  check_name_port_(std::move(check_name_port))
 {
 }
 
@@ -36,28 +48,67 @@ BT::PortsList VerifySkillOutcomeNode::providedPorts()
   };
 }
 
+WaitForGateVerdictNode::WaitForGateVerdictNode(
+  const std::string& name,
+  const BT::NodeConfiguration& config,
+  const rclcpp::Node::SharedPtr& ros_node,
+  const std::string& vlm_state_service)
+: VerifySkillOutcomeNode(name, config, ros_node, vlm_state_service, "gate_name")
+{
+}
+
+BT::PortsList WaitForGateVerdictNode::providedPorts()
+{
+  return {
+    BT::InputPort<std::string>("gate_name"),
+  };
+}
+
+WaitForSkillVerdictNode::WaitForSkillVerdictNode(
+  const std::string& name,
+  const BT::NodeConfiguration& config,
+  const rclcpp::Node::SharedPtr& ros_node,
+  const std::string& vlm_state_service)
+: VerifySkillOutcomeNode(name, config, ros_node, vlm_state_service, "skill_name")
+{
+}
+
+BT::PortsList WaitForSkillVerdictNode::providedPorts()
+{
+  return {
+    BT::InputPort<std::string>("skill_name"),
+  };
+}
+
 /**
- * @brief Dispatches one asynchronous VLM state lookup for the current skill.
+ * @brief Dispatches one asynchronous VLM state lookup for the current check.
  */
 void VerifySkillOutcomeNode::startRequest()
 {
   auto request = std::make_shared<ServiceT::Request>();
-  request->skill_name = skill_name_;
+  request->skill_name = check_name_;
   auto future_and_request_id = client_->async_send_request(request);
   future_ = future_and_request_id.future.share();
   request_pending_ = true;
 }
 
 /**
- * @brief Reads the skill name and starts polling the VLM state service.
+ * @brief Reads the check name and starts polling the VLM state service.
  */
 BT::NodeStatus VerifySkillOutcomeNode::onStart()
 {
-  if (!getInput("skill_name", skill_name_)) {
-    throw BT::RuntimeError("VerifySkillOutcome missing required input port 'skill_name'");
+  if (!rclcpp::ok()) {
+    return BT::NodeStatus::RUNNING;
+  }
+
+  if (!getInput(check_name_port_, check_name_)) {
+    throw BT::RuntimeError("VLM verdict node missing required input port '" + check_name_port_ + "'");
   }
 
   if (!client_->wait_for_service(std::chrono::seconds(5))) {
+    if (!rclcpp::ok()) {
+      return BT::NodeStatus::RUNNING;
+    }
     RCLCPP_ERROR(ros_node_->get_logger(), "Service '%s' not available.", vlm_state_service_.c_str());
     return BT::NodeStatus::FAILURE;
   }
@@ -65,8 +116,8 @@ BT::NodeStatus VerifySkillOutcomeNode::onStart()
   startRequest();
   RCLCPP_INFO(
     ros_node_->get_logger(),
-    "Started VLM check polling for skill '%s'.",
-    skill_name_.c_str());
+    "Started VLM verdict polling for check '%s'.",
+    check_name_.c_str());
   return BT::NodeStatus::RUNNING;
 }
 
@@ -75,6 +126,10 @@ BT::NodeStatus VerifySkillOutcomeNode::onStart()
  */
 BT::NodeStatus VerifySkillOutcomeNode::onRunning()
 {
+  if (!rclcpp::ok()) {
+    return BT::NodeStatus::RUNNING;
+  }
+
   if (!request_pending_) {
     return BT::NodeStatus::FAILURE;
   }
@@ -92,8 +147,8 @@ BT::NodeStatus VerifySkillOutcomeNode::onRunning()
     if (!response->has_attempt) {
       RCLCPP_ERROR(
         ros_node_->get_logger(),
-        "VLM check for skill '%s' has no recorded attempt: %s",
-        skill_name_.c_str(),
+        "VLM check '%s' has no recorded attempt: %s",
+        check_name_.c_str(),
         response->message.c_str());
       return BT::NodeStatus::FAILURE;
     }
@@ -101,8 +156,8 @@ BT::NodeStatus VerifySkillOutcomeNode::onRunning()
     if (response->status == "SUCCESS") {
       RCLCPP_INFO(
         ros_node_->get_logger(),
-        "VLM check succeeded for skill '%s' attempt %d: %s",
-        skill_name_.c_str(),
+        "VLM check '%s' succeeded for attempt %d: %s",
+        check_name_.c_str(),
         response->attempt_id,
         response->message.c_str());
       return BT::NodeStatus::SUCCESS;
@@ -111,8 +166,8 @@ BT::NodeStatus VerifySkillOutcomeNode::onRunning()
     if (response->status == "FAILURE") {
       RCLCPP_ERROR(
         ros_node_->get_logger(),
-        "VLM check failed for skill '%s' attempt %d: %s",
-        skill_name_.c_str(),
+        "VLM check '%s' failed for attempt %d: %s",
+        check_name_.c_str(),
         response->attempt_id,
         response->message.c_str());
       return BT::NodeStatus::FAILURE;
@@ -128,8 +183,8 @@ BT::NodeStatus VerifySkillOutcomeNode::onRunning()
       // yet, or it explicitly requested waiting for human/manual progress.
       RCLCPP_DEBUG(
         ros_node_->get_logger(),
-        "VLM check still waiting for skill '%s' attempt %d status='%s': %s",
-        skill_name_.c_str(),
+        "VLM check '%s' still waiting for attempt %d status='%s': %s",
+        check_name_.c_str(),
         response->attempt_id,
         response->status.c_str(),
         response->message.c_str());
@@ -139,8 +194,8 @@ BT::NodeStatus VerifySkillOutcomeNode::onRunning()
 
     RCLCPP_ERROR(
       ros_node_->get_logger(),
-      "VLM check for skill '%s' returned unexpected status '%s': %s",
-      skill_name_.c_str(),
+      "VLM check '%s' returned unexpected status '%s': %s",
+      check_name_.c_str(),
       response->status.c_str(),
       response->message.c_str());
     return BT::NodeStatus::FAILURE;
@@ -157,10 +212,12 @@ BT::NodeStatus VerifySkillOutcomeNode::onRunning()
 void VerifySkillOutcomeNode::onHalted()
 {
   request_pending_ = false;
-  RCLCPP_WARN(
-    ros_node_->get_logger(),
-    "VerifySkillOutcome halted while polling service '%s'.",
-    vlm_state_service_.c_str());
+  if (rclcpp::ok()) {
+    RCLCPP_WARN(
+      ros_node_->get_logger(),
+      "VerifySkillOutcome halted while polling service '%s'.",
+      vlm_state_service_.c_str());
+  }
 }
 
 }  // namespace sandwich_bt_runtime_cpp

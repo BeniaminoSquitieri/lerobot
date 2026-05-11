@@ -39,8 +39,9 @@ motions. A VLM `FAILURE` is handled by the BT retrying the same BC skill.
    `MANUAL_INTERVENTION_REQUIRED` result arrives while the skill is running,
    the executor stops the rollout and `server.py` creates the VLM check attempt
    already set to that verifier status.
-6. `VerifySkillOutcome` polls `/sandwich_bt/vlm_state` and returns
-   BT `RUNNING` while the attempt remains in a waiting state.
+6. `WaitForGateVerdict` or `WaitForSkillVerdict` polls
+   `/sandwich_bt/vlm_state` and returns BT `RUNNING` while the attempt remains
+   in a waiting state.
 7. A manual tester or VLM publishes JSON on `/sandwich_bt/vlm_result`
    with `RUNNING`, `WAIT_HUMAN`, `MANUAL_INTERVENTION_REQUIRED`, `SUCCESS`, or
    `FAILURE`.
@@ -102,10 +103,10 @@ marks the attempt as `FAILURE`; the BT VLM check node then returns failure
 and the XML retry wrapper reruns the same skill. Set `vlm_timeout_s: 0`
 to disable this automatic timeout.
 
-## Current Two-Skill Test
+## Active Sandwich Tree
 
-Use `sandwich_tree_two_real_skills_manual_vlm.xml` for the current temporary
-task with two real BC skills and manual VLM verdicts. For VLM gates, wait for
+Use `makesandwitch.xml` for the active task with two real BC skills and manual
+VLM verdicts. For VLM gates, wait for
 `/sandwich_bt/vlm_request` before publishing. For real BC skills, either wait
 for the request after the rollout ends or publish the terminal/manual verdict
 while the skill is moving to stop it immediately.
@@ -116,7 +117,8 @@ Expected manual report order:
 initial_scene_ready SUCCESS -> starts place_first_toast
 place_first_toast SUCCESS -> opens the human pouring gate
 pour_ingredient WAIT_HUMAN/RUNNING -> BT keeps waiting
-pour_ingredient SUCCESS -> starts place_second_toast
+pour_ingredient SUCCESS -> opens the second-toast positioning gate
+second_toast_ready SUCCESS -> starts place_second_toast
 place_second_toast SUCCESS -> completes the BT
 ```
 

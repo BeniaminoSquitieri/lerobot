@@ -6,6 +6,7 @@
 
 #include <exception>
 #include <future>
+#include <utility>
 
 namespace sandwich_bt_runtime_cpp
 {
@@ -21,15 +22,30 @@ RunNamedCommandNode::RunNamedCommandNode(
   const BT::NodeConfiguration& config,
   const rclcpp::Node::SharedPtr& ros_node,
   const std::string& bt_command_service)
+: RunNamedCommandNode(name, config, ros_node, bt_command_service, "", "command_name", "timeout_s")
+{
+}
+
+RunNamedCommandNode::RunNamedCommandNode(
+  const std::string& name,
+  const BT::NodeConfiguration& config,
+  const rclcpp::Node::SharedPtr& ros_node,
+  const std::string& bt_command_service,
+  std::string fixed_kind,
+  std::string command_name_port,
+  std::string timeout_port)
 : BT::StatefulActionNode(name, config),
   ros_node_(ros_node),
   client_(ros_node_->create_client<ServiceT>(bt_command_service)),
-  bt_command_service_(bt_command_service)
+  bt_command_service_(bt_command_service),
+  fixed_kind_(std::move(fixed_kind)),
+  command_name_port_(std::move(command_name_port)),
+  timeout_port_(std::move(timeout_port))
 {
 }
 
 /**
- * @brief Defines the input ports read from each RunNamedCommand XML element.
+ * @brief Defines the input ports read from legacy command XML elements.
  */
 BT::PortsList RunNamedCommandNode::providedPorts()
 {
@@ -40,26 +56,86 @@ BT::PortsList RunNamedCommandNode::providedPorts()
   };
 }
 
+RunRobotSkillNode::RunRobotSkillNode(
+  const std::string& name,
+  const BT::NodeConfiguration& config,
+  const rclcpp::Node::SharedPtr& ros_node,
+  const std::string& bt_command_service)
+: RunNamedCommandNode(name, config, ros_node, bt_command_service, "skill", "skill_name", "timeout_s")
+{
+}
+
+BT::PortsList RunRobotSkillNode::providedPorts()
+{
+  return {
+    BT::InputPort<std::string>("skill_name"),
+    BT::InputPort<double>("timeout_s", 0.0, "Optional timeout override in seconds")
+  };
+}
+
+OpenVLMGateNode::OpenVLMGateNode(
+  const std::string& name,
+  const BT::NodeConfiguration& config,
+  const rclcpp::Node::SharedPtr& ros_node,
+  const std::string& bt_command_service)
+: RunNamedCommandNode(name, config, ros_node, bt_command_service, "vlm_gate_pending", "gate_name", "")
+{
+}
+
+BT::PortsList OpenVLMGateNode::providedPorts()
+{
+  return {
+    BT::InputPort<std::string>("gate_name"),
+  };
+}
+
+SimulateRobotSkillNode::SimulateRobotSkillNode(
+  const std::string& name,
+  const BT::NodeConfiguration& config,
+  const rclcpp::Node::SharedPtr& ros_node,
+  const std::string& bt_command_service)
+: RunNamedCommandNode(name, config, ros_node, bt_command_service, "no_motion_skill", "skill_name", "")
+{
+}
+
+BT::PortsList SimulateRobotSkillNode::providedPorts()
+{
+  return {
+    BT::InputPort<std::string>("skill_name"),
+  };
+}
+
 /**
  * @brief Validates inputs, waits briefly for the server, and starts the call.
  */
 BT::NodeStatus RunNamedCommandNode::onStart()
 {
+  if (!rclcpp::ok()) {
+    return BT::NodeStatus::RUNNING;
+  }
+
   // These variables mirror the XML attributes; missing required inputs mean
   // the tree definition is invalid and should fail loudly during execution.
   std::string kind;
   std::string name;
   double timeout_s = 0.0;
 
-  if (!getInput("kind", kind)) {
+  if (!fixed_kind_.empty()) {
+    kind = fixed_kind_;
+  } else if (!getInput("kind", kind)) {
     throw BT::RuntimeError("RunNamedCommand missing required input port 'kind'");
   }
-  if (!getInput("command_name", name)) {
-    throw BT::RuntimeError("RunNamedCommand missing required input port 'command_name'");
+  if (!getInput(command_name_port_, name)) {
+    throw BT::RuntimeError("Command node missing required input port '" + command_name_port_ + "'");
   }
-  getInput("timeout_s", timeout_s);
+  if (!timeout_port_.empty()) {
+    getInput(timeout_port_, timeout_s);
+  }
 
   if (!client_->wait_for_service(std::chrono::seconds(5))) {
+    if (!rclcpp::ok()) {
+      return BT::NodeStatus::RUNNING;
+    }
     RCLCPP_ERROR(ros_node_->get_logger(), "Service '%s' not available.", bt_command_service_.c_str());
     return BT::NodeStatus::FAILURE;
   }
@@ -90,6 +166,10 @@ BT::NodeStatus RunNamedCommandNode::onStart()
  */
 BT::NodeStatus RunNamedCommandNode::onRunning()
 {
+  if (!rclcpp::ok()) {
+    return BT::NodeStatus::RUNNING;
+  }
+
   if (!request_pending_) {
     return BT::NodeStatus::FAILURE;
   }
@@ -134,10 +214,12 @@ void RunNamedCommandNode::onHalted()
 {
   // The BT can halt this node, but the server-side command may already be running.
   request_pending_ = false;
-  RCLCPP_WARN(
-    ros_node_->get_logger(),
-    "RunNamedCommand halted while service '%s' may still be executing server-side.",
-    bt_command_service_.c_str());
+  if (rclcpp::ok()) {
+    RCLCPP_WARN(
+      ros_node_->get_logger(),
+      "RunNamedCommand halted while service '%s' may still be executing server-side.",
+      bt_command_service_.c_str());
+  }
 }
 
 }  // namespace sandwich_bt_runtime_cpp

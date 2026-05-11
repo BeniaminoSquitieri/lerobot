@@ -20,9 +20,10 @@ This package owns BT orchestration.
 It owns:
 
 - loading BT XML trees
-- registering the `RunNamedCommand` BT leaf
-- registering the `VerifySkillOutcome` BT leaf and the Groot-readable aliases
-  `WaitForVLMDecision` and `VLMReplanningDecision`
+- registering readable command-start leaves: `OpenVLMGate`, `RunRobotSkill`,
+  and `SimulateRobotSkill`
+- registering readable VLM-wait leaves: `WaitForGateVerdict` and
+  `WaitForSkillVerdict`
 - ticking the tree until success or failure
 - converting service replies into BT `RUNNING`, `SUCCESS`, or `FAILURE`
 - publishing to Groot when supported by the installed BehaviorTree.CPP version
@@ -42,9 +43,7 @@ Those belong to `sandwich_bt_python`.
 - `include/sandwich_bt_runtime_cpp/run_named_command_node.hpp`: BT leaf declaration
 - `src/verify_skill_outcome_node.cpp`: BT leaf that polls VLM check state
 - `include/sandwich_bt_runtime_cpp/verify_skill_outcome_node.hpp`: VLM check leaf declaration
-- `trees/sandwich_tree.xml`: full sandwich task tree
-- `trees/sandwich_tree_first_real_rest_simulated.xml`: bring-up tree that runs `place_first_toast` as real and simulates the remaining primitives
-- `trees/sandwich_tree_two_real_skills_manual_vlm.xml`: current two-real-skill task with manual/VLM topic gates
+- `trees/makesandwitch.xml`: active two-real-skill sandwich task with manual/VLM topic gates
 
 ## Execution Model
 
@@ -55,10 +54,12 @@ At startup it:
 
 1. creates one ROS2 node named `sandwich_bt_runner`
 2. reads the runtime parameters `tree_xml_path`, `bt_command_service`,
-   `vlm_state_service`, `tick_ms`, and `enable_groot_publisher`
-3. registers `RunNamedCommand` as a custom BT builder
-4. registers `VerifySkillOutcome`, `WaitForVLMDecision`, and
-   `VLMReplanningDecision` as VLM-check-node builders
+   `vlm_state_service`, `tick_ms`, `enable_groot_publisher`, and
+   `groot_publisher_port`
+3. registers `OpenVLMGate`, `RunRobotSkill`, `SimulateRobotSkill`, and the
+   task-specific aliases as custom BT builders
+4. registers `WaitForGateVerdict` and `WaitForSkillVerdict` as VLM-check-node
+   builders
 5. loads the XML tree from disk
 6. optionally enables a Groot publisher if the installed BT.CPP version has a
    compatible publisher API
@@ -66,17 +67,22 @@ At startup it:
 
 The executable returns `0` on final BT `SUCCESS` and `1` on final BT `FAILURE`.
 That makes the process exit code usable as a high-level integration signal.
+On `Ctrl+C`, it halts the active BT, destroys the Groot/ZMQ publisher, and then
+returns `130`. If the Groot port is already occupied, the runner logs a warning
+and continues without monitor publishing instead of aborting.
 
-## `RunNamedCommand` Leaf Lifecycle
+## Command-Start Leaf Lifecycle
 
-The custom leaf is implemented as a `BT::StatefulActionNode`, not a synchronous
-action, because the ROS2 service reply may arrive after multiple tree ticks.
+`OpenVLMGate`, `RunRobotSkill`, `SimulateRobotSkill`, and the task-specific
+aliases are thin BT wrappers
+around the same ROS2 command service. They are implemented as
+`BT::StatefulActionNode`, not synchronous actions, because the service reply
+may arrive after multiple tree ticks.
 
 Its behavior is:
 
-1. `onStart()` validates the BT input ports `kind` and `command_name`, reads the
-   optional `timeout_s`, waits for the configured ROS2 service, and sends an
-   asynchronous request.
+1. `onStart()` validates the visible BT input port, waits for the configured
+   ROS2 service, and sends an asynchronous request.
 2. The node returns `RUNNING` immediately after sending the request.
 3. `onRunning()` polls the future. While the service call is incomplete, the
    node keeps returning `RUNNING`.
@@ -85,21 +91,24 @@ Its behavior is:
 5. `onHalted()` clears the local waiting state, but it does not cancel work
    already executing on the Python server.
 
-This means the leaf is only a transport bridge. All semantics of "what a skill
-does" remain on the Python side.
+`PrepareInitialScene` and `PrepareSecondToast` use the same behavior as
+`OpenVLMGate`. `PlaceFirstToast` and `PlaceSecondToast` use the same behavior
+as `RunRobotSkill`. `RunNamedCommand` and `RunSkillOrVLMGate` are still
+registered as legacy aliases for older Groot/XML files.
 
-## `VerifySkillOutcome` Leaf Lifecycle
+## Verdict-Wait Leaf Lifecycle
 
 This second custom leaf is also a `BT::StatefulActionNode`.
 
-The XML trees normally use two semantic aliases of this same C++ class:
+The XML trees normally use two readable wrappers of this same C++ polling
+behavior:
 
-- `WaitForVLMDecision`: used for scene/human gates such as initial scene ready
+- `WaitForGateVerdict`: used for scene/human gates such as initial scene ready
   or human pouring.
-- `VLMReplanningDecision`: used after a robot/simulated skill, where a VLM
+- `WaitForSkillVerdict`: used after a robot/simulated skill, where a VLM
   `FAILURE` means "retry this same skill from the beginning."
 
-The aliases exist so Groot shows the intent of each VLM check point. They do
+The wrappers exist so Groot shows the intent of each VLM check point. They do
 not add a second communication path and they do not change the ROS2 contract.
 The XML files also include `TreeNodesModel` entries for these custom nodes so
 Groot can display/edit their ports when opening the tree file directly.
@@ -126,13 +135,16 @@ shape:
 
 - retry behavior lives in XML through `RetryUntilSuccessful`
 - local ordering lives in XML through `Sequence`
-- robot-side effects are always requested through `RunNamedCommand`
-- VLM/manual waiting gates are shown as `WaitForVLMDecision`
-- post-skill retry decisions are shown as `VLMReplanningDecision`
+- VLM/manual gates are opened through `OpenVLMGate` or task-specific aliases
+  such as `PrepareInitialScene` and `PrepareSecondToast`
+- robot skills are executed through `RunRobotSkill` or task-specific aliases
+  such as `PlaceFirstToast` and `PlaceSecondToast`
+- VLM/manual gate verdicts are awaited through `WaitForGateVerdict`
+- robot skill verdicts are awaited through `WaitForSkillVerdict`
 For example, the usual subtree shape is:
 
 1. run one named BC skill
-2. check the outcome of that skill through `VLMReplanningDecision`
+2. check the outcome of that skill through `WaitForSkillVerdict`
 3. if the VLM reports `FAILURE`, let the named `RetryUntilSuccessful` trigger
    another attempt of the same skill
 
@@ -141,16 +153,17 @@ Python executor.
 
 ## BT Ports And Naming
 
-- The leaf expects the port name `command_name`, not `name`.
-- `kind` is forwarded as an opaque string. The Python server currently handles
-   `skill`, `no_motion_skill`, and `vlm_gate_pending`.
-- `timeout_s` is optional and overrides the Python-side default for that one
-  leaf execution.
-- `VerifySkillOutcome`, `WaitForVLMDecision`, and `VLMReplanningDecision` expect
-  the port `skill_name`.
+- `OpenVLMGate` expects `gate_name`.
+- `PrepareInitialScene` and `PrepareSecondToast` expect `gate_name`.
+- `RunRobotSkill` expects `skill_name`; `timeout_s` is optional.
+- `PlaceFirstToast` and `PlaceSecondToast` expect `skill_name`; `timeout_s` is
+  optional.
+- `SimulateRobotSkill` expects `skill_name`.
+- `WaitForGateVerdict` expects `gate_name`.
+- `WaitForSkillVerdict` expects `skill_name`.
 
-The C++ runtime does not interpret the command name. It only forwards the
-string. The matching config entry must exist on the Python side.
+The C++ runtime maps these readable ports to the Python command service. A
+real skill name must still match an entry in the Python skill config.
 
 ## When To Modify This Package
 

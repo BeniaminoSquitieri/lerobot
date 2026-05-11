@@ -26,7 +26,7 @@ again from the beginning.
 Default tree:
 
 ```text
-src/sandwich_bt_runtime_cpp/trees/sandwich_tree.xml
+src/sandwich_bt_runtime_cpp/trees/makesandwitch.xml
 ```
 
 Runtime sequence:
@@ -40,6 +40,9 @@ place_first_toast
   -> VLM/manual result
 
 pour_ingredient
+  -> human step represented as VLM/manual gate
+
+second_toast_ready
   -> human step represented as VLM/manual gate
 
 place_second_toast
@@ -60,11 +63,12 @@ The Python server exposes:
 /sandwich_bt/vlm_result_legacy
 ```
 
-`RunNamedCommand` accepts these active `kind` values:
+The readable BT command leaves map to these Python command kinds:
 
-- `skill`: run one configured BC skill on the robot.
-- `no_motion_skill`: skip robot motion and auto-mark the VLM check as `SUCCESS`.
-- `vlm_gate_pending`: open a VLM check attempt without robot motion.
+- `RunRobotSkill`: runs one configured BC skill on the robot.
+- `SimulateRobotSkill`: skips robot motion and auto-marks the VLM check as
+  `SUCCESS`.
+- `OpenVLMGate`: opens a VLM/manual check attempt without robot motion.
 
 `/sandwich_bt/vlm_result` is the VLM/manual input boundary. It may report:
 
@@ -91,8 +95,8 @@ For a robot skill, the BT subtree shape is:
 ```text
 RetryUntilSuccessful(name="retry_<skill>_on_vlm_retry_skill")
   Sequence(name="<skill>_vlm_replanning_loop")
-    RunNamedCommand(kind="skill", command_name="<skill>")
-    VLMReplanningDecision(skill_name="<skill>")
+    RunRobotSkill(skill_name="<skill>")
+    WaitForSkillVerdict(skill_name="<skill>")
 ```
 
 For a VLM/human gate with no robot motion, the shape is:
@@ -100,28 +104,27 @@ For a VLM/human gate with no robot motion, the shape is:
 ```text
 RetryUntilSuccessful(name="retry_<gate>_until_vlm_success")
   Sequence(name="<gate>_wait_or_manual_intervention_gate")
-    RunNamedCommand(kind="vlm_gate_pending", command_name="<gate>")
-    WaitForVLMDecision(skill_name="<gate>")
+    OpenVLMGate(gate_name="<gate>")
+    WaitForGateVerdict(gate_name="<gate>")
 ```
 
 If the skill call fails, the sequence fails and the same skill is retried.
 
-If the VLM reports `FAILURE`, `VLMReplanningDecision` returns BT `FAILURE`; the
+If the VLM reports `FAILURE`, `WaitForSkillVerdict` returns BT `FAILURE`; the
 same `RetryUntilSuccessful` wrapper restarts the same BC skill from the
 beginning.
 
 If the VLM reports `RUNNING`, `WAIT_HUMAN`, or
-`MANUAL_INTERVENTION_REQUIRED`, `WaitForVLMDecision` or
-`VLMReplanningDecision` keeps returning BT
+`MANUAL_INTERVENTION_REQUIRED`, `WaitForGateVerdict` or
+`WaitForSkillVerdict` keeps returning BT
 `RUNNING`; the tree waits for a later `SUCCESS` or `FAILURE`.
 
 No gripper open/close, Panda reset, or deterministic Cartesian delta is run by
 the retry mechanism.
 
-`WaitForVLMDecision` and `VLMReplanningDecision` are semantic aliases of the
+`WaitForGateVerdict` and `WaitForSkillVerdict` are readable wrappers around the
 same C++ VLM check node. They are intentionally present in XML so Groot shows
-where the BT is waiting for the VLM, where it can retry the same skill, and
-where manual intervention blocks progress.
+whether the BT is waiting on a human/VLM gate or checking a robot skill result.
 
 ## Real Robot Complete Test
 
@@ -157,12 +160,12 @@ lerobot-bt-skill-server \
 
 ### Terminale 2: BehaviorTree runner
 
-Start the C++ BT runner with the temporary real-robot tree. Start this after the
+Start the C++ BT runner with the active real-robot tree. Start this after the
 skill server is ready.
 
 ```bash
 ros2 run sandwich_bt_runtime_cpp sandwich_bt_runner --ros-args \
-  -p tree_xml_path:="$(pwd)/src/sandwich_bt_runtime_cpp/trees/sandwich_tree_two_real_skills_manual_vlm.xml"
+  -p tree_xml_path:="$(pwd)/src/sandwich_bt_runtime_cpp/trees/makesandwitch.xml"
 ```
 
 The tree order is:
@@ -171,6 +174,7 @@ The tree order is:
 initial_scene_ready
 place_first_toast
 pour_ingredient
+second_toast_ready
 place_second_toast
 ```
 
@@ -234,6 +238,13 @@ Human pouring completed:
 ```bash
 ros2 topic pub --once /sandwich_bt/vlm_result std_msgs/msg/String \
   "{data: '{\"skill_name\":\"pour_ingredient\",\"attempt_id\":0,\"status\":\"SUCCESS\",\"message\":\"ingredient poured\"}'}"
+```
+
+Second toast positioned correctly by the human:
+
+```bash
+ros2 topic pub --once /sandwich_bt/vlm_result std_msgs/msg/String \
+  "{data: '{\"skill_name\":\"second_toast_ready\",\"attempt_id\":0,\"status\":\"SUCCESS\",\"message\":\"second toast ready\"}'}"
 ```
 
 Second toast placed correctly:

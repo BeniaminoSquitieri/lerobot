@@ -9,9 +9,8 @@
  * result. A VLM `SUCCESS` lets the tree continue, a VLM `FAILURE`
  * triggers XML retry/failure logic, and waiting statuses such as PENDING,
  * RUNNING, WAIT_HUMAN, or MANUAL_INTERVENTION_REQUIRED keep the node RUNNING.
- * The XML may instantiate this class as VerifySkillOutcome,
- * WaitForVLMDecision, or VLMReplanningDecision depending on what should be
- * visible in Groot.
+ * The XML may instantiate this behavior as WaitForGateVerdict or
+ * WaitForSkillVerdict depending on what should be visible in Groot.
  */
 
 #include <memory>
@@ -79,16 +78,55 @@ public:
   /// Stops local polling if BehaviorTree.CPP halts this leaf.
   void onHalted() override;
 
+protected:
+  VerifySkillOutcomeNode(
+    const std::string& name,
+    const BT::NodeConfiguration& config,
+    const rclcpp::Node::SharedPtr& ros_node,
+    const std::string& vlm_state_service,
+    std::string check_name_port);
+
 private:
-  /// Sends one asynchronous VLM state request for skill_name_.
+  /// Sends one asynchronous VLM state request for check_name_.
   void startRequest();
 
   rclcpp::Node::SharedPtr ros_node_;            ///< Shared ROS2 node used for logging and service transport.
   rclcpp::Client<ServiceT>::SharedPtr client_;  ///< Client that sends VLM state requests.
   std::string vlm_state_service_;               ///< Service endpoint name reported in diagnostics.
-  std::string skill_name_;                      ///< Skill currently checked by the VLM state service.
+  std::string check_name_port_;                 ///< XML port that provides the VLM check key.
+  std::string check_name_;                      ///< Skill/gate key currently checked by the VLM state service.
   rclcpp::Client<ServiceT>::SharedFuture future_;  ///< Future holding the in-flight VLM state response.
   bool request_pending_{false};                 ///< True while a VLM state request is awaiting completion.
+};
+
+/**
+ * @brief BT leaf that waits until a VLM/manual gate has a terminal verdict.
+ */
+class WaitForGateVerdictNode : public VerifySkillOutcomeNode
+{
+public:
+  WaitForGateVerdictNode(
+    const std::string& name,
+    const BT::NodeConfiguration& config,
+    const rclcpp::Node::SharedPtr& ros_node,
+    const std::string& vlm_state_service);
+
+  static BT::PortsList providedPorts();
+};
+
+/**
+ * @brief BT leaf that waits until a robot skill has a terminal VLM verdict.
+ */
+class WaitForSkillVerdictNode : public VerifySkillOutcomeNode
+{
+public:
+  WaitForSkillVerdictNode(
+    const std::string& name,
+    const BT::NodeConfiguration& config,
+    const rclcpp::Node::SharedPtr& ros_node,
+    const std::string& vlm_state_service);
+
+  static BT::PortsList providedPorts();
 };
 
 }  // namespace sandwich_bt_runtime_cpp
