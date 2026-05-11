@@ -2,6 +2,8 @@
 
 This guide lists the commands needed to run the `grocery_bagging` BT and to manually emulate the VLM verdicts.
 
+BT diagram: [grocery_bagging_bt.png](sandwich_bt_runtime_cpp/diagrams/grocery_bagging_bt.png)
+
 ## Terminal setup
 
 Run this in every terminal:

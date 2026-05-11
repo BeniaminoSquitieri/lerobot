@@ -75,6 +75,13 @@ set(SANDWICH_BT_CONFIG_FILES
   config/make_coffee_bt.yaml
   config/makesandwitch_bt.yaml
 )
+set(SANDWICH_BT_DIAGRAM_FILES
+  diagrams/grocery_bagging_bt.png
+  diagrams/items_in_drawer_bt.png
+  diagrams/lunch_table_bussing_bt.png
+  diagrams/make_coffee_bt.png
+  diagrams/makesandwitch_bt.png
+)
 
 # Install only the curated tree/subtree XML files into the package share path.
 install(FILES ${SANDWICH_BT_TREE_FILES}
@@ -84,6 +91,11 @@ install(FILES ${SANDWICH_BT_TREE_FILES}
 # Install task-level BT parameter profiles.
 install(FILES ${SANDWICH_BT_CONFIG_FILES}
   DESTINATION share/${PROJECT_NAME}/config
+)
+
+# Install rendered BT diagrams for reports and quick inspection.
+install(FILES ${SANDWICH_BT_DIAGRAM_FILES}
+  DESTINATION share/${PROJECT_NAME}/diagrams
 )
 
 # Install launch files for one-command BT runner startup.

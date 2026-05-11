@@ -2,6 +2,8 @@
 
 This guide lists the commands needed to run the `make_coffee` BT and to manually emulate the VLM verdicts.
 
+BT diagram: [make_coffee_bt.png](sandwich_bt_runtime_cpp/diagrams/make_coffee_bt.png)
+
 ## Terminal setup
 
 Run this in every terminal:

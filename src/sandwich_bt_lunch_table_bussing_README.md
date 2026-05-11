@@ -2,6 +2,8 @@
 
 This guide lists the commands needed to run the `lunch_table_bussing` BT and to manually emulate the VLM verdicts.
 
+BT diagram: [lunch_table_bussing_bt.png](sandwich_bt_runtime_cpp/diagrams/lunch_table_bussing_bt.png)
+
 ## Terminal setup
 
 Run this in every terminal:

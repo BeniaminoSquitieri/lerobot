@@ -77,6 +77,13 @@ EXPECTED_LAUNCH_FILES = {
     "items_in_drawer.launch.py": ("items_in_drawer.xml", "items_in_drawer_bt.yaml"),
     "make_coffee.launch.py": ("make_coffee.xml", "make_coffee_bt.yaml"),
 }
+EXPECTED_DIAGRAM_FILES = {
+    "makesandwitch_bt.png",
+    "lunch_table_bussing_bt.png",
+    "grocery_bagging_bt.png",
+    "items_in_drawer_bt.png",
+    "make_coffee_bt.png",
+}
 EXPECTED_TASK_READMES = {
     "sandwich_bt_README.md": {
         "initial_scene_ready",
@@ -364,6 +371,15 @@ def test_launch_files_cover_all_runtime_profiles() -> None:
         assert tree_name in launch_text
         assert profile_name in launch_text
         assert "sandwich_bt_runner" in launch_text
+
+
+def test_rendered_bt_diagrams_exist_as_png_files() -> None:
+    diagram_dir = _runtime_dir() / "diagrams"
+
+    assert {path.name for path in diagram_dir.glob("*.png")} == EXPECTED_DIAGRAM_FILES
+    for diagram_path in diagram_dir.glob("*.png"):
+        assert diagram_path.read_bytes().startswith(b"\x89PNG\r\n\x1a\n")
+        assert diagram_path.stat().st_size > 10_000
 
 
 def test_makesandwitch_profile_matches_current_robot_task() -> None:

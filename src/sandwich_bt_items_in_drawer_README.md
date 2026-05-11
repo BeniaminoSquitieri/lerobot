@@ -2,6 +2,8 @@
 
 This guide lists the commands needed to run the `items_in_drawer` BT and to manually emulate the VLM verdicts.
 
+BT diagram: [items_in_drawer_bt.png](sandwich_bt_runtime_cpp/diagrams/items_in_drawer_bt.png)
+
 ## Terminal setup
 
 Run this in every terminal:

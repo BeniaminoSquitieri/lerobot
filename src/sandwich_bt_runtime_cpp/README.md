@@ -50,6 +50,8 @@ Those belong to `sandwich_bt_python`.
 - `trees/make_coffee.xml`: scene-gated coffee preparation task
 - `config/*_bt.yaml`: task-level gate names, skill names, timeouts, and retry limits loaded into the BT blackboard
 - `launch/*.launch.py`: one-command runner startup for each task profile
+- `diagrams/*_bt.png`: rendered PNG diagrams of each BT
+- `tools/render_bt_diagrams.py`: script that regenerates the PNG diagrams from XML and YAML
 
 ## Execution Model
 
@@ -190,6 +192,15 @@ and override `tree_xml_path` by hand.
 Use XML for control structure changes: order, retry boundaries, and which node
 types appear. Use a `config/*_bt.yaml` profile for task-level values: gate
 names, skill names, retry limits, and skill timeouts.
+
+## Rendered BT Diagrams
+
+The `diagrams/` directory contains PNG images for every task tree. Regenerate
+them after changing XML or BT YAML profiles with:
+
+```bash
+uv run python src/sandwich_bt_runtime_cpp/tools/render_bt_diagrams.py
+```
 
 ## When To Modify This Package
 

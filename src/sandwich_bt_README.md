@@ -343,3 +343,11 @@ The same command format is documented for the additional scene-gated BTs:
 - [Grocery Bagging](sandwich_bt_grocery_bagging_README.md)
 - [Items In Drawer](sandwich_bt_items_in_drawer_README.md)
 - [Make Coffee](sandwich_bt_make_coffee_README.md)
+
+Rendered PNG diagrams:
+
+- [Make Sandwich BT](sandwich_bt_runtime_cpp/diagrams/makesandwitch_bt.png)
+- [Lunch Table Bussing BT](sandwich_bt_runtime_cpp/diagrams/lunch_table_bussing_bt.png)
+- [Grocery Bagging BT](sandwich_bt_runtime_cpp/diagrams/grocery_bagging_bt.png)
+- [Items In Drawer BT](sandwich_bt_runtime_cpp/diagrams/items_in_drawer_bt.png)
+- [Make Coffee BT](sandwich_bt_runtime_cpp/diagrams/make_coffee_bt.png)
