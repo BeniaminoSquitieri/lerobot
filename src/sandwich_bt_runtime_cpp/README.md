@@ -44,6 +44,7 @@ Those belong to `sandwich_bt_python`.
 - `src/verify_skill_outcome_node.cpp`: BT leaf that polls VLM check state
 - `include/sandwich_bt_runtime_cpp/verify_skill_outcome_node.hpp`: VLM check leaf declaration
 - `trees/makesandwitch.xml`: active two-real-skill sandwich task with manual/VLM topic gates
+- `config/makesandwitch_bt.yaml`: task-level names and timeouts loaded into the BT blackboard
 
 ## Execution Model
 
@@ -54,16 +55,17 @@ At startup it:
 
 1. creates one ROS2 node named `sandwich_bt_runner`
 2. reads the runtime parameters `tree_xml_path`, `bt_command_service`,
-   `vlm_state_service`, `tick_ms`, `enable_groot_publisher`, and
-   `groot_publisher_port`
+   `vlm_state_service`, `tick_ms`, `enable_groot_publisher`,
+   `groot_publisher_port`, and the `bt.*` task profile values
 3. registers `OpenVLMGate`, `RunRobotSkill`, and the task-specific aliases as
    custom BT builders
 4. registers `WaitForGateVerdict` and `WaitForSkillVerdict` as VLM-check-node
    builders
-5. loads the XML tree from disk
-6. optionally enables a Groot publisher if the installed BT.CPP version has a
+5. writes the `bt.*` task profile values to the BT blackboard
+6. loads the XML tree from disk
+7. optionally enables a Groot publisher if the installed BT.CPP version has a
    compatible publisher API
-7. ticks the tree until the root stops returning `RUNNING`
+8. ticks the tree until the root stops returning `RUNNING`
 
 The executable returns `0` on final BT `SUCCESS` and `1` on final BT `FAILURE`.
 That makes the process exit code usable as a high-level integration signal.
@@ -162,6 +164,20 @@ Python executor.
 The C++ runtime maps these readable ports to the Python command service. A
 real skill name must still match an entry in the Python skill config.
 
+The active tree uses blackboard placeholders such as
+`{place_first_toast_skill}` instead of hard-coded task names. The default values
+come from C++ parameters and can be overridden by passing a ROS2 params file,
+for example:
+
+```bash
+ros2 run sandwich_bt_runtime_cpp sandwich_bt_runner --ros-args \
+  --params-file src/sandwich_bt_runtime_cpp/config/makesandwitch_bt.yaml
+```
+
+Use XML for control structure changes: order, retry boundaries, and which node
+types appear. Use a `config/*.yaml` profile for task-level values: checkpoint
+names, skill names, and skill timeouts.
+
 ## When To Modify This Package
 
 Change this package when you need to:
@@ -172,5 +188,6 @@ Change this package when you need to:
 - change Groot integration behavior
 - change the XML-level control structure for retries or ordering
 
-Do not modify this package just to point a leaf at a different checkpoint or a
-different skill checkpoint. Those changes belong to `sandwich_bt_python`.
+Do not change C++ just to point a leaf at a different checkpoint or skill name.
+Those values belong in a BT parameter profile under `config/`. The actual robot
+policy definitions still belong to `sandwich_bt_python`.

@@ -20,48 +20,54 @@
       <!-- Stage 0: no robot motion; wait until the initial scene is ready. -->
       <RetryUntilSuccessful name="STAGE 0 - Initial scene ready" num_attempts="-1">
         <Sequence name="Open VLM gate, then wait for ready scene">
-          <PrepareInitialScene name="Prepare initial scene" gate_name="initial_scene_ready"/>
-          <WaitForGateVerdict name="Wait verdict - scene ready" gate_name="initial_scene_ready"/>
+          <PrepareInitialScene name="Prepare initial scene" gate_name="{initial_scene_ready_gate}"/>
+          <WaitForGateVerdict name="Wait verdict - scene ready" gate_name="{initial_scene_ready_gate}"/>
         </Sequence>
       </RetryUntilSuccessful>
 
       <!-- Stage 1: first real BC primitive, then VLM/manual verification. -->
       <RetryUntilSuccessful name="STAGE 1 - Place first toast" num_attempts="-1">
         <Sequence name="Run real skill, then verify first toast">
-          <PlaceFirstToast name="Place first toast" skill_name="place_first_toast" timeout_s="120.0"/>
+          <PlaceFirstToast
+            name="Place first toast"
+            skill_name="{place_first_toast_skill}"
+            timeout_s="{place_first_toast_timeout_s}"/>
           <WaitForSkillVerdict
             name="Wait skill verdict - first toast"
-            skill_name="place_first_toast"/>
+            skill_name="{place_first_toast_skill}"/>
         </Sequence>
       </RetryUntilSuccessful>
 
       <!-- Stage 2: human pouring; the gate succeeds only after topic verification. -->
       <RetryUntilSuccessful name="STAGE 2 - Human pours ingredient" num_attempts="-1">
         <Sequence name="Open human-step gate, then wait for poured ingredient">
-          <OpenVLMGate name="Open VLM/manual check - human pouring" gate_name="pour_ingredient"/>
+          <OpenVLMGate name="Open VLM/manual check - human pouring" gate_name="{pour_ingredient_gate}"/>
           <WaitForGateVerdict
             name="Wait verdict - pouring complete"
-            gate_name="pour_ingredient"/>
+            gate_name="{pour_ingredient_gate}"/>
         </Sequence>
       </RetryUntilSuccessful>
 
       <!-- Stage 3: human positions the second toast before the robot picks it. -->
       <RetryUntilSuccessful name="STAGE 3 - Second toast ready" num_attempts="-1">
         <Sequence name="Open second-toast gate, then wait for ready toast">
-          <PrepareSecondToast name="Prepare second toast" gate_name="second_toast_ready"/>
+          <PrepareSecondToast name="Prepare second toast" gate_name="{second_toast_ready_gate}"/>
           <WaitForGateVerdict
             name="Wait verdict - second toast ready"
-            gate_name="second_toast_ready"/>
+            gate_name="{second_toast_ready_gate}"/>
         </Sequence>
       </RetryUntilSuccessful>
 
       <!-- Stage 4: second real BC primitive, then final VLM/manual verification. -->
       <RetryUntilSuccessful name="STAGE 4 - Place second toast" num_attempts="-1">
         <Sequence name="Run real skill, then verify closed sandwich">
-          <PlaceSecondToast name="Place second toast" skill_name="place_second_toast" timeout_s="30.0"/>
+          <PlaceSecondToast
+            name="Place second toast"
+            skill_name="{place_second_toast_skill}"
+            timeout_s="{place_second_toast_timeout_s}"/>
           <WaitForSkillVerdict
             name="Wait skill verdict - second toast"
-            skill_name="place_second_toast"/>
+            skill_name="{place_second_toast_skill}"/>
         </Sequence>
       </RetryUntilSuccessful>
     </Sequence>

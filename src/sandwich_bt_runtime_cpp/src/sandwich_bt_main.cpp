@@ -14,8 +14,10 @@
 #include <rclcpp/rclcpp.hpp>
 
 #if __has_include(<behaviortree_cpp/bt_factory.h>)
+#include <behaviortree_cpp/blackboard.h>
 #include <behaviortree_cpp/bt_factory.h>
 #elif __has_include(<behaviortree_cpp_v3/bt_factory.h>)
+#include <behaviortree_cpp_v3/blackboard.h>
 #include <behaviortree_cpp_v3/bt_factory.h>
 #else
 #error "BehaviorTree.CPP headers were not found."
@@ -82,6 +84,13 @@ int main(int argc, char** argv)
   node->declare_parameter<int>("tick_ms", 100);
   node->declare_parameter<bool>("enable_groot_publisher", true);
   node->declare_parameter<int>("groot_publisher_port", 1667);
+  node->declare_parameter<std::string>("bt.initial_scene_ready_gate", "initial_scene_ready");
+  node->declare_parameter<std::string>("bt.place_first_toast_skill", "place_first_toast");
+  node->declare_parameter<double>("bt.place_first_toast_timeout_s", 120.0);
+  node->declare_parameter<std::string>("bt.pour_ingredient_gate", "pour_ingredient");
+  node->declare_parameter<std::string>("bt.second_toast_ready_gate", "second_toast_ready");
+  node->declare_parameter<std::string>("bt.place_second_toast_skill", "place_second_toast");
+  node->declare_parameter<double>("bt.place_second_toast_timeout_s", 30.0);
 
   const auto tree_xml_path = node->get_parameter("tree_xml_path").as_string();
   const auto bt_command_service = node->get_parameter("bt_command_service").as_string();
@@ -89,6 +98,13 @@ int main(int argc, char** argv)
   const auto tick_ms = node->get_parameter("tick_ms").as_int();
   const auto enable_groot = node->get_parameter("enable_groot_publisher").as_bool();
   const auto groot_port = node->get_parameter("groot_publisher_port").as_int();
+  const auto initial_scene_ready_gate = node->get_parameter("bt.initial_scene_ready_gate").as_string();
+  const auto place_first_toast_skill = node->get_parameter("bt.place_first_toast_skill").as_string();
+  const auto place_first_toast_timeout_s = node->get_parameter("bt.place_first_toast_timeout_s").as_double();
+  const auto pour_ingredient_gate = node->get_parameter("bt.pour_ingredient_gate").as_string();
+  const auto second_toast_ready_gate = node->get_parameter("bt.second_toast_ready_gate").as_string();
+  const auto place_second_toast_skill = node->get_parameter("bt.place_second_toast_skill").as_string();
+  const auto place_second_toast_timeout_s = node->get_parameter("bt.place_second_toast_timeout_s").as_double();
 
   // Register each custom XML tag with a lambda that injects the already-created
   // ROS2 node and service name into the BT node constructor.
@@ -175,9 +191,31 @@ int main(int argc, char** argv)
         vlm_state_service);
     });
 
+  auto blackboard = BT::Blackboard::create();
+  blackboard->set("initial_scene_ready_gate", initial_scene_ready_gate);
+  blackboard->set("place_first_toast_skill", place_first_toast_skill);
+  blackboard->set("place_first_toast_timeout_s", place_first_toast_timeout_s);
+  blackboard->set("pour_ingredient_gate", pour_ingredient_gate);
+  blackboard->set("second_toast_ready_gate", second_toast_ready_gate);
+  blackboard->set("place_second_toast_skill", place_second_toast_skill);
+  blackboard->set("place_second_toast_timeout_s", place_second_toast_timeout_s);
+
+  RCLCPP_INFO(
+    node->get_logger(),
+    "Loaded BT task parameters: initial_scene_ready_gate='%s', place_first_toast_skill='%s', "
+    "place_first_toast_timeout_s=%.2f, pour_ingredient_gate='%s', second_toast_ready_gate='%s', "
+    "place_second_toast_skill='%s', place_second_toast_timeout_s=%.2f.",
+    initial_scene_ready_gate.c_str(),
+    place_first_toast_skill.c_str(),
+    place_first_toast_timeout_s,
+    pour_ingredient_gate.c_str(),
+    second_toast_ready_gate.c_str(),
+    place_second_toast_skill.c_str(),
+    place_second_toast_timeout_s);
+
   // Loading from file keeps the BT topology editable without recompiling this
   // executable; malformed XML or missing node tags will fail at this point.
-  BT::Tree tree = factory.createTreeFromFile(tree_xml_path);
+  BT::Tree tree = factory.createTreeFromFile(tree_xml_path, blackboard);
 
 #if SANDWICH_BT_HAS_GROOT
   std::unique_ptr<GrootPublisherT> groot_publisher;

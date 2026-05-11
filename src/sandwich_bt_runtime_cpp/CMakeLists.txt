@@ -64,10 +64,18 @@ install(DIRECTORY include/
 set(SANDWICH_BT_TREE_FILES
   trees/makesandwitch.xml
 )
+set(SANDWICH_BT_CONFIG_FILES
+  config/makesandwitch_bt.yaml
+)
 
 # Install only the curated tree/subtree XML files into the package share path.
 install(FILES ${SANDWICH_BT_TREE_FILES}
   DESTINATION share/${PROJECT_NAME}/trees
+)
+
+# Install task-level BT parameter profiles.
+install(FILES ${SANDWICH_BT_CONFIG_FILES}
+  DESTINATION share/${PROJECT_NAME}/config
 )
 
 # Register this package and its installed resources with the ament index.

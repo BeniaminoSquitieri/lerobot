@@ -158,15 +158,17 @@ lerobot-bt-skill-server \
 
 ### Terminale 2: BehaviorTree runner
 
-Start the C++ BT runner with the active real-robot tree. Start this after the
-skill server is ready.
+Start the C++ BT runner with the active real-robot tree and its task parameter
+profile. Start this after the skill server is ready.
 
 ```bash
 ros2 run sandwich_bt_runtime_cpp sandwich_bt_runner --ros-args \
+  --params-file "$(pwd)/src/sandwich_bt_runtime_cpp/config/makesandwitch_bt.yaml" \
   -p tree_xml_path:="$(pwd)/src/sandwich_bt_runtime_cpp/trees/makesandwitch.xml"
 ```
 
-The tree order is:
+The XML keeps the order/retry structure. The YAML profile keeps the names and
+timeouts that are expected to change between BTs:
 
 ```text
 initial_scene_ready
@@ -175,6 +177,10 @@ pour_ingredient
 second_toast_ready
 place_second_toast
 ```
+
+For a new BT, make a new XML if the order changes. If only checkpoint names,
+skill names, or timeouts change, make a new `config/*.yaml` profile and pass it
+with `--params-file`.
 
 ### Optional Groot2 monitor
 
