@@ -26,6 +26,18 @@ import numpy as np  # type: ignore  # TODO: add type stubs for numpy
 from numpy.typing import NDArray  # type: ignore  # TODO: add type stubs for numpy.typing
 
 try:
+    import rclpy  # type: ignore
+    from rclpy.node import Node  # type: ignore
+    from sensor_msgs.msg import Image as RosImage  # type: ignore
+
+    _ros_import_error: Exception | None = None
+except Exception as e:
+    rclpy = None  # type: ignore[assignment]
+    Node = None  # type: ignore[assignment,misc]
+    RosImage = None  # type: ignore[assignment,misc]
+    _ros_import_error = e
+
+try:
     import pyrealsense2 as rs  # type: ignore  # TODO: add type stubs for pyrealsense2
     _realsense_import_error: Exception | None = None
 except Exception as e:
@@ -42,6 +54,19 @@ from ..utils import get_cv2_rotation
 from .configuration_realsense import RealSenseCameraConfig
 
 logger = logging.getLogger(__name__)
+
+_ros_node: "Node | None" = None
+
+
+def _get_ros_node() -> "Node":
+    global _ros_node
+    if rclpy is None or Node is None:
+        raise ImportError("rclpy is required but could not be imported.") from _ros_import_error
+    if not rclpy.ok():
+        rclpy.init(args=None)
+    if _ros_node is None:
+        _ros_node = Node("lerobot_realsense_cameras")
+    return _ros_node
 
 
 def _require_realsense() -> None:
@@ -136,9 +161,12 @@ class RealSenseCamera(Camera):
         self.color_mode = config.color_mode
         self.use_depth = config.use_depth
         self.warmup_s = config.warmup_s
+        self.publish_ros_topic = bool(getattr(config, "publish_ros_topic", False))
+        self.ros_topic = getattr(config, "ros_topic", None)
 
         self.rs_pipeline: rs.pipeline | None = None
         self.rs_profile: rs.pipeline_profile | None = None
+        self._ros_pub = None
 
         self.thread: Thread | None = None
         self.stop_event: Event | None = None
@@ -198,6 +226,7 @@ class RealSenseCamera(Camera):
             ) from e
 
         self._configure_capture_settings()
+        self._maybe_setup_ros_publisher()
         self._start_read_thread()
 
         # NOTE(Steven/Caroline): Enforcing at least one second of warmup as RS cameras need a bit of time before the first read. If we don't wait, the first read from the warmup will raise.
@@ -212,6 +241,31 @@ class RealSenseCamera(Camera):
                 raise ConnectionError(f"{self} failed to capture frames during warmup.")
 
         logger.info(f"{self} connected.")
+
+    def _maybe_setup_ros_publisher(self) -> None:
+        if not self.publish_ros_topic:
+            return
+        if rclpy is None or RosImage is None:
+            logger.warning(f"{self} publish_ros_topic=true but ROS2 python deps missing: {_ros_import_error}")
+            self.publish_ros_topic = False
+            return
+        node = _get_ros_node()
+        topic = self.ros_topic or f"/lerobot/realsense/{self.serial_number}/color"
+        self._ros_pub = node.create_publisher(RosImage, topic, 10)
+
+    def _maybe_publish_ros(self, image: NDArray[Any]) -> None:
+        if not self.publish_ros_topic or self._ros_pub is None or RosImage is None:
+            return
+        # Best-effort publish; no need to spin for publishing only.
+        msg = RosImage()
+        msg.header.stamp = _get_ros_node().get_clock().now().to_msg()
+        msg.header.frame_id = str(self)
+        msg.height, msg.width = int(image.shape[0]), int(image.shape[1])
+        msg.encoding = "bgr8" if self.color_mode == ColorMode.BGR else "rgb8"
+        msg.is_bigendian = False
+        msg.step = int(msg.width * 3)
+        msg.data = image.tobytes()
+        self._ros_pub.publish(msg)
 
     @staticmethod
     def find_cameras() -> list[dict[str, Any]]:
@@ -505,6 +559,7 @@ class RealSenseCamera(Camera):
                         self.latest_depth_frame = processed_depth_frame
                     self.latest_timestamp = capture_time
                 self.new_frame_event.set()
+                self._maybe_publish_ros(processed_color_frame)
                 failure_count = 0
 
             except DeviceNotConnectedError:
