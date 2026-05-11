@@ -250,6 +250,11 @@ ros2 topic pub --once /sandwich_bt/vlm_result std_msgs/msg/String \
   "{data: '{\"skill_name\":\"place_first_toast\",\"attempt_id\":0,\"status\":\"FAILURE\",\"failure_reason\":\"toast misplaced\",\"message\":\"retry skill\"}'}"
 ```
 
+```bash
+ros2 topic pub --once /sandwich_bt/vlm_result std_msgs/msg/String \
+  "{data: '{\"skill_name\":\"place_second_toast\",\"attempt_id\":0,\"status\":\"FAILURE\",\"failure_reason\":\"toast misplaced\",\"message\":\"retry skill\"}'}"
+```
+
 Request manual intervention without advancing the BT:
 
 ```bash
