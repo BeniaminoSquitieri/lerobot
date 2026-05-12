@@ -1,0 +1,78 @@
+<!--
+  @file make_coffee.xml
+  @brief Scene-gated coffee preparation task.
+
+  The final completion scene is a VLM/manual gate because no BC skill is needed
+  after the start button has been pressed.
+-->
+<root BTCPP_format="4" main_tree_to_execute="MainTree">
+  <BehaviorTree ID="MainTree">
+    <Sequence name="Make coffee - VLM scene gates">
+      <RetryUntilSuccessful name="SCENE 0 - Coffee setup ready" num_attempts="{initial_scene_ready_max_attempts}">
+        <Sequence name="Open setup gate, then wait for scene 0">
+          <OpenVLMGate name="Open scene 0 gate" gate_name="{initial_scene_ready_gate}"/>
+          <WaitForGateVerdict name="Wait scene 0 ready" gate_name="{initial_scene_ready_gate}"/>
+        </Sequence>
+      </RetryUntilSuccessful>
+
+      <RetryUntilSuccessful name="SCENE 1 - Cup under dispenser" num_attempts="{place_cup_under_dispenser_max_attempts}">
+        <Sequence name="Place cup, then check scene 1">
+          <RunRobotSkill
+            name="Place cup under dispenser"
+            skill_name="{place_cup_under_dispenser_skill}"
+            timeout_s="{place_cup_under_dispenser_timeout_s}"/>
+          <WaitForSkillVerdict
+            name="Wait scene 1 ready - cup placed"
+            skill_name="{place_cup_under_dispenser_skill}"/>
+        </Sequence>
+      </RetryUntilSuccessful>
+
+      <RetryUntilSuccessful name="SCENE 2 - Capsule inserted" num_attempts="{pick_and_insert_capsule_max_attempts}">
+        <Sequence name="Insert capsule, then check scene 2">
+          <RunRobotSkill
+            name="Pick and insert capsule"
+            skill_name="{pick_and_insert_capsule_skill}"
+            timeout_s="{pick_and_insert_capsule_timeout_s}"/>
+          <WaitForSkillVerdict
+            name="Wait scene 2 ready - capsule inserted"
+            skill_name="{pick_and_insert_capsule_skill}"/>
+        </Sequence>
+      </RetryUntilSuccessful>
+
+      <RetryUntilSuccessful name="SCENE 3 - Coffee started" num_attempts="{press_start_button_max_attempts}">
+        <Sequence name="Press start, then check scene 3">
+          <RunRobotSkill
+            name="Press start button"
+            skill_name="{press_start_button_skill}"
+            timeout_s="{press_start_button_timeout_s}"/>
+          <WaitForSkillVerdict
+            name="Wait scene 3 ready - extraction started"
+            skill_name="{press_start_button_skill}"/>
+        </Sequence>
+      </RetryUntilSuccessful>
+
+      <RetryUntilSuccessful name="TASK COMPLETE - Coffee complete" num_attempts="{task_complete_max_attempts}">
+        <Sequence name="Open completion gate, then wait for scene 4">
+          <OpenVLMGate name="Open task-complete gate" gate_name="{task_complete_gate}"/>
+          <WaitForGateVerdict name="Wait task complete" gate_name="{task_complete_gate}"/>
+        </Sequence>
+      </RetryUntilSuccessful>
+    </Sequence>
+  </BehaviorTree>
+
+  <TreeNodesModel>
+    <Action ID="OpenVLMGate">
+      <input_port name="gate_name"/>
+    </Action>
+    <Action ID="RunRobotSkill">
+      <input_port name="skill_name"/>
+      <input_port name="timeout_s"/>
+    </Action>
+    <Action ID="WaitForGateVerdict">
+      <input_port name="gate_name"/>
+    </Action>
+    <Action ID="WaitForSkillVerdict">
+      <input_port name="skill_name"/>
+    </Action>
+  </TreeNodesModel>
+</root>
