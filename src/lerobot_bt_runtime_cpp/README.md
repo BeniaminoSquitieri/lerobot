@@ -45,9 +45,9 @@ Those belong to `lerobot_bt_python`.
 - `include/lerobot_bt_runtime_cpp/verify_skill_outcome_node.hpp`: VLM check leaf declaration
 - `trees/make_sandwich.xml`: active two-real-skill sandwich task with manual/VLM topic gates
 - `trees/lunch_table_bussing.xml`: scene-gated lunch table cleanup task
-- `trees/grocery_bagging.xml`: scene-gated grocery bagging task
 - `trees/items_in_drawer.xml`: scene-gated drawer insertion task
 - `trees/make_coffee.xml`: scene-gated coffee preparation task
+- `trees/prepare_picnic_bag.xml`: scene-gated picnic bag preparation task
 - `config/*_bt.yaml`: task-level gate names, skill names, timeouts, and retry limits loaded into the BT blackboard
 - `launch/*.launch.py`: one-command runner startup for each task profile
 - `diagrams/*_bt.png`: rendered PNG diagrams of each BT

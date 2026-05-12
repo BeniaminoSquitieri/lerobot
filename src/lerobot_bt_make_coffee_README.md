@@ -73,7 +73,14 @@ ros2 topic pub --once /lerobot_bt/vlm_result std_msgs/msg/String \
   "{data: '{\"skill_name\":\"pick_and_insert_capsule\",\"attempt_id\":0,\"status\":\"SUCCESS\",\"message\":\"capsule inserted\"}'}"
 ```
 
-Start button pressed:
+Human closes the machine:
+
+```bash
+ros2 topic pub --once /lerobot_bt/vlm_result std_msgs/msg/String \
+  "{data: '{\"skill_name\":\"make_coffee.human_close_machine\",\"attempt_id\":0,\"status\":\"SUCCESS\",\"message\":\"human closed the coffee machine\"}'}"
+```
+
+Start button pressed and extraction starts:
 
 ```bash
 ros2 topic pub --once /lerobot_bt/vlm_result std_msgs/msg/String \
@@ -100,7 +107,7 @@ Request human intervention:
 
 ```bash
 ros2 topic pub --once /lerobot_bt/vlm_result std_msgs/msg/String \
-  "{data: '{\"skill_name\":\"press_start_button\",\"attempt_id\":0,\"status\":\"WAIT_HUMAN\",\"next_action\":\"REQUEST_MANUAL_INTERVENTION\",\"failure_reason\":\"machine_not_ready\",\"required_human_action\":\"check the coffee machine state\",\"message\":\"human help required\"}'}"
+  "{data: '{\"skill_name\":\"make_coffee.human_close_machine\",\"attempt_id\":0,\"status\":\"WAIT_HUMAN\",\"next_action\":\"REQUEST_MANUAL_INTERVENTION\",\"failure_reason\":\"machine_still_open\",\"required_human_action\":\"close the coffee machine before the robot presses start\",\"message\":\"human help required\"}'}"
 ```
 
 ## Useful checks

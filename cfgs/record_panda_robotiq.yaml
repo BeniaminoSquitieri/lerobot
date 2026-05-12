@@ -24,14 +24,16 @@ robot:
 
 teleop:
   type: metaquest_rail
+  gripper_deadzone: 0.05
+  invert_gripper_trigger: true
 
 dataset:
-  repo_id: HSP-IIT/pick_place_2nd
-  single_task: Pick.
+  repo_id: HSP-IIT/put_coffee
+  single_task: Place the cup in the coffee machine.
   fps: 10
   episode_time_s: 2000
   reset_time_s: 0
-  num_episodes: 15
+  num_episodes: 10
   video: true
   push_to_hub: true
   private: false
@@ -41,14 +43,28 @@ dataset:
   rename_map: {}
 
 teleop_action_processor:
-  steps: [clutch_processor]  #, arm_absolute_to_delta]
+  steps:
+    - registry_name: clutch_processor
+      config:
+        translation_scale: 0.35
+        rotation_scale: 0.8
+        max_translation_m: 0.12
+        max_rotation_rad: 0.5
+        translation_deadzone_m: 0.002
+        rotation_deadzone_rad: 0.02
 
 robot_action_processor:
-  steps: []
+  steps:
+    - registry_name: cartesian_action_safety_processor
+      config:
+        max_translation_m: 0.02
+        max_rotation_rad: 0.18
+        mode: clip
 
 robot_observation_processor:
   steps: []
 
 display_data: true
+control_fps: 30
 play_sounds: true
-resume: true
+resume: false

@@ -6,17 +6,12 @@ lerobot_bt_runner:
     bt:
       initial_scene_ready_gate: "items_in_drawer.scene_0_ready"
       initial_scene_ready_max_attempts: -1
-      open_drawer_skill: "open_drawer"
-      open_drawer_timeout_s: 60.0
-      open_drawer_max_attempts: 3
-      pick_object_for_drawer_skill: "pick_object_for_drawer"
-      pick_object_for_drawer_timeout_s: 60.0
-      pick_object_for_drawer_max_attempts: 3
-      insert_object_in_drawer_skill: "insert_object_in_drawer"
-      insert_object_in_drawer_timeout_s: 60.0
-      objects_inserted_max_attempts: 3
-      close_drawer_skill: "close_drawer"
-      close_drawer_timeout_s: 60.0
-      close_drawer_max_attempts: 3
+      drawer_open_gate: "items_in_drawer.drawer_open_ready"
+      drawer_open_gate_max_attempts: -1
+      insert_next_drawer_item_skill: "insert_next_drawer_item"
+      insert_next_drawer_item_timeout_s: 60.0
+      insert_next_drawer_item_max_attempts: -1
+      drawer_closed_gate: "items_in_drawer.drawer_closed"
+      drawer_closed_gate_max_attempts: -1
       task_complete_gate: "items_in_drawer.task_complete"
       task_complete_max_attempts: -1

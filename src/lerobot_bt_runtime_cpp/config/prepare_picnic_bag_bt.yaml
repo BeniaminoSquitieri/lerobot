@@ -1,0 +1,17 @@
+# @file prepare_picnic_bag_bt.yaml
+# @brief ROS2 parameters that configure prepare_picnic_bag.xml blackboard values.
+
+lerobot_bt_runner:
+  ros__parameters:
+    bt:
+      initial_scene_ready_gate: "prepare_picnic_bag.scene_0_ready"
+      initial_scene_ready_max_attempts: -1
+      human_open_bag_gate: "prepare_picnic_bag.human_open_bag"
+      human_open_bag_max_attempts: -1
+      bag_next_picnic_item_skill: "bag_next_picnic_item"
+      bag_next_picnic_item_timeout_s: 120.0
+      bag_next_picnic_item_max_attempts: -1
+      human_close_bag_gate: "prepare_picnic_bag.human_close_bag"
+      human_close_bag_max_attempts: -1
+      task_complete_gate: "prepare_picnic_bag.task_complete"
+      task_complete_max_attempts: -1

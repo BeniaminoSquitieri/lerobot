@@ -59,32 +59,25 @@ ros2 topic pub --once /lerobot_bt/vlm_result std_msgs/msg/String \
   "{data: '{\"skill_name\":\"items_in_drawer.scene_0_ready\",\"attempt_id\":0,\"status\":\"SUCCESS\",\"message\":\"drawer setup ready\"}'}"
 ```
 
-Drawer opened:
+Human opens the drawer:
 
 ```bash
 ros2 topic pub --once /lerobot_bt/vlm_result std_msgs/msg/String \
-  "{data: '{\"skill_name\":\"open_drawer\",\"attempt_id\":0,\"status\":\"SUCCESS\",\"message\":\"drawer is open\"}'}"
+  "{data: '{\"skill_name\":\"items_in_drawer.drawer_open_ready\",\"attempt_id\":0,\"status\":\"SUCCESS\",\"message\":\"drawer is open and ready\"}'}"
 ```
 
-Object picked:
+Insert next item:
 
 ```bash
 ros2 topic pub --once /lerobot_bt/vlm_result std_msgs/msg/String \
-  "{data: '{\"skill_name\":\"pick_object_for_drawer\",\"attempt_id\":0,\"status\":\"SUCCESS\",\"message\":\"object picked for drawer insertion\"}'}"
+  "{data: '{\"skill_name\":\"insert_next_drawer_item\",\"attempt_id\":0,\"status\":\"SUCCESS\",\"message\":\"all requested drawer items are now inside\"}'}"
 ```
 
-Object inserted:
+Human closes the drawer:
 
 ```bash
 ros2 topic pub --once /lerobot_bt/vlm_result std_msgs/msg/String \
-  "{data: '{\"skill_name\":\"insert_object_in_drawer\",\"attempt_id\":0,\"status\":\"SUCCESS\",\"message\":\"object inserted in drawer\"}'}"
-```
-
-Drawer closed:
-
-```bash
-ros2 topic pub --once /lerobot_bt/vlm_result std_msgs/msg/String \
-  "{data: '{\"skill_name\":\"close_drawer\",\"attempt_id\":0,\"status\":\"SUCCESS\",\"message\":\"drawer is closed\"}'}"
+  "{data: '{\"skill_name\":\"items_in_drawer.drawer_closed\",\"attempt_id\":0,\"status\":\"SUCCESS\",\"message\":\"drawer is closed\"}'}"
 ```
 
 Task complete:
@@ -100,14 +93,14 @@ Retry the current skill:
 
 ```bash
 ros2 topic pub --once /lerobot_bt/vlm_result std_msgs/msg/String \
-  "{data: '{\"skill_name\":\"insert_object_in_drawer\",\"attempt_id\":0,\"status\":\"FAILURE\",\"failure_reason\":\"object_not_inside_drawer\",\"message\":\"object is not fully inside the drawer\"}'}"
+  "{data: '{\"skill_name\":\"insert_next_drawer_item\",\"attempt_id\":0,\"status\":\"FAILURE\",\"failure_reason\":\"more_objects_remaining\",\"message\":\"there are still objects outside the drawer, run the insertion skill again\"}'}"
 ```
 
 Request human intervention:
 
 ```bash
 ros2 topic pub --once /lerobot_bt/vlm_result std_msgs/msg/String \
-  "{data: '{\"skill_name\":\"close_drawer\",\"attempt_id\":0,\"status\":\"WAIT_HUMAN\",\"next_action\":\"REQUEST_MANUAL_INTERVENTION\",\"failure_reason\":\"drawer_blocked\",\"required_human_action\":\"remove the obstruction from the drawer rails\",\"message\":\"human help required\"}'}"
+  "{data: '{\"skill_name\":\"items_in_drawer.drawer_closed\",\"attempt_id\":0,\"status\":\"WAIT_HUMAN\",\"next_action\":\"REQUEST_MANUAL_INTERVENTION\",\"failure_reason\":\"drawer_blocked\",\"required_human_action\":\"remove the obstruction and close the drawer\",\"message\":\"human help required\"}'}"
 ```
 
 ## Useful checks

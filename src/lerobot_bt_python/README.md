@@ -52,9 +52,9 @@ motions. A VLM `FAILURE` is handled by the BT retrying the same BC skill.
 - `verification.py`: in-memory registry for VLM pending/success/failure verdicts.
 - `make_sandwich_executor.yaml`: active sandwich skill profile.
 - `lunch_table_bussing_executor.yaml`: lunch table bussing skill profile template.
-- `grocery_bagging_executor.yaml`: grocery bagging skill profile template.
 - `items_in_drawer_executor.yaml`: drawer insertion skill profile template.
 - `make_coffee_executor.yaml`: coffee task skill profile template.
+- `prepare_picnic_bag_executor.yaml`: picnic bag preparation skill profile template.
 
 The scene-task profile templates follow the same structure as the sandwich
 profile. Keep the `name` fields aligned with the BT XML and replace only each
@@ -149,20 +149,20 @@ executor profile and start the C++ runner with the matching XML tree plus BT
 profile, for example:
 
 ```bash
-lerobot-bt-skill-server --config_path src/lerobot_bt_python/grocery_bagging_executor.yaml
+lerobot-bt-skill-server --config_path src/lerobot_bt_python/prepare_picnic_bag_executor.yaml
 ```
 
 ```bash
 ros2 run lerobot_bt_runtime_cpp lerobot_bt_runner --ros-args \
-  --params-file src/lerobot_bt_runtime_cpp/config/grocery_bagging_bt.yaml \
-  -p tree_xml_path:="$(pwd)/src/lerobot_bt_runtime_cpp/trees/grocery_bagging.xml"
+  --params-file src/lerobot_bt_runtime_cpp/config/prepare_picnic_bag_bt.yaml \
+  -p tree_xml_path:="$(pwd)/src/lerobot_bt_runtime_cpp/trees/prepare_picnic_bag.xml"
 ```
 
 After installing or sourcing the ROS2 workspace, the runner can also be started
 with the task launch file:
 
 ```bash
-ros2 launch lerobot_bt_runtime_cpp grocery_bagging.launch.py
+ros2 launch lerobot_bt_runtime_cpp prepare_picnic_bag.launch.py
 ```
 
 The same pairing applies to:
@@ -170,3 +170,4 @@ The same pairing applies to:
 - `lunch_table_bussing_executor.yaml` with `lunch_table_bussing_bt.yaml` and `lunch_table_bussing.xml`
 - `items_in_drawer_executor.yaml` with `items_in_drawer_bt.yaml` and `items_in_drawer.xml`
 - `make_coffee_executor.yaml` with `make_coffee_bt.yaml` and `make_coffee.xml`
+- `prepare_picnic_bag_executor.yaml` with `prepare_picnic_bag_bt.yaml` and `prepare_picnic_bag.xml`

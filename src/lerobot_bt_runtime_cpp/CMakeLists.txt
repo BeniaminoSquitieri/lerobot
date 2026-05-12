@@ -62,25 +62,25 @@ install(DIRECTORY include/
 
 # Explicit tree list prevents accidentally installing scratch or duplicate XML.
 set(LEROBOT_BT_TREE_FILES
-  trees/grocery_bagging.xml
   trees/items_in_drawer.xml
   trees/lunch_table_bussing.xml
   trees/make_coffee.xml
   trees/make_sandwich.xml
+  trees/prepare_picnic_bag.xml
 )
 set(LEROBOT_BT_CONFIG_FILES
-  config/grocery_bagging_bt.yaml
   config/items_in_drawer_bt.yaml
   config/lunch_table_bussing_bt.yaml
   config/make_coffee_bt.yaml
   config/make_sandwich_bt.yaml
+  config/prepare_picnic_bag_bt.yaml
 )
 set(LEROBOT_BT_DIAGRAM_FILES
-  diagrams/grocery_bagging_bt.png
   diagrams/items_in_drawer_bt.png
   diagrams/lunch_table_bussing_bt.png
   diagrams/make_coffee_bt.png
   diagrams/make_sandwich_bt.png
+  diagrams/prepare_picnic_bag_bt.png
 )
 
 # Install only the curated tree/subtree XML files into the package share path.

@@ -1,9 +1,8 @@
-# @file items_in_drawer_executor.yaml
-# @brief Real-robot Python execution config for items_in_drawer.xml.
+# @file prepare_picnic_bag_executor.yaml
+# @brief Real-robot Python execution config for prepare_picnic_bag.xml.
 #
 # To connect the real BC model, replace only the policy.pretrained_path value
-# below. The human-driven drawer open/close steps are VLM gates in the BT, so
-# the executor only needs the repeated insertion skill.
+# below. The human-driven bag open/close phases are VLM gates in the BT.
 
 bt_command_service: "/lerobot_bt/run"
 vlm_state_service: "/lerobot_bt/vlm_state"
@@ -13,7 +12,7 @@ vlm_result_topic: "/lerobot_bt/vlm_result"
 vlm_timeout_s: 0.0
 
 expected_skill_names:
-  - insert_next_drawer_item
+  - bag_next_picnic_item
 
 required_cameras:
   - wrist
@@ -54,17 +53,17 @@ robot_observation_processor:
   steps: []
 
 skills:
-  - name: insert_next_drawer_item
-    dataset_repo_id: "scene-transition/insert_next_drawer_item"
+  - name: bag_next_picnic_item
+    dataset_repo_id: "scene-transition/bag_next_picnic_item"
     metadata_source: robot
-    task: "Pick the next object and place it inside the open drawer without blocking the rails."
+    task: "Pick the next picnic item from the table and place it inside the open bag while the human keeps the bag open."
     policy:
       type: act
       device: cuda
-      pretrained_path: "TODO_MODEL_INSERT_NEXT_DRAWER_ITEM"
+      pretrained_path: "TODO_MODEL_BAG_NEXT_PICNIC_ITEM"
       n_action_steps: 16
       chunk_size: 16
     transition:
       mode: timeout
-      max_duration_s: 60.0
+      max_duration_s: 120.0
     settle_time_s: 0.0

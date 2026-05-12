@@ -49,7 +49,7 @@ digraph LeRobotBTArchitecture {
     color="#60a5fa";
     style="rounded";
     fillcolor="#eff6ff";
-    trees [label=<BT XML trees<BR/><FONT POINT-SIZE="12">make_sandwich, grocery_bagging,<BR/>items_in_drawer, lunch_table_bussing,<BR/>make_coffee</FONT>>, fillcolor="#dbeafe"];
+    trees [label=<BT XML trees<BR/><FONT POINT-SIZE="12">make_sandwich, prepare_picnic_bag,<BR/>items_in_drawer, lunch_table_bussing,<BR/>make_coffee</FONT>>, fillcolor="#dbeafe"];
     profiles [label=<Task YAML profiles<BR/><FONT POINT-SIZE="12">config/*_bt.yaml writes bt.*<BR/>blackboard values</FONT>>, fillcolor="#dbeafe"];
     diagrams [label=<Rendered BT diagrams<BR/><FONT POINT-SIZE="12">diagrams/*_bt.png generated<BR/>from XML + YAML</FONT>>, fillcolor="#dbeafe"];
   }

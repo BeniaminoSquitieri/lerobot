@@ -2,8 +2,10 @@
   @file items_in_drawer.xml
   @brief Scene-gated drawer insertion task.
 
-  The repeated insertion phase follows pick -> insert until the VLM/manual
-  verifier reports that all expected objects are inside and the drawer can close.
+  The human opens and closes the drawer. The robot owns a single repeated BC
+  skill that inserts the next object. After every rollout, the BT waits on the
+  VLM topic: `FAILURE` means more objects remain and the same skill is retried,
+  while `SUCCESS` means the drawer contents are complete.
 -->
 <root BTCPP_format="4" main_tree_to_execute="MainTree">
   <BehaviorTree ID="MainTree">
@@ -15,50 +17,33 @@
         </Sequence>
       </RetryUntilSuccessful>
 
-      <RetryUntilSuccessful name="SCENE 1 - Drawer open" num_attempts="{open_drawer_max_attempts}">
-        <Sequence name="Open drawer, then check scene 1">
-          <RunRobotSkill
-            name="Open drawer"
-            skill_name="{open_drawer_skill}"
-            timeout_s="{open_drawer_timeout_s}"/>
-          <WaitForSkillVerdict
+      <RetryUntilSuccessful name="SCENE 1 - Human opens drawer" num_attempts="{drawer_open_gate_max_attempts}">
+        <Sequence name="Open human-open gate, then wait for drawer open">
+          <OpenVLMGate name="Open drawer-open gate" gate_name="{drawer_open_gate}"/>
+          <WaitForGateVerdict
             name="Wait scene 1 ready - drawer open"
-            skill_name="{open_drawer_skill}"/>
+            gate_name="{drawer_open_gate}"/>
         </Sequence>
       </RetryUntilSuccessful>
 
-      <RetryUntilSuccessful name="SCENE 2 - Objects inserted" num_attempts="{objects_inserted_max_attempts}">
-        <Sequence name="Pick and insert next object, then check scene 2">
-          <RetryUntilSuccessful name="Pick object for drawer" num_attempts="{pick_object_for_drawer_max_attempts}">
-            <Sequence name="Pick one object">
-              <RunRobotSkill
-                name="Pick object for drawer"
-                skill_name="{pick_object_for_drawer_skill}"
-                timeout_s="{pick_object_for_drawer_timeout_s}"/>
-              <WaitForSkillVerdict
-                name="Wait pick verdict"
-                skill_name="{pick_object_for_drawer_skill}"/>
-            </Sequence>
-          </RetryUntilSuccessful>
+      <RetryUntilSuccessful name="SCENE 2 - Insert next drawer item" num_attempts="{insert_next_drawer_item_max_attempts}">
+        <Sequence name="Insert next object, then check if more remain">
           <RunRobotSkill
-            name="Insert object in drawer"
-            skill_name="{insert_object_in_drawer_skill}"
-            timeout_s="{insert_object_in_drawer_timeout_s}"/>
+            name="Insert next drawer item"
+            skill_name="{insert_next_drawer_item_skill}"
+            timeout_s="{insert_next_drawer_item_timeout_s}"/>
           <WaitForSkillVerdict
-            name="Wait scene 2 ready - drawer contents"
-            skill_name="{insert_object_in_drawer_skill}"/>
+            name="Wait scene 2 verdict - drawer contents complete"
+            skill_name="{insert_next_drawer_item_skill}"/>
         </Sequence>
       </RetryUntilSuccessful>
 
-      <RetryUntilSuccessful name="SCENE 3 - Drawer closed" num_attempts="{close_drawer_max_attempts}">
-        <Sequence name="Close drawer, then check scene 3">
-          <RunRobotSkill
-            name="Close drawer"
-            skill_name="{close_drawer_skill}"
-            timeout_s="{close_drawer_timeout_s}"/>
-          <WaitForSkillVerdict
+      <RetryUntilSuccessful name="SCENE 3 - Human closes drawer" num_attempts="{drawer_closed_gate_max_attempts}">
+        <Sequence name="Open human-close gate, then wait for drawer closed">
+          <OpenVLMGate name="Open drawer-closed gate" gate_name="{drawer_closed_gate}"/>
+          <WaitForGateVerdict
             name="Wait scene 3 ready - drawer closed"
-            skill_name="{close_drawer_skill}"/>
+            gate_name="{drawer_closed_gate}"/>
         </Sequence>
       </RetryUntilSuccessful>
 

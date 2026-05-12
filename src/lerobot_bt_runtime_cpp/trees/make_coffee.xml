@@ -2,8 +2,10 @@
   @file make_coffee.xml
   @brief Scene-gated coffee preparation task.
 
-  The final completion scene is a VLM/manual gate because no BC skill is needed
-  after the start button has been pressed.
+  Every BC stage advances only after the VLM topic confirms the post-skill
+  scene. Between capsule insertion and coffee start, the BT also waits for a
+  human-only step: the coffee machine must be closed before the robot presses
+  the start button.
 -->
 <root BTCPP_format="4" main_tree_to_execute="MainTree">
   <BehaviorTree ID="MainTree">
@@ -39,20 +41,29 @@
         </Sequence>
       </RetryUntilSuccessful>
 
-      <RetryUntilSuccessful name="SCENE 3 - Coffee started" num_attempts="{press_start_button_max_attempts}">
-        <Sequence name="Press start, then check scene 3">
+      <RetryUntilSuccessful name="SCENE 3 - Human closes machine" num_attempts="{human_close_machine_max_attempts}">
+        <Sequence name="Open human-close gate, then wait for machine closed">
+          <OpenVLMGate name="Open human-close-machine gate" gate_name="{human_close_machine_gate}"/>
+          <WaitForGateVerdict
+            name="Wait scene 3 ready - machine closed"
+            gate_name="{human_close_machine_gate}"/>
+        </Sequence>
+      </RetryUntilSuccessful>
+
+      <RetryUntilSuccessful name="SCENE 4 - Coffee started" num_attempts="{press_start_button_max_attempts}">
+        <Sequence name="Press start, then check scene 4">
           <RunRobotSkill
             name="Press start button"
             skill_name="{press_start_button_skill}"
             timeout_s="{press_start_button_timeout_s}"/>
           <WaitForSkillVerdict
-            name="Wait scene 3 ready - extraction started"
+            name="Wait scene 4 ready - extraction started"
             skill_name="{press_start_button_skill}"/>
         </Sequence>
       </RetryUntilSuccessful>
 
       <RetryUntilSuccessful name="TASK COMPLETE - Coffee complete" num_attempts="{task_complete_max_attempts}">
-        <Sequence name="Open completion gate, then wait for scene 4">
+        <Sequence name="Open completion gate, then wait for final scene">
           <OpenVLMGate name="Open task-complete gate" gate_name="{task_complete_gate}"/>
           <WaitForGateVerdict name="Wait task complete" gate_name="{task_complete_gate}"/>
         </Sequence>

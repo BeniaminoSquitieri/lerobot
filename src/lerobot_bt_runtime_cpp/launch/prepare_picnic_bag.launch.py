@@ -1,4 +1,4 @@
-"""Launch the LeRobot BT runner with the grocery_bagging task profile."""
+"""Launch the LeRobot BT runner with the prepare_picnic_bag task profile."""
 
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument
@@ -18,13 +18,13 @@ def generate_launch_description():
             DeclareLaunchArgument(
                 "params_file",
                 default_value=PathJoinSubstitution(
-                    [pkg_share, "config", "grocery_bagging_bt.yaml"]
+                    [pkg_share, "config", "prepare_picnic_bag_bt.yaml"]
                 ),
             ),
             DeclareLaunchArgument(
                 "tree_xml_path",
                 default_value=PathJoinSubstitution(
-                    [pkg_share, "trees", "grocery_bagging.xml"]
+                    [pkg_share, "trees", "prepare_picnic_bag.xml"]
                 ),
             ),
             Node(

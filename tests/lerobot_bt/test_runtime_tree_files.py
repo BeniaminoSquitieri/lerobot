@@ -5,11 +5,11 @@ from pathlib import Path
 from xml.etree import ElementTree
 
 EXPECTED_TREE_FILES = {
-    "grocery_bagging.xml",
     "items_in_drawer.xml",
     "lunch_table_bussing.xml",
     "make_coffee.xml",
     "make_sandwich.xml",
+    "prepare_picnic_bag.xml",
 }
 VERDICT_NODE_TAGS = {"WaitForGateVerdict", "WaitForSkillVerdict"}
 EXPECTED_BT_PROFILE = {
@@ -35,54 +35,59 @@ EXPECTED_SCENE_TASK_SKILLS = {
         "pick_and_store_cutlery",
         "pick_and_store_dishware",
     ],
-    "grocery_bagging.xml": [
-        "bag_rigid_or_cylindrical_item",
-        "bag_flat_or_long_item",
-        "bag_soft_or_fragile_item",
-    ],
-    "items_in_drawer.xml": [
-        "open_drawer",
-        "pick_object_for_drawer",
-        "insert_object_in_drawer",
-        "close_drawer",
-    ],
+    "items_in_drawer.xml": ["insert_next_drawer_item"],
     "make_coffee.xml": [
         "place_cup_under_dispenser",
         "pick_and_insert_capsule",
         "press_start_button",
     ],
+    "prepare_picnic_bag.xml": ["bag_next_picnic_item"],
 }
 EXPECTED_SCENE_TASK_GATES = {
     "lunch_table_bussing.xml": ["lunch_table_bussing.scene_0_ready", "lunch_table_bussing.task_complete"],
-    "grocery_bagging.xml": ["grocery_bagging.scene_0_ready", "grocery_bagging.task_complete"],
-    "items_in_drawer.xml": ["items_in_drawer.scene_0_ready", "items_in_drawer.task_complete"],
-    "make_coffee.xml": ["make_coffee.scene_0_ready", "make_coffee.task_complete"],
+    "items_in_drawer.xml": [
+        "items_in_drawer.scene_0_ready",
+        "items_in_drawer.drawer_open_ready",
+        "items_in_drawer.drawer_closed",
+        "items_in_drawer.task_complete",
+    ],
+    "make_coffee.xml": [
+        "make_coffee.scene_0_ready",
+        "make_coffee.human_close_machine",
+        "make_coffee.task_complete",
+    ],
+    "prepare_picnic_bag.xml": [
+        "prepare_picnic_bag.scene_0_ready",
+        "prepare_picnic_bag.human_open_bag",
+        "prepare_picnic_bag.human_close_bag",
+        "prepare_picnic_bag.task_complete",
+    ],
 }
 EXPECTED_SCENE_TASK_BT_PROFILES = {
     "lunch_table_bussing.xml": "lunch_table_bussing_bt.yaml",
-    "grocery_bagging.xml": "grocery_bagging_bt.yaml",
     "items_in_drawer.xml": "items_in_drawer_bt.yaml",
     "make_coffee.xml": "make_coffee_bt.yaml",
+    "prepare_picnic_bag.xml": "prepare_picnic_bag_bt.yaml",
 }
 EXPECTED_SCENE_TASK_EXECUTOR_PROFILES = {
     "lunch_table_bussing.xml": "lunch_table_bussing_executor.yaml",
-    "grocery_bagging.xml": "grocery_bagging_executor.yaml",
     "items_in_drawer.xml": "items_in_drawer_executor.yaml",
     "make_coffee.xml": "make_coffee_executor.yaml",
+    "prepare_picnic_bag.xml": "prepare_picnic_bag_executor.yaml",
 }
 EXPECTED_LAUNCH_FILES = {
     "make_sandwich.launch.py": ("make_sandwich.xml", "make_sandwich_bt.yaml"),
     "lunch_table_bussing.launch.py": ("lunch_table_bussing.xml", "lunch_table_bussing_bt.yaml"),
-    "grocery_bagging.launch.py": ("grocery_bagging.xml", "grocery_bagging_bt.yaml"),
     "items_in_drawer.launch.py": ("items_in_drawer.xml", "items_in_drawer_bt.yaml"),
     "make_coffee.launch.py": ("make_coffee.xml", "make_coffee_bt.yaml"),
+    "prepare_picnic_bag.launch.py": ("prepare_picnic_bag.xml", "prepare_picnic_bag_bt.yaml"),
 }
 EXPECTED_DIAGRAM_FILES = {
     "make_sandwich_bt.png",
     "lunch_table_bussing_bt.png",
-    "grocery_bagging_bt.png",
     "items_in_drawer_bt.png",
     "make_coffee_bt.png",
+    "prepare_picnic_bag_bt.png",
 }
 EXPECTED_TASK_READMES = {
     "lerobot_bt_README.md": {
@@ -97,10 +102,6 @@ EXPECTED_TASK_READMES = {
         *EXPECTED_SCENE_TASK_SKILLS["lunch_table_bussing.xml"],
         *EXPECTED_SCENE_TASK_GATES["lunch_table_bussing.xml"],
     },
-    "lerobot_bt_grocery_bagging_README.md": {
-        *EXPECTED_SCENE_TASK_SKILLS["grocery_bagging.xml"],
-        *EXPECTED_SCENE_TASK_GATES["grocery_bagging.xml"],
-    },
     "lerobot_bt_items_in_drawer_README.md": {
         *EXPECTED_SCENE_TASK_SKILLS["items_in_drawer.xml"],
         *EXPECTED_SCENE_TASK_GATES["items_in_drawer.xml"],
@@ -108,6 +109,10 @@ EXPECTED_TASK_READMES = {
     "lerobot_bt_make_coffee_README.md": {
         *EXPECTED_SCENE_TASK_SKILLS["make_coffee.xml"],
         *EXPECTED_SCENE_TASK_GATES["make_coffee.xml"],
+    },
+    "lerobot_bt_prepare_picnic_bag_README.md": {
+        *EXPECTED_SCENE_TASK_SKILLS["prepare_picnic_bag.xml"],
+        *EXPECTED_SCENE_TASK_GATES["prepare_picnic_bag.xml"],
     },
 }
 
