@@ -20,7 +20,10 @@ import time
 from dataclasses import asdict
 from pathlib import Path
 from pprint import pformat
+from threading import Event, Lock, Thread
+from typing import Any, List
 
+import numpy as np
 from pyparsing import Optional
 
 from lerobot.configs import parser
@@ -40,6 +43,8 @@ from lerobot.robots.custom_manipulator.episode_start_overlay import make_episode
 from lerobot.robots.custom_manipulator.policy_rollout_viewer import log_policy_rollout
 from lerobot.robots.custom_manipulator.record_config import (
     RecordConfig,
+    RosEnvironmentStateConfig,
+    RosObservationTopicConfig,
     get_missing_policy_source_message,
     get_policy_loading_source,
 )
@@ -52,7 +57,7 @@ from lerobot.common.control_utils import (
 from lerobot.utils.utils import log_say, init_logging
 from lerobot.utils.device_utils import get_safe_torch_device
 from lerobot.utils.visualization_utils import init_rerun, log_rerun_data
-from lerobot.utils.constants import ACTION, HF_LEROBOT_HOME, OBS_STR
+from lerobot.utils.constants import ACTION, HF_LEROBOT_HOME, OBS_ENV_STATE, OBS_STR
 from lerobot.utils.robot_utils import precise_sleep
 from lerobot.policies.utils import make_robot_action
 from lerobot.policies.factory import make_policy, make_pre_post_processors
@@ -62,15 +67,174 @@ from lerobot.teleoperators import Teleoperator, make_teleoperator_from_config
 from lerobot.policies.pretrained import PreTrainedPolicy
 from lerobot.processor import PolicyAction, PolicyProcessorPipeline
 from lerobot.common.control_utils import predict_action
-from typing import Any, List
 
 import rerun as rr
 from lerobot.utils.rotation import Rotation as R
+
+try:
+    import rclpy  # type: ignore
+    from rclpy.executors import SingleThreadedExecutor  # type: ignore
+    from rclpy.node import Node  # type: ignore
+
+    _ros_import_error: Exception | None = None
+except Exception as e:
+    rclpy = None  # type: ignore[assignment]
+    SingleThreadedExecutor = None  # type: ignore[assignment,misc]
+    Node = None  # type: ignore[assignment,misc]
+    _ros_import_error = e
 
 # import debugpy
 # debugpy.listen(5678)
 # print('Waiting for client...')
 # debugpy.wait_for_client()
+
+
+def _normalize_ros_message_type_path(message_type: str) -> str:
+    if "/msg/" in message_type:
+        return message_type.replace("/msg/", ".msg.")
+    if message_type.count("/") == 2:
+        package, namespace, name = message_type.split("/")
+        return f"{package}.{namespace}.{name}"
+    if message_type.count("/") == 1:
+        package, name = message_type.split("/")
+        return f"{package}.msg.{name}"
+    return message_type
+
+
+def _load_ros_message_type(message_type: str) -> type[Any]:
+    normalized = _normalize_ros_message_type_path(message_type)
+    module_path, class_name = normalized.rsplit(".", 1)
+    module = importlib.import_module(module_path)
+    return getattr(module, class_name)
+
+
+def _extract_ros_message_value(message: Any, field_path: str) -> float:
+    value = message
+    for field_name in field_path.split("."):
+        value = getattr(value, field_name)
+    return float(value)
+
+
+def _build_ros_env_state_dataset_features(config: RosEnvironmentStateConfig) -> dict[str, dict]:
+    if not config.enabled:
+        return {}
+
+    source_keys = config.ordered_output_keys
+    return {
+        OBS_ENV_STATE: {
+        "dtype": "float32",
+        "shape": (len(source_keys),),
+        "names": source_keys,
+        }
+    }
+
+
+class _RosEnvironmentStateReader:
+    def __init__(self, config: RosEnvironmentStateConfig):
+        self.config = config
+        self._latest_values: dict[str, np.float32] = {}
+        self._lock = Lock()
+        self._stop_event = Event()
+        self._spin_thread: Thread | None = None
+        self._executor = None
+        self._node = None
+        self._subscriptions: list[Any] = []
+
+    def _make_callback(self, topic_config: RosObservationTopicConfig):
+        def _callback(message: Any) -> None:
+            extracted = {
+                key: np.float32(_extract_ros_message_value(message, field_path))
+                for key, field_path in zip(topic_config.output_keys, topic_config.value_fields, strict=True)
+            }
+            with self._lock:
+                self._latest_values.update(extracted)
+
+        return _callback
+
+    @property
+    def is_ready(self) -> bool:
+        with self._lock:
+            return all(key in self._latest_values for key in self.config.ordered_output_keys)
+
+    def connect(self) -> None:
+        if not self.config.enabled:
+            return
+        if rclpy is None or Node is None or SingleThreadedExecutor is None:
+            raise ImportError("ROS2 support is unavailable in this environment.") from _ros_import_error
+
+        if not rclpy.ok():
+            rclpy.init(args=None)
+
+        self._node = Node("lerobot_custom_manipulator_env_state")
+        self._executor = SingleThreadedExecutor()
+        self._executor.add_node(self._node)
+
+        for topic_config in self.config.topics:
+            message_type = _load_ros_message_type(topic_config.message_type)
+            subscription = self._node.create_subscription(
+                message_type,
+                topic_config.topic,
+                self._make_callback(topic_config),
+                topic_config.queue_size,
+            )
+            self._subscriptions.append(subscription)
+
+        self._spin_thread = Thread(
+            target=self._spin,
+            name="lerobot_ros_env_state",
+            daemon=True,
+        )
+        self._spin_thread.start()
+
+    def _spin(self) -> None:
+        if self._executor is None:
+            return
+        while not self._stop_event.is_set():
+            self._executor.spin_once(timeout_sec=0.1)
+
+    def wait_until_ready(self, timeout_s: float) -> None:
+        deadline = time.perf_counter() + timeout_s
+        while time.perf_counter() < deadline:
+            if self.is_ready:
+                return
+            time.sleep(0.05)
+
+        missing = [key for key in self.config.ordered_output_keys if key not in self._latest_values]
+        raise TimeoutError(
+            "Timed out waiting for ROS environment-state topics. "
+            f"Missing values for keys: {missing}."
+        )
+
+    def get_latest_values(self) -> dict[str, np.float32]:
+        with self._lock:
+            missing = [key for key in self.config.ordered_output_keys if key not in self._latest_values]
+            if missing:
+                raise RuntimeError(
+                    "ROS environment-state reader is missing required values "
+                    f"for keys: {missing}."
+                )
+            return {key: self._latest_values[key] for key in self.config.ordered_output_keys}
+
+    def try_get_latest_values(self) -> dict[str, np.float32] | None:
+        with self._lock:
+            if not all(key in self._latest_values for key in self.config.ordered_output_keys):
+                return None
+            return {key: self._latest_values[key] for key in self.config.ordered_output_keys}
+
+    def disconnect(self) -> None:
+        self._stop_event.set()
+        if self._spin_thread is not None and self._spin_thread.is_alive():
+            self._spin_thread.join(timeout=2.0)
+        if self._node is not None:
+            self._node.destroy_node()
+            self._node = None
+        if self._executor is not None:
+            try:
+                self._executor.shutdown()
+            except Exception:
+                pass
+            self._executor = None
+        self._subscriptions.clear()
 
 #  +---------------------------------------------------------------------------------------+
 #  |                                          record_loop                                  |
@@ -146,6 +310,8 @@ def record_loop(
     single_task: str | None = None,
     display_data: bool = False,
     overlay_viewer = None,
+    ros_environment_state_reader: _RosEnvironmentStateReader | None = None,
+    teleop_recording_mode: str = "corrections_only",
 ):
     """
     Custom record_loop forked from lerobot.scripts.lerobot_record.record_loop.
@@ -169,6 +335,7 @@ def record_loop(
     timestamp = 0
     start_episode_t = time.perf_counter()
     teleop_was_engaged = False
+    waiting_for_ros_env_state = False
     while timestamp < control_time_s:
         start_loop_t = time.perf_counter()
 
@@ -183,6 +350,29 @@ def record_loop(
 
         # Applies a pipeline to the raw robot observation, default is IdentityProcessor
         obs_processed = robot_observation_processor(obs)
+        ros_env_state_values = {}
+        if ros_environment_state_reader is not None:
+            latest_values = ros_environment_state_reader.try_get_latest_values()
+            if latest_values is None:
+                if not waiting_for_ros_env_state:
+                    logging.info(
+                        "Waiting for ROS environment-state outputs. Cameras remain active and keep streaming "
+                        "until the first values arrive."
+                    )
+                    waiting_for_ros_env_state = True
+                precise_sleep(max(1 / fps - (time.perf_counter() - start_loop_t), 0.0))
+                start_episode_t = time.perf_counter()
+                timestamp = 0
+                continue
+
+            ros_env_state_values = latest_values
+            if waiting_for_ros_env_state:
+                logging.info("ROS environment-state outputs received. Starting episode timing now.")
+                waiting_for_ros_env_state = False
+                start_episode_t = time.perf_counter()
+                timestamp = 0
+        if ros_env_state_values:
+            obs_processed = {**obs_processed, **ros_env_state_values}
 
         if policy is not None or dataset is not None:
             observation_frame = build_dataset_frame(dataset.features, obs_processed, prefix=OBS_STR)
@@ -257,9 +447,22 @@ def record_loop(
 
         _sent_action = robot.send_action(robot_action_to_send)
 
-        if dataset is not None and (policy is None or teleop is None or teleop_engaged):
+        should_save_frame = (
+            dataset is not None
+            and (
+                policy is None
+                or teleop is None
+                or teleop_recording_mode == "all"
+                or teleop_engaged
+            )
+        )
+        if should_save_frame:
             action_frame = build_dataset_frame(dataset.features, _sent_action, prefix=ACTION)
-            frame = {**observation_frame, **action_frame, "task": single_task}
+            frame = {
+                **observation_frame,
+                **action_frame,
+                "task": single_task,
+            }
             dataset.add_frame(frame)
 
         if display_data:
@@ -370,6 +573,7 @@ def record(cfg: RecordConfig):
             initial_features=create_initial_features(observation=robot.observation_features),
             use_videos=cfg.dataset.video,
         ),
+        _build_ros_env_state_dataset_features(cfg.ros_environment_state),
     )
 
     if cfg.resume:
@@ -422,11 +626,17 @@ def record(cfg: RecordConfig):
             },
         )
 
+    ros_environment_state_reader = None
+    if cfg.ros_environment_state.enabled:
+        ros_environment_state_reader = _RosEnvironmentStateReader(cfg.ros_environment_state)
+
     overlay_viewer = None
     if cfg.display_data and not is_headless():
         overlay_viewer = make_episode_start_overlay(dataset)
 
     robot.connect()
+    if ros_environment_state_reader is not None:
+        ros_environment_state_reader.connect()
     if cfg.teleop is not None:
         teleop.connect()
 
@@ -454,6 +664,8 @@ def record(cfg: RecordConfig):
                 single_task=cfg.dataset.single_task,
                 display_data=cfg.display_data,
                 overlay_viewer=overlay_viewer,
+                ros_environment_state_reader=ros_environment_state_reader,
+                teleop_recording_mode=cfg.teleop_recording_mode,
             )
 
             if not events["stop_recording"] and (
@@ -488,6 +700,8 @@ def record(cfg: RecordConfig):
         overlay_viewer.close()
 
     robot.disconnect()
+    if ros_environment_state_reader is not None:
+        ros_environment_state_reader.disconnect()
     if cfg.teleop is not None:
         teleop.disconnect()
 

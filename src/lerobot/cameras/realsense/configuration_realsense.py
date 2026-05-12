@@ -45,6 +45,10 @@ class RealSenseCameraConfig(CameraConfig):
         use_depth: Whether to enable depth stream. Defaults to False.
         rotation: Image rotation setting (0°, 90°, 180°, or 270°). Defaults to no rotation.
         warmup_s: Time reading frames before returning from connect (in seconds)
+        publish_ros_topic: Whether to publish images to ROS2.
+        ros_topic: Base ROS2 topic used for the image stream.
+        ros_transport: ROS2 image transport mode. Supported values are `raw` and `compressed`.
+        ros_jpeg_quality: JPEG quality used when `ros_transport="compressed"`.
 
     Note:
         - Either name or serial_number must be specified.
@@ -60,13 +64,20 @@ class RealSenseCameraConfig(CameraConfig):
     warmup_s: int = 1
     publish_ros_topic: bool = False
     ros_topic: str | None = None
+    ros_transport: str = "raw"
+    ros_jpeg_quality: int = 75
 
     def __post_init__(self) -> None:
         self.color_mode = ColorMode(self.color_mode)
         self.rotation = Cv2Rotation(self.rotation)
+        self.ros_transport = self.ros_transport.lower()
 
         values = (self.fps, self.width, self.height)
         if any(v is not None for v in values) and any(v is None for v in values):
             raise ValueError(
                 "For `fps`, `width` and `height`, either all of them need to be set, or none of them."
             )
+        if self.ros_transport not in {"raw", "compressed"}:
+            raise ValueError("`ros_transport` must be one of {'raw', 'compressed'}.")
+        if not 0 <= self.ros_jpeg_quality <= 100:
+            raise ValueError("`ros_jpeg_quality` must be between 0 and 100.")
