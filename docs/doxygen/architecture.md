@@ -1,15 +1,15 @@
 # Architecture
 
 ```text
-sandwich_bt_runtime_cpp
+lerobot_bt_runtime_cpp
   -> RunNamedCommand
-  -> sandwich_bt_python
+  -> lerobot_bt_python
   -> GetSkillVerification
   -> waits while PENDING/RUNNING/WAIT_HUMAN/MANUAL_INTERVENTION_REQUIRED
 
 VLM/manual verifier
-  -> /sandwich_bt/vlm_result
-  -> sandwich_bt_python
+  -> /lerobot_bt/vlm_result
+  -> lerobot_bt_python
 ```
 
 There is no separate planning supervisor in the active runtime path.

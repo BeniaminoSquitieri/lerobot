@@ -1,10 +1,10 @@
-PROJECT_NAME           = "Sandwich BT Stack"
-PROJECT_BRIEF          = "VLM-gated Behavior Tree stack for sandwich manipulation"
+PROJECT_NAME           = "LeRobot BT Stack"
+PROJECT_BRIEF          = "VLM-gated Behavior Tree stack for LeRobot manipulation tasks"
 OUTPUT_DIRECTORY       = docs/doxygen/build
-INPUT                  = src/sandwich_bt_README.md \
-                         src/sandwich_bt_runtime_cpp \
-                         src/sandwich_bt_python \
-                         src/sandwich_bt_interfaces \
+INPUT                  = src/lerobot_bt_README.md \
+                         src/lerobot_bt_runtime_cpp \
+                         src/lerobot_bt_python \
+                         src/lerobot_bt_interfaces \
                          docs/doxygen/mainpage.md \
                          docs/doxygen/architecture.md \
                          docs/doxygen/runtime_flows.md \

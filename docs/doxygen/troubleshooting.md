@@ -5,8 +5,8 @@
 Check the VLM check state:
 
 ```bash
-ros2 service call /sandwich_bt/vlm_state \
-  sandwich_bt_interfaces/srv/GetSkillVerification \
+ros2 service call /lerobot_bt/vlm_state \
+  lerobot_bt_interfaces/srv/GetSkillVerification \
   "{skill_name: place_first_toast}"
 ```
 
@@ -17,7 +17,7 @@ update.
 ## Manually Resolve A Gate
 
 ```bash
-ros2 topic pub --once /sandwich_bt/vlm_result std_msgs/msg/String \
+ros2 topic pub --once /lerobot_bt/vlm_result std_msgs/msg/String \
   "{data: '{\"skill_name\":\"place_first_toast\",\"attempt_id\":0,\"status\":\"SUCCESS\",\"message\":\"ok\"}'}"
 ```
 

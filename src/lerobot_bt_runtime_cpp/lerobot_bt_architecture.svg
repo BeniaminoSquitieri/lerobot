@@ -1,0 +1,74 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="900" viewBox="0 0 1600 900" role="img" aria-labelledby="title desc">
+  <title id="title">VLM-gated LeRobot Behavior Tree architecture</title>
+  <desc id="desc">Active LeRobot BT stack: BehaviorTree.CPP runtime, Python skill server, robot execution, VLM check registry, and VLM verifier.</desc>
+  <defs>
+    <marker id="arrow" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto" markerUnits="strokeWidth">
+      <path d="M2,2 L10,6 L2,10 Z" fill="#1f2937"/>
+    </marker>
+    <style>
+      .bg { fill: #f8fafc; }
+      .box { fill: #ffffff; stroke: #334155; stroke-width: 2.4; rx: 10; }
+      .blue { fill: #e8f1ff; stroke: #1d4ed8; }
+      .green { fill: #e9f8ef; stroke: #15803d; }
+      .amber { fill: #fff7e6; stroke: #b45309; }
+      .red { fill: #fff1f2; stroke: #be123c; }
+      .gray { fill: #f1f5f9; stroke: #475569; }
+      .arrow { stroke: #1f2937; stroke-width: 3; fill: none; marker-end: url(#arrow); }
+      .soft { stroke: #64748b; stroke-width: 2.4; fill: none; marker-end: url(#arrow); stroke-dasharray: 8 7; }
+      .title { font: 700 36px "DejaVu Sans", Arial, sans-serif; fill: #0f172a; }
+      .h1 { font: 700 24px "DejaVu Sans", Arial, sans-serif; fill: #0f172a; }
+      .h2 { font: 700 19px "DejaVu Sans", Arial, sans-serif; fill: #0f172a; }
+      .txt { font: 16px "DejaVu Sans", Arial, sans-serif; fill: #1e293b; }
+      .small { font: 14px "DejaVu Sans", Arial, sans-serif; fill: #334155; }
+      .mono { font: 14px "DejaVu Sans Mono", Consolas, monospace; fill: #111827; }
+    </style>
+  </defs>
+  <rect class="bg" width="1600" height="900"/>
+  <text class="title" x="60" y="64">LeRobot BT Architecture - VLM-Gated Execution</text>
+  <text class="txt" x="60" y="96">BT owns order/wait/retry, Python owns skill execution and VLM check state, VLM reports scene updates.</text>
+
+  <rect class="box blue" x="80" y="170" width="380" height="180"/>
+  <text class="h1" x="110" y="215">BehaviorTree.CPP</text>
+  <text class="mono" x="110" y="250">lerobot_bt_runner</text>
+  <text class="small" x="110" y="282">Sequence + RetryUntilSuccessful</text>
+  <text class="small" x="110" y="310">OpenVLMGate / RunRobotSkill, then wait verdict</text>
+
+  <rect class="box green" x="610" y="150" width="420" height="220"/>
+  <text class="h1" x="640" y="195">Python Skill Server</text>
+  <text class="mono" x="640" y="230">/lerobot_bt/run</text>
+  <text class="mono" x="640" y="258">/lerobot_bt/vlm_state</text>
+  <text class="mono" x="640" y="286">/lerobot_bt/vlm_result_legacy</text>
+  <text class="small" x="640" y="325">Runs BC skills and opens VLM gates.</text>
+
+  <rect class="box gray" x="1180" y="170" width="300" height="180"/>
+  <text class="h1" x="1210" y="215">Robot</text>
+  <text class="mono" x="1210" y="250">place_first_toast</text>
+  <text class="mono" x="1210" y="278">place_second_toast</text>
+  <text class="small" x="1210" y="315">No deterministic recovery motions.</text>
+
+  <rect class="box amber" x="610" y="515" width="420" height="160"/>
+  <text class="h1" x="640" y="560">VLM Check Registry</text>
+  <text class="small" x="640" y="595">Creates PENDING attempts per skill/gate.</text>
+  <text class="small" x="640" y="623">Stores VLM waiting/final statuses.</text>
+
+  <rect class="box red" x="80" y="515" width="380" height="160"/>
+  <text class="h1" x="110" y="560">VLM / Manual Verifier</text>
+  <text class="small" x="110" y="595">Observes the scene.</text>
+  <text class="small" x="110" y="623">Reports waiting, success, failure, or next_action.</text>
+
+  <path class="arrow" d="M460 250 C520 250 545 250 610 250"/>
+  <text class="mono" x="488" y="235">RunRobotSkill / OpenVLMGate</text>
+  <path class="arrow" d="M1030 250 C1085 250 1120 250 1180 250"/>
+  <text class="mono" x="1062" y="235">BC actions</text>
+  <path class="arrow" d="M820 370 C820 430 820 470 820 515"/>
+  <text class="small" x="840" y="445">open PENDING</text>
+  <path class="arrow" d="M460 590 C520 590 545 590 610 590"/>
+  <text class="mono" x="480" y="575">/lerobot_bt/vlm_result</text>
+  <path class="soft" d="M610 625 C500 625 420 420 420 350"/>
+  <text class="small" x="440" y="470">VLM state service: PENDING -> BT RUNNING</text>
+  <path class="soft" d="M1030 625 C1160 625 1280 485 1320 350"/>
+  <text class="small" x="1060" y="650">SUCCESS advances; FAILURE retries same BC skill.</text>
+
+  <rect x="80" y="770" width="1180" height="54" rx="8" fill="#0f172a"/>
+  <text x="105" y="805" class="small" fill="#ffffff">Key rule: waiting statuses keep the BT RUNNING; SUCCESS advances; FAILURE retries via XML.</text>
+</svg>
