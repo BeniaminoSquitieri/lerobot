@@ -22,25 +22,31 @@ robot:
       height: 480
       fps: 30
 
-teleop:
-  type: metaquest_rail
+# teleop:
+#   type: metaquest_rail
 
-teleop_action_processor:
-  steps:
-    - clutch_processor
-    # - arm_absolute_to_delta
+# teleop_action_processor:
+#   steps:
+#     - clutch_processor
+#     # - arm_absolute_to_delta
+
+# policy:
+#   type: smolvla
+#   pretrained_path: steb6/smolvla_roboarena_HRII
+#   device: cuda
+#   # n_action_steps: 16
+#   # compile_model: true
 
 policy:
-  type: groot
-  pretrained_path: steb6/groot_hello_world
+  type: act
+  pretrained_path: steb6/act_roboarena_HRII
   device: cuda
   n_action_steps: 16
   chunk_size: 16
 
 dataset:
-  repo_id: steb6/eval_groot_pick_bread_dagger
-  root: outputs/eval_groot_pick_bread_dagger
-  single_task: Pick.
+  repo_id: HSP-IIT/eval_smolvla_default_toast_prep
+  single_task: Pick the metal block and put it in the box.
   fps: 10
   episode_time_s: 12000
   reset_time_s: 0
@@ -61,4 +67,4 @@ robot_observation_processor:
 
 # display_data: true
 play_sounds: true
-resume: true
+resume: false

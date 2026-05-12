@@ -111,11 +111,11 @@ if __name__ == "__main__":
     from lerobot.robots.custom_manipulator.custom_manipulator import CustomManipulator
     from lerobot.utils.visualization_utils import init_rerun
 
-    repo_id = "HSP-IIT/roboarena_HRII"
+    repo_id = "HSP-IIT/toast_pick_and_place"
     left_serial = "123622270882"
     episode_indices = list(range(10,30))
     dataset = LeRobotDataset(repo_id)
-    robot = CustomManipulator(CustomManipulatorConfig(cameras={"left": RealSenseCameraConfig(serial_number_or_name=left_serial, fps=30, width=640, height=480, use_depth=False)}))
+    robot = CustomManipulator(CustomManipulatorConfig(cameras={"left": RealSenseCameraConfig(serial_number_or_name=left_serial, fps=30, width=640, height=480, use_depth=False,publish_ros_topic=True, ros_topic="/topic_camera")}))
     init_rerun(session_name="episode_start_overlay")
     overlay = make_episode_start_overlay(dataset, camera_key="left_rgb", episode_indices=episode_indices)
     robot.connect()

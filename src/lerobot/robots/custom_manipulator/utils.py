@@ -1,11 +1,11 @@
 from .arms.dummy import DummyArm, DummyArmConfig
 from .grippers.config_leap_hand import LeapHandConfig
 from .grippers.config_xhand import XHandConfig
-# from .grippers.robotiq import Robotiq, RobotiqConfig
+from .grippers.robotiq import Robotiq, RobotiqConfig
 from .grippers.dummy_gripper import DummyGripper, DummyGripperConfig
 
 import numpy as np
-RobotiqConfig=None
+
 try:
     from .arms.panda import Panda, PandaConfig
 except ModuleNotFoundError:
@@ -26,8 +26,8 @@ def make_arm_from_config(config):
         raise ValueError(f"Unknown arm config type: {type(config)}")
 
 def make_gripper_from_config(config):
-    # if isinstance(config, RobotiqConfig):
-    #     return Robotiq(config)
+    if isinstance(config, RobotiqConfig):
+        return Robotiq(config)
     if isinstance(config, DummyGripperConfig) or config is None:
         return DummyGripper(config)
     elif PandaGripperConfig is not None and isinstance(config, PandaGripperConfig):

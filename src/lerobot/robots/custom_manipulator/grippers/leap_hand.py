@@ -27,14 +27,20 @@ from lerobot.robots.custom_manipulator.grippers.leap_hand_visualizer import (
     LeapHandDebugTools,
     transform_leap_target_positions,
 )
+from lerobot.robots.custom_manipulator.grippers.leap_hand_visualizer import LeapHandDebugTools
 
 LEAP_BASE_ROTATION = np.array([[0.0, -1.0, 0.0], [0.0, 0.0, 1.0], [-1.0, 0.0, 0.0]], dtype=float)
 
 
 class LeapHand:
-    end_effector_transforms = {"panda": np.eye(4, dtype=float), "dummy": np.eye(4, dtype=float)}
+    end_effector_transforms = {
+        "panda": np.eye(4),
+        "dummy": np.eye(4),
+    }
 
     def __init__(self, config: LeapHandConfig | None = None):
+        from dex_retargeting.retargeting_config import RetargetingConfig
+
         self.config = config or LeapHandConfig()
         self.dxl_client = None
 
@@ -286,5 +292,5 @@ class LeapHand:
         return {
             f"{tip}.position.{axis}": float(value)
             for tip, pos in tip_positions.items()
-            for axis, value in zip("xyz", pos, strict=True)
+            for axis, value in zip(AXES, pos, strict=True)
         }
