@@ -1,11 +1,11 @@
 import time
 import numpy as np
+import rclpy
 from rclpy.node import Node
 from panda_interface.srv import ApplyCommandsGripper, ConnectGripper, GetSensorsGripper
 from panda_interface.msg import PandaGripperCommand
 from dataclasses import dataclass
 from ..configs import GripperConfig
-from ..ros_spin import spin_until_future_complete
 
 @GripperConfig.register_subclass("panda_gripper")
 @dataclass
@@ -44,7 +44,7 @@ class PandaGripper(Node):
 
         request = PandaGripper.interfaces['connect_gripper'].Request()
         future = self.client_names['connect_gripper'].call_async(request)
-        spin_until_future_complete(self, future)
+        rclpy.spin_until_future_complete(self, future)
         return future.result().success
 
     def apply_commands(self, action=None, speed: float = None, force: float = None):
@@ -52,13 +52,13 @@ class PandaGripper(Node):
         request.command = PandaGripperCommand(width=float(action < 0.1))
         
         future = self.client_names['apply_commands_gripper'].call_async(request)
-        spin_until_future_complete(self, future)
+        rclpy.spin_until_future_complete(self, future)
         return future.result().success
 
     def get_sensors(self):
         request = PandaGripper.interfaces['get_sensors_gripper'].Request()
         future = self.client_names['get_sensors_gripper'].call_async(request)
-        spin_until_future_complete(self, future)
+        rclpy.spin_until_future_complete(self, future)
         res = future.result()
         return {'gripper': res.state.width}
 

@@ -5,9 +5,9 @@ from pathlib import Path
 from typing import Any
 
 import numpy as np
-from scipy.spatial.transform import Rotation as R
 
 from lerobot.teleoperators.teleoperator import Teleoperator
+from lerobot.utils.rotation import Rotation as R
 from lerobot.utils.errors import DeviceNotConnectedError
 
 from .config_metareader import MetaReaderConfig
@@ -18,6 +18,7 @@ if str(repo_root) not in sys.path:
 
 
 TIPS = ("thumb", "index", "middle", "ring", "little")
+REQUIRED_TIPS = TIPS[:-1]
 METAREADER_TRANSFORM = np.array([[0, 0, -1], [-1, 0, 0], [0, 1, 0]], dtype=float)
 HOME_ROT = R.from_rotvec([np.pi, 0.0, 0.0])
 
@@ -36,6 +37,10 @@ def _get_metareader_module():
 
 def _tip_features(prefix: str = "") -> dict[str, type[float]]:
     return {f"{prefix}{tip}.position.{axis}": float for tip in TIPS for axis in "xyz"}
+
+
+def _wrist_features(prefix: str = "") -> dict[str, type[float]]:
+    return {f"{prefix}wrist.position.{axis}": float for axis in "xyz"}
 
 
 class _CtrlClutch:
@@ -85,6 +90,7 @@ class MetaReaderTeleoperator(Teleoperator):
             "is_engaged": float,
             "exit_episode": float,
             "discard_episode": float,
+            **_wrist_features(),
             **_tip_features(),
         }
 
@@ -164,13 +170,14 @@ class MetaReaderTeleoperator(Teleoperator):
             "is_engaged": engaged,
             "exit_episode": 0.0,
             "discard_episode": 0.0,
+            **{key: 0.0 for key in _wrist_features()},
             **{key: 0.0 for key in _tip_features()},
         }
 
     def _frame_to_action(self, frame: Any) -> dict[str, float]:
         hand = frame.right_hand
         palm = getattr(hand.palm, "pose", None)
-        engaged = float((hand.tracked or not self.config.require_tracked_right_hand) and self._clutch.pressed)
+        engaged = 1.0 if self._clutch.pressed else 0.0
         if engaged == 0.0 or palm is None or not palm.valid:
             return self._neutral_action(engaged)
 
@@ -190,10 +197,21 @@ class MetaReaderTeleoperator(Teleoperator):
             }
         )
 
+        wrist_pose = getattr(hand.wrist, "pose", None)
+        if wrist_pose is None or not wrist_pose.valid:
+            return self._neutral_action(0.0)
+
+        wrist_position = METAREADER_TRANSFORM @ np.asarray(wrist_pose.position, dtype=float)
+        wrist_relative = palm_inverse.apply(wrist_position - palm_position)
+        for axis, value in zip("xyz", wrist_relative, strict=True):
+            action[f"wrist.position.{axis}"] = float(value)
+
         for tip in TIPS:
             fingertip = hand.fingertips.get(f"{tip}_tip")
             pose = getattr(fingertip, "pose", None)
             if pose is None or not pose.valid:
+                if tip in REQUIRED_TIPS:
+                    return self._neutral_action(0.0)
                 continue
             tip_position = METAREADER_TRANSFORM @ np.asarray(pose.position, dtype=float)
             relative = palm_inverse.apply(tip_position - palm_position)

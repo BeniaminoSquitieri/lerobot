@@ -20,10 +20,9 @@ from typing import Any
 import numpy as np
 import cv2
 import torch
-from scipy.spatial.transform import Rotation as R
 
 # ROS2 imports
-import rclpy
+# import rclpy
 
 from lerobot.utils.errors import DeviceNotConnectedError
 from lerobot.cameras.utils import make_cameras_from_configs
@@ -40,8 +39,8 @@ class CustomManipulator(Robot):
 
     def __init__(self, config: CustomManipulatorConfig):
         Robot.__init__(self, config)
-        if not rclpy.ok():
-            rclpy.init()
+        # if not rclpy.ok():
+        #     rclpy.init()
         
         self.config = config
         self._is_connected = False
@@ -117,23 +116,12 @@ class CustomManipulator(Robot):
     def disconnect(self) -> None:
         if not self.is_connected:
             return
-
-        try:
-            self.arm_interface.close()
-        except Exception:  # noqa: BLE001
-            logger.exception("Best-effort arm shutdown failed.")
-
-        try:
-            self.gripper_interface.close()
-        except Exception:  # noqa: BLE001
-            logger.exception("Best-effort gripper shutdown failed.")
-
+            
+        self.arm_interface.close()
+        self.gripper_interface.close()
         for cam in self.cameras.values():
-            try:
-                cam.disconnect()
-            except Exception:  # noqa: BLE001
-                logger.exception("Best-effort camera shutdown failed for %s.", cam)
-
+            cam.disconnect()
+        
         self._is_connected = False
         logger.info(f"{self} disconnected.")
 
@@ -171,10 +159,10 @@ class CustomManipulator(Robot):
     def reset(self) -> None:
         if not self.is_connected:
             raise DeviceNotConnectedError(f"{self} is not connected.")
-
-        print("[robot] Resetting arm...", flush=True)
-        self.arm_interface.reset()
-        print("[robot] Arm reset complete.", flush=True)
         print("[robot] Resetting gripper...", flush=True)
         self.gripper_interface.reset()
         print("[robot] Gripper reset complete.", flush=True)
+        print("[robot] Resetting arm...", flush=True)
+        self.arm_interface.reset()
+        print("[robot] Arm reset complete.", flush=True)
+
