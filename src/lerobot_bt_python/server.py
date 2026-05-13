@@ -263,7 +263,7 @@ class SkillCommandServer(Node):
 
     The node owns three services and two verifier-facing topics:
     - `RunNamedCommand`: command execution requested by BT XML leaf nodes.
-    - `VLM state service`: polling endpoint used by `VerifySkillOutcome`.
+    - `VLM state service`: polling endpoint used by `WaitForVLMVerdict`.
     - `legacy VLM result service`: legacy endpoint kept for compatibility.
     - `vlm_request_topic`: published when a scene verdict is needed.
     - `vlm_result_topic`: consumed from manual/VLM results.
@@ -349,7 +349,7 @@ class SkillCommandServer(Node):
 
         This method deliberately separates command execution from post-skill
         scene check. A successful skill opens a VLM check attempt; the
-        BT can only advance after `VerifySkillOutcome` sees that attempt resolve.
+        BT can only advance after `WaitForVLMVerdict` sees that attempt resolve.
         """
         # This is the handoff point between C++ BT orchestration and Python execution.
         log_say(f"Executing {request.kind} {request.name}", self.cfg.play_sounds)

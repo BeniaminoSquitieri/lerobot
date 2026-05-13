@@ -97,7 +97,7 @@ For a robot skill, the BT subtree shape is:
 RetryUntilSuccessful(name="retry_<skill>_on_vlm_retry_skill")
   Sequence(name="<skill>_vlm_replanning_loop")
     RunRobotSkill(skill_name="<skill>")
-    WaitForSkillVerdict(skill_name="<skill>")
+    WaitForVLMVerdict(check_name="<skill>")
 ```
 
 For a VLM/human gate with no robot motion, the shape is:
@@ -106,26 +106,25 @@ For a VLM/human gate with no robot motion, the shape is:
 RetryUntilSuccessful(name="retry_<gate>_until_vlm_success")
   Sequence(name="<gate>_wait_or_manual_intervention_gate")
     OpenVLMGate(gate_name="<gate>")
-    WaitForGateVerdict(gate_name="<gate>")
+    WaitForVLMVerdict(check_name="<gate>")
 ```
 
 If the skill call fails, the sequence fails and the same skill is retried.
 
-If the VLM reports `FAILURE`, `WaitForSkillVerdict` returns BT `FAILURE`; the
+If the VLM reports `FAILURE`, `WaitForVLMVerdict` returns BT `FAILURE`; the
 same `RetryUntilSuccessful` wrapper restarts the same BC skill from the
 beginning.
 
 If the VLM reports `RUNNING`, `WAIT_HUMAN`, or
-`MANUAL_INTERVENTION_REQUIRED`, `WaitForGateVerdict` or
-`WaitForSkillVerdict` keeps returning BT
+`MANUAL_INTERVENTION_REQUIRED`, `WaitForVLMVerdict` keeps returning BT
 `RUNNING`; the tree waits for a later `SUCCESS` or `FAILURE`.
 
 No gripper open/close, Panda reset, or deterministic Cartesian delta is run by
 the retry mechanism.
 
-`WaitForGateVerdict` and `WaitForSkillVerdict` are readable wrappers around the
-same C++ VLM check node. They are intentionally present in XML so Groot shows
-whether the BT is waiting on a human/VLM gate or checking a robot skill result.
+`WaitForVLMVerdict` is the single C++ VLM check node. It waits on the latest
+attempt named by `check_name`, whether that attempt was opened by a human/VLM
+gate or by a completed robot skill.
 
 ## Real Robot Complete Test
 

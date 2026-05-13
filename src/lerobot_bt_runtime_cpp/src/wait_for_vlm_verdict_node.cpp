@@ -1,13 +1,12 @@
 /**
- * @file verify_skill_outcome_node.cpp
+ * @file wait_for_vlm_verdict_node.cpp
  * @brief BehaviorTree.CPP node that polls Python-side VLM check state.
  */
-#include "lerobot_bt_runtime_cpp/verify_skill_outcome_node.hpp"
+#include "lerobot_bt_runtime_cpp/wait_for_vlm_verdict_node.hpp"
 
 #include <chrono>
 #include <exception>
 #include <future>
-#include <utility>
 
 namespace lerobot_bt_runtime_cpp
 {
@@ -15,75 +14,32 @@ namespace lerobot_bt_runtime_cpp
 /**
  * @brief Stores the BT and ROS2 dependencies required by the VLM check leaf.
  */
-VerifySkillOutcomeNode::VerifySkillOutcomeNode(
+WaitForVLMVerdictNode::WaitForVLMVerdictNode(
   const std::string& name,
   const BT::NodeConfiguration& config,
   const rclcpp::Node::SharedPtr& ros_node,
   const std::string& vlm_state_service)
-: VerifySkillOutcomeNode(name, config, ros_node, vlm_state_service, "skill_name")
-{
-}
-
-VerifySkillOutcomeNode::VerifySkillOutcomeNode(
-  const std::string& name,
-  const BT::NodeConfiguration& config,
-  const rclcpp::Node::SharedPtr& ros_node,
-  const std::string& vlm_state_service,
-  std::string check_name_port)
 : BT::StatefulActionNode(name, config),
   ros_node_(ros_node),
   client_(ros_node_->create_client<ServiceT>(vlm_state_service)),
-  vlm_state_service_(vlm_state_service),
-  check_name_port_(std::move(check_name_port))
+  vlm_state_service_(vlm_state_service)
 {
 }
 
 /**
- * @brief Defines the skill_name input port read from XML.
+ * @brief Defines the check_name input port read from XML.
  */
-BT::PortsList VerifySkillOutcomeNode::providedPorts()
+BT::PortsList WaitForVLMVerdictNode::providedPorts()
 {
   return {
-    BT::InputPort<std::string>("skill_name"),
-  };
-}
-
-WaitForGateVerdictNode::WaitForGateVerdictNode(
-  const std::string& name,
-  const BT::NodeConfiguration& config,
-  const rclcpp::Node::SharedPtr& ros_node,
-  const std::string& vlm_state_service)
-: VerifySkillOutcomeNode(name, config, ros_node, vlm_state_service, "gate_name")
-{
-}
-
-BT::PortsList WaitForGateVerdictNode::providedPorts()
-{
-  return {
-    BT::InputPort<std::string>("gate_name"),
-  };
-}
-
-WaitForSkillVerdictNode::WaitForSkillVerdictNode(
-  const std::string& name,
-  const BT::NodeConfiguration& config,
-  const rclcpp::Node::SharedPtr& ros_node,
-  const std::string& vlm_state_service)
-: VerifySkillOutcomeNode(name, config, ros_node, vlm_state_service, "skill_name")
-{
-}
-
-BT::PortsList WaitForSkillVerdictNode::providedPorts()
-{
-  return {
-    BT::InputPort<std::string>("skill_name"),
+    BT::InputPort<std::string>("check_name"),
   };
 }
 
 /**
  * @brief Dispatches one asynchronous VLM state lookup for the current check.
  */
-void VerifySkillOutcomeNode::startRequest()
+void WaitForVLMVerdictNode::startRequest()
 {
   auto request = std::make_shared<ServiceT::Request>();
   request->skill_name = check_name_;
@@ -95,14 +51,14 @@ void VerifySkillOutcomeNode::startRequest()
 /**
  * @brief Reads the check name and starts polling the VLM state service.
  */
-BT::NodeStatus VerifySkillOutcomeNode::onStart()
+BT::NodeStatus WaitForVLMVerdictNode::onStart()
 {
   if (!rclcpp::ok()) {
     return BT::NodeStatus::RUNNING;
   }
 
-  if (!getInput(check_name_port_, check_name_)) {
-    throw BT::RuntimeError("VLM verdict node missing required input port '" + check_name_port_ + "'");
+  if (!getInput("check_name", check_name_)) {
+    throw BT::RuntimeError("WaitForVLMVerdict missing required input port 'check_name'");
   }
 
   if (!client_->wait_for_service(std::chrono::seconds(5))) {
@@ -124,7 +80,7 @@ BT::NodeStatus VerifySkillOutcomeNode::onStart()
 /**
  * @brief Interprets VLM state responses and keeps polling while pending.
  */
-BT::NodeStatus VerifySkillOutcomeNode::onRunning()
+BT::NodeStatus WaitForVLMVerdictNode::onRunning()
 {
   if (!rclcpp::ok()) {
     return BT::NodeStatus::RUNNING;
@@ -209,13 +165,13 @@ BT::NodeStatus VerifySkillOutcomeNode::onRunning()
 /**
  * @brief Stops local polling when BehaviorTree.CPP halts this VLM check leaf.
  */
-void VerifySkillOutcomeNode::onHalted()
+void WaitForVLMVerdictNode::onHalted()
 {
   request_pending_ = false;
   if (rclcpp::ok()) {
     RCLCPP_WARN(
       ros_node_->get_logger(),
-      "VerifySkillOutcome halted while polling service '%s'.",
+      "WaitForVLMVerdict halted while polling service '%s'.",
       vlm_state_service_.c_str());
   }
 }

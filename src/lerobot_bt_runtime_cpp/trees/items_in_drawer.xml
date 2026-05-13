@@ -13,16 +13,16 @@
       <RetryUntilSuccessful name="SCENE 0 - Drawer setup ready" num_attempts="{initial_scene_ready_max_attempts}">
         <Sequence name="Open setup gate, then wait for scene 0">
           <OpenVLMGate name="Open scene 0 gate" gate_name="{initial_scene_ready_gate}"/>
-          <WaitForGateVerdict name="Wait scene 0 ready" gate_name="{initial_scene_ready_gate}"/>
+          <WaitForVLMVerdict name="Wait scene 0 ready" check_name="{initial_scene_ready_gate}"/>
         </Sequence>
       </RetryUntilSuccessful>
 
       <RetryUntilSuccessful name="SCENE 1 - Human opens drawer" num_attempts="{drawer_open_gate_max_attempts}">
         <Sequence name="Open human-open gate, then wait for drawer open">
           <OpenVLMGate name="Open drawer-open gate" gate_name="{drawer_open_gate}"/>
-          <WaitForGateVerdict
+          <WaitForVLMVerdict
             name="Wait scene 1 ready - drawer open"
-            gate_name="{drawer_open_gate}"/>
+            check_name="{drawer_open_gate}"/>
         </Sequence>
       </RetryUntilSuccessful>
 
@@ -32,25 +32,25 @@
             name="Insert next drawer item"
             skill_name="{insert_next_drawer_item_skill}"
             timeout_s="{insert_next_drawer_item_timeout_s}"/>
-          <WaitForSkillVerdict
+          <WaitForVLMVerdict
             name="Wait scene 2 verdict - drawer contents complete"
-            skill_name="{insert_next_drawer_item_skill}"/>
+            check_name="{insert_next_drawer_item_skill}"/>
         </Sequence>
       </RetryUntilSuccessful>
 
       <RetryUntilSuccessful name="SCENE 3 - Human closes drawer" num_attempts="{drawer_closed_gate_max_attempts}">
         <Sequence name="Open human-close gate, then wait for drawer closed">
           <OpenVLMGate name="Open drawer-closed gate" gate_name="{drawer_closed_gate}"/>
-          <WaitForGateVerdict
+          <WaitForVLMVerdict
             name="Wait scene 3 ready - drawer closed"
-            gate_name="{drawer_closed_gate}"/>
+            check_name="{drawer_closed_gate}"/>
         </Sequence>
       </RetryUntilSuccessful>
 
       <RetryUntilSuccessful name="TASK COMPLETE - Drawer task done" num_attempts="{task_complete_max_attempts}">
         <Sequence name="Open task-complete gate, then wait for final verdict">
           <OpenVLMGate name="Open task-complete gate" gate_name="{task_complete_gate}"/>
-          <WaitForGateVerdict name="Wait task complete" gate_name="{task_complete_gate}"/>
+          <WaitForVLMVerdict name="Wait task complete" check_name="{task_complete_gate}"/>
         </Sequence>
       </RetryUntilSuccessful>
     </Sequence>
@@ -64,11 +64,8 @@
       <input_port name="skill_name"/>
       <input_port name="timeout_s"/>
     </Action>
-    <Action ID="WaitForGateVerdict">
-      <input_port name="gate_name"/>
-    </Action>
-    <Action ID="WaitForSkillVerdict">
-      <input_port name="skill_name"/>
+    <Action ID="WaitForVLMVerdict">
+      <input_port name="check_name"/>
     </Action>
   </TreeNodesModel>
 </root>

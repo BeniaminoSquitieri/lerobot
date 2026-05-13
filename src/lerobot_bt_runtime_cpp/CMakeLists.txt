@@ -36,7 +36,7 @@ endif()
 add_executable(lerobot_bt_runner
   src/run_named_command_node.cpp
   src/lerobot_bt_main.cpp
-  src/verify_skill_outcome_node.cpp
+  src/wait_for_vlm_verdict_node.cpp
 )
 
 # Public headers live under include/lerobot_bt_runtime_cpp.

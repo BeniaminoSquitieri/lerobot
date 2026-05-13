@@ -36,9 +36,8 @@ motions. A VLM `FAILURE` is handled by the BT retrying the same BC skill.
    `MANUAL_INTERVENTION_REQUIRED` result arrives while the skill is running,
    the executor stops the rollout and `server.py` creates the VLM check attempt
    already set to that verifier status.
-6. `WaitForGateVerdict` or `WaitForSkillVerdict` polls
-   `/lerobot_bt/vlm_state` and returns BT `RUNNING` while the attempt remains
-   in a waiting state.
+6. `WaitForVLMVerdict` polls `/lerobot_bt/vlm_state` and returns BT `RUNNING`
+   while the attempt remains in a waiting state.
 7. A manual tester or VLM publishes JSON on `/lerobot_bt/vlm_result`
    with `RUNNING`, `WAIT_HUMAN`, `MANUAL_INTERVENTION_REQUIRED`, `SUCCESS`, or
    `FAILURE`.

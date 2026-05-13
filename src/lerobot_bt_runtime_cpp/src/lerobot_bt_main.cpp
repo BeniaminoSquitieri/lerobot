@@ -48,7 +48,7 @@ using GrootPublisherT = BT::PublisherZMQ;
 #endif
 
 #include "lerobot_bt_runtime_cpp/run_named_command_node.hpp"
-#include "lerobot_bt_runtime_cpp/verify_skill_outcome_node.hpp"
+#include "lerobot_bt_runtime_cpp/wait_for_vlm_verdict_node.hpp"
 
 namespace
 {
@@ -208,60 +208,10 @@ int main(int argc, char** argv)
   factory.registerBuilder<lerobot_bt_runtime_cpp::OpenVLMGateNode>(
     "OpenVLMGate",
     vlm_gate_builder);
-  factory.registerBuilder<lerobot_bt_runtime_cpp::OpenVLMGateNode>(
-    "PrepareInitialScene",
-    vlm_gate_builder);
-  factory.registerBuilder<lerobot_bt_runtime_cpp::OpenVLMGateNode>(
-    "PrepareSecondToast",
-    vlm_gate_builder);
-  factory.registerBuilder<lerobot_bt_runtime_cpp::RunRobotSkillNode>(
-    "PlaceFirstToast",
-    robot_skill_builder);
-  factory.registerBuilder<lerobot_bt_runtime_cpp::RunRobotSkillNode>(
-    "PlaceSecondToast",
-    robot_skill_builder);
-  factory.registerBuilder<lerobot_bt_runtime_cpp::VerifySkillOutcomeNode>(
-    "VerifySkillOutcome",
+  factory.registerBuilder<lerobot_bt_runtime_cpp::WaitForVLMVerdictNode>(
+    "WaitForVLMVerdict",
     [node, vlm_state_service](const std::string& instance_name, const BT::NodeConfiguration& config) {
-      return std::make_unique<lerobot_bt_runtime_cpp::VerifySkillOutcomeNode>(
-        instance_name,
-        config,
-        node,
-        vlm_state_service);
-    });
-  factory.registerBuilder<lerobot_bt_runtime_cpp::WaitForGateVerdictNode>(
-    "WaitForGateVerdict",
-    [node, vlm_state_service](const std::string& instance_name, const BT::NodeConfiguration& config) {
-      return std::make_unique<lerobot_bt_runtime_cpp::WaitForGateVerdictNode>(
-        instance_name,
-        config,
-        node,
-        vlm_state_service);
-    });
-  factory.registerBuilder<lerobot_bt_runtime_cpp::WaitForSkillVerdictNode>(
-    "WaitForSkillVerdict",
-    [node, vlm_state_service](const std::string& instance_name, const BT::NodeConfiguration& config) {
-      return std::make_unique<lerobot_bt_runtime_cpp::WaitForSkillVerdictNode>(
-        instance_name,
-        config,
-        node,
-        vlm_state_service);
-    });
-  // These aliases use the same ROS2 VLM state service but make the XML/Groot
-  // graph show whether a node is a waiting gate or a post-skill retry decision.
-  factory.registerBuilder<lerobot_bt_runtime_cpp::VerifySkillOutcomeNode>(
-    "WaitForVLMDecision",
-    [node, vlm_state_service](const std::string& instance_name, const BT::NodeConfiguration& config) {
-      return std::make_unique<lerobot_bt_runtime_cpp::VerifySkillOutcomeNode>(
-        instance_name,
-        config,
-        node,
-        vlm_state_service);
-    });
-  factory.registerBuilder<lerobot_bt_runtime_cpp::VerifySkillOutcomeNode>(
-    "VLMReplanningDecision",
-    [node, vlm_state_service](const std::string& instance_name, const BT::NodeConfiguration& config) {
-      return std::make_unique<lerobot_bt_runtime_cpp::VerifySkillOutcomeNode>(
+      return std::make_unique<lerobot_bt_runtime_cpp::WaitForVLMVerdictNode>(
         instance_name,
         config,
         node,

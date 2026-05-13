@@ -1,0 +1,47 @@
+// generated from rosidl_adapter/resource/srv.idl.em
+// with input from lerobot_bt_interfaces/srv/ReportSkillVerification.srv
+// generated code does not contain a copyright notice
+
+
+module lerobot_bt_interfaces {
+  module srv {
+    @verbatim (language="comment", text=
+      "@file ReportSkillVerification.srv" "\n"
+      "@brief Legacy external verifier to Python VLM-check-registry update boundary." "\n"
+      "" "\n"
+      "Request fields:" "\n"
+      "skill_name identifies the primitive whose attempt is being judged.")
+    struct ReportSkillVerification_Request {
+      string skill_name;
+
+      @verbatim (language="comment", text=
+        "attempt_id selects a concrete attempt; 0 applies to the latest pending attempt.")
+      int32 attempt_id;
+
+      @verbatim (language="comment", text=
+        "status is the verifier update:" "\n"
+        "  PENDING/RUNNING/WAIT_HUMAN/MANUAL_INTERVENTION_REQUIRED keep the BT blocked" "\n"
+        "  SUCCESS advances the BT" "\n"
+        "  FAILURE triggers XML retry/failure logic")
+      string status;
+
+      @verbatim (language="comment", text=
+        "message explains the verdict for logs, operators, and tests.")
+      string message;
+    };
+    @verbatim (language="comment", text=
+      "Response fields:" "\n"
+      "accepted is true when the registry applied the report.")
+    struct ReportSkillVerification_Response {
+      boolean accepted;
+
+      @verbatim (language="comment", text=
+        "applied_attempt_id is the attempt updated when accepted is true.")
+      int32 applied_attempt_id;
+
+      @verbatim (language="comment", text=
+        "message describes rejection or success details for tooling.")
+      string message;
+    };
+  };
+};

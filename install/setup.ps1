@@ -23,7 +23,6 @@ function _colcon_prefix_chain_powershell_source_script {
 }
 
 # source chained prefixes
-_colcon_prefix_chain_powershell_source_script "/home/panda-admin/miniconda3/envs/lerobot/local_setup.ps1"
 _colcon_prefix_chain_powershell_source_script "/home/panda-admin/miniconda3/envs/lerobot_ben/local_setup.ps1"
 
 # source this prefix

@@ -32,13 +32,8 @@ NODE_STYLE = {
     "Sequence": ("#e8f1ff", "#3f6ea8"),
     "RetryUntilSuccessful": ("#fff4d6", "#b57900"),
     "RunRobotSkill": ("#e4f8ec", "#16834a"),
-    "PlaceFirstToast": ("#e4f8ec", "#16834a"),
-    "PlaceSecondToast": ("#e4f8ec", "#16834a"),
     "OpenVLMGate": ("#f2e9ff", "#7353b6"),
-    "PrepareInitialScene": ("#f2e9ff", "#7353b6"),
-    "PrepareSecondToast": ("#f2e9ff", "#7353b6"),
-    "WaitForGateVerdict": ("#ffe8dc", "#b85c2e"),
-    "WaitForSkillVerdict": ("#ffe8dc", "#b85c2e"),
+    "WaitForVLMVerdict": ("#ffe8dc", "#b85c2e"),
 }
 DEFAULT_STYLE = ("#f6f7f9", "#667085")
 BOX_RADIUS = 12
@@ -105,14 +100,14 @@ def node_lines(element: ElementTree.Element, profile: dict[str, str]) -> list[st
     """Build plain-text lines shared by Graphviz and Pillow renderers."""
     rows = [element.attrib.get("name", element.tag), element.tag]
 
-    for key in ("skill_name", "gate_name", "timeout_s", "num_attempts"):
+    for key in ("skill_name", "gate_name", "check_name", "timeout_s", "num_attempts"):
         if key in element.attrib:
             value = resolve_value(element.attrib[key], profile)
             rows.append(f"{key}={value}")
 
-    if element.tag in {"OpenVLMGate", "PrepareInitialScene", "PrepareSecondToast"}:
+    if element.tag == "OpenVLMGate":
         rows.append("publish /lerobot_bt/vlm_request")
-    if element.tag in {"WaitForGateVerdict", "WaitForSkillVerdict"}:
+    if element.tag == "WaitForVLMVerdict":
         rows.append("wait /lerobot_bt/vlm_result to advance")
 
     return rows

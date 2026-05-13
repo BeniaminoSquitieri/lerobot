@@ -27,17 +27,17 @@ BT advances on SUCCESS or retries on FAILURE
 The common BT pattern is:
 
 ```text
-OpenVLMGate(scene_i_ready)
-WaitForGateVerdict(scene_i_ready)
+OpenVLMGate(gate_name=scene_i_ready)
+WaitForVLMVerdict(check_name=scene_i_ready)
 RunRobotSkill(skill_i)
-WaitForSkillVerdict(skill_i)
+WaitForVLMVerdict(check_name=skill_i)
 ```
 
 Task completion is also a gate:
 
 ```text
-OpenVLMGate(task_complete)
-WaitForGateVerdict(task_complete)
+OpenVLMGate(gate_name=task_complete)
+WaitForVLMVerdict(check_name=task_complete)
 ```
 
 ## Verdict Statuses
