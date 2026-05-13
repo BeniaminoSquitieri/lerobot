@@ -28,12 +28,12 @@ teleop:
   type: metaquest_rail
 
 dataset:
-  repo_id: steb6/hello_world
+  repo_id: HSP-IIT/pear_bread
   single_task: Pick.
   fps: 10
   episode_time_s: 2000
   reset_time_s: 0
-  num_episodes: 5
+  num_episodes: 25
   video: true
   push_to_hub: true
   private: false

@@ -66,25 +66,32 @@ ros2 topic pub --once /lerobot_bt/vlm_result std_msgs/msg/String \
   "{data: '{\"skill_name\":\"prepare_picnic_bag.human_open_bag\",\"attempt_id\":0,\"status\":\"SUCCESS\",\"message\":\"human opened the bag and is holding it open\"}'}"
 ```
 
-Bag next picnic item:
+Human inserts the Monster drink:
 
 ```bash
 ros2 topic pub --once /lerobot_bt/vlm_result std_msgs/msg/String \
-  "{data: '{\"skill_name\":\"bag_next_picnic_item\",\"attempt_id\":0,\"status\":\"SUCCESS\",\"message\":\"all picnic items are now inside the bag\"}'}"
+  "{data: '{\"skill_name\":\"prepare_picnic_bag.human_insert_monster\",\"attempt_id\":0,\"status\":\"SUCCESS\",\"message\":\"Monster drink is inside the bag\"}'}"
 ```
 
-Human closes the bag:
+Robot inserts the bread:
 
 ```bash
 ros2 topic pub --once /lerobot_bt/vlm_result std_msgs/msg/String \
-  "{data: '{\"skill_name\":\"prepare_picnic_bag.human_close_bag\",\"attempt_id\":0,\"status\":\"SUCCESS\",\"message\":\"human closed the picnic bag\"}'}"
+  "{data: '{\"skill_name\":\"bag_bread\",\"attempt_id\":0,\"status\":\"SUCCESS\",\"message\":\"bread is inside the bag\"}'}"
 ```
 
-Task complete:
+Human inserts the mustard:
 
 ```bash
 ros2 topic pub --once /lerobot_bt/vlm_result std_msgs/msg/String \
-  "{data: '{\"skill_name\":\"prepare_picnic_bag.task_complete\",\"attempt_id\":0,\"status\":\"SUCCESS\",\"message\":\"picnic bag is packed and the scene is complete\"}'}"
+  "{data: '{\"skill_name\":\"prepare_picnic_bag.human_insert_mustard\",\"attempt_id\":0,\"status\":\"SUCCESS\",\"message\":\"mustard is inside the bag\"}'}"
+```
+
+Robot inserts the pear. This is the final BT step:
+
+```bash
+ros2 topic pub --once /lerobot_bt/vlm_result std_msgs/msg/String \
+  "{data: '{\"skill_name\":\"bag_pear\",\"attempt_id\":0,\"status\":\"SUCCESS\",\"message\":\"pear is inside the bag\"}'}"
 ```
 
 ## Failure and human help examples
@@ -93,14 +100,14 @@ Retry the current skill:
 
 ```bash
 ros2 topic pub --once /lerobot_bt/vlm_result std_msgs/msg/String \
-  "{data: '{\"skill_name\":\"bag_next_picnic_item\",\"attempt_id\":0,\"status\":\"FAILURE\",\"failure_reason\":\"more_items_remaining\",\"message\":\"the scene is not clean yet, run the bagging skill again\"}'}"
+  "{data: '{\"skill_name\":\"bag_bread\",\"attempt_id\":0,\"status\":\"FAILURE\",\"failure_reason\":\"bread_not_bagged\",\"message\":\"bread is not correctly inside the bag\"}'}"
 ```
 
 Request human intervention:
 
 ```bash
 ros2 topic pub --once /lerobot_bt/vlm_result std_msgs/msg/String \
-  "{data: '{\"skill_name\":\"prepare_picnic_bag.human_open_bag\",\"attempt_id\":0,\"status\":\"WAIT_HUMAN\",\"next_action\":\"REQUEST_MANUAL_INTERVENTION\",\"failure_reason\":\"bag_not_open\",\"required_human_action\":\"open the picnic bag and keep it open for the robot\",\"message\":\"human help required\"}'}"
+  "{data: '{\"skill_name\":\"prepare_picnic_bag.human_insert_monster\",\"attempt_id\":0,\"status\":\"WAIT_HUMAN\",\"next_action\":\"REQUEST_MANUAL_INTERVENTION\",\"failure_reason\":\"monster_not_bagged\",\"required_human_action\":\"insert the Monster drink into the picnic bag\",\"message\":\"human help required\"}'}"
 ```
 
 ## Useful checks

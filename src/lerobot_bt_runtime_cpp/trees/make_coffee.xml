@@ -2,10 +2,10 @@
   @file make_coffee.xml
   @brief Scene-gated coffee preparation task.
 
-  Every BC stage advances only after the VLM topic confirms the post-skill
-  scene. Between capsule insertion and coffee start, the BT also waits for a
-  human-only step: the coffee machine must be closed before the robot presses
-  the start button.
+  The human places the cup under the dispenser and later presses the start
+  button. The robot inserts the capsule and closes the coffee machine. Every
+  robot BC stage advances only after the VLM topic confirms the post-skill
+  scene; human-only steps are represented as VLM gates.
 -->
 <root BTCPP_format="4" main_tree_to_execute="MainTree">
   <BehaviorTree ID="MainTree">
@@ -17,15 +17,12 @@
         </Sequence>
       </RetryUntilSuccessful>
 
-      <RetryUntilSuccessful name="SCENE 1 - Cup under dispenser" num_attempts="{place_cup_under_dispenser_max_attempts}">
-        <Sequence name="Place cup, then check scene 1">
-          <RunRobotSkill
-            name="Place cup under dispenser"
-            skill_name="{place_cup_under_dispenser_skill}"
-            timeout_s="{place_cup_under_dispenser_timeout_s}"/>
-          <WaitForSkillVerdict
-            name="Wait scene 1 ready - cup placed"
-            skill_name="{place_cup_under_dispenser_skill}"/>
+      <RetryUntilSuccessful name="SCENE 1 - Human places cup under dispenser" num_attempts="{cup_under_dispenser_max_attempts}">
+        <Sequence name="Open cup-placement gate, then wait for scene 1">
+          <OpenVLMGate name="Open cup-under-dispenser gate" gate_name="{cup_under_dispenser_gate}"/>
+          <WaitForGateVerdict
+            name="Wait scene 1 ready - cup under dispenser"
+            gate_name="{cup_under_dispenser_gate}"/>
         </Sequence>
       </RetryUntilSuccessful>
 
@@ -41,31 +38,24 @@
         </Sequence>
       </RetryUntilSuccessful>
 
-      <RetryUntilSuccessful name="SCENE 3 - Human closes machine" num_attempts="{human_close_machine_max_attempts}">
-        <Sequence name="Open human-close gate, then wait for machine closed">
-          <OpenVLMGate name="Open human-close-machine gate" gate_name="{human_close_machine_gate}"/>
-          <WaitForGateVerdict
-            name="Wait scene 3 ready - machine closed"
-            gate_name="{human_close_machine_gate}"/>
-        </Sequence>
-      </RetryUntilSuccessful>
-
-      <RetryUntilSuccessful name="SCENE 4 - Coffee started" num_attempts="{press_start_button_max_attempts}">
-        <Sequence name="Press start, then check scene 4">
+      <RetryUntilSuccessful name="SCENE 3 - Robot closes machine" num_attempts="{close_coffee_machine_max_attempts}">
+        <Sequence name="Close machine, then check scene 3">
           <RunRobotSkill
-            name="Press start button"
-            skill_name="{press_start_button_skill}"
-            timeout_s="{press_start_button_timeout_s}"/>
+            name="Close coffee machine"
+            skill_name="{close_coffee_machine_skill}"
+            timeout_s="{close_coffee_machine_timeout_s}"/>
           <WaitForSkillVerdict
-            name="Wait scene 4 ready - extraction started"
-            skill_name="{press_start_button_skill}"/>
+            name="Wait scene 3 ready - machine closed"
+            skill_name="{close_coffee_machine_skill}"/>
         </Sequence>
       </RetryUntilSuccessful>
 
-      <RetryUntilSuccessful name="TASK COMPLETE - Coffee complete" num_attempts="{task_complete_max_attempts}">
-        <Sequence name="Open completion gate, then wait for final scene">
-          <OpenVLMGate name="Open task-complete gate" gate_name="{task_complete_gate}"/>
-          <WaitForGateVerdict name="Wait task complete" gate_name="{task_complete_gate}"/>
+      <RetryUntilSuccessful name="TASK COMPLETE - Human starts coffee" num_attempts="{human_press_start_button_max_attempts}">
+        <Sequence name="Open human-start gate, then wait for extraction">
+          <OpenVLMGate name="Open human-press-start gate" gate_name="{human_press_start_button_gate}"/>
+          <WaitForGateVerdict
+            name="Wait task complete - extraction started"
+            gate_name="{human_press_start_button_gate}"/>
         </Sequence>
       </RetryUntilSuccessful>
     </Sequence>

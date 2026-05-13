@@ -3,9 +3,9 @@
   @brief Scene-gated picnic bag preparation task.
 
   The VLM/manual verifier starts the BT only when the scene is ready, waits for
-  the human to open and hold the bag, and decides after every robot rollout
-  whether more objects still need to be inserted. Once the bag is full, the
-  human closes it and the VLM confirms the scene is complete.
+  the human to open and hold the bag, then gates explicit human and robot item
+  insertion steps: human inserts the Monster drink, robot inserts the bread,
+  human inserts the mustard, and robot inserts the pear.
 -->
 <root BTCPP_format="4" main_tree_to_execute="MainTree">
   <BehaviorTree ID="MainTree">
@@ -26,31 +26,45 @@
         </Sequence>
       </RetryUntilSuccessful>
 
-      <RetryUntilSuccessful name="SCENE 2 - Insert next picnic item" num_attempts="{bag_next_picnic_item_max_attempts}">
-        <Sequence name="Bag next item, then check if the scene is clean">
-          <RunRobotSkill
-            name="Bag next picnic item"
-            skill_name="{bag_next_picnic_item_skill}"
-            timeout_s="{bag_next_picnic_item_timeout_s}"/>
-          <WaitForSkillVerdict
-            name="Wait scene 2 verdict - all items bagged"
-            skill_name="{bag_next_picnic_item_skill}"/>
-        </Sequence>
-      </RetryUntilSuccessful>
-
-      <RetryUntilSuccessful name="SCENE 3 - Human closes the bag" num_attempts="{human_close_bag_max_attempts}">
-        <Sequence name="Open human-close-bag gate, then wait for bag closed">
-          <OpenVLMGate name="Open human-close-bag gate" gate_name="{human_close_bag_gate}"/>
+      <RetryUntilSuccessful name="SCENE 2 - Human inserts Monster drink" num_attempts="{human_insert_monster_max_attempts}">
+        <Sequence name="Open human-insert-monster gate, then wait for scene 2">
+          <OpenVLMGate name="Open human-insert-monster gate" gate_name="{human_insert_monster_gate}"/>
           <WaitForGateVerdict
-            name="Wait scene 3 ready - bag closed"
-            gate_name="{human_close_bag_gate}"/>
+            name="Wait scene 2 ready - Monster drink bagged"
+            gate_name="{human_insert_monster_gate}"/>
         </Sequence>
       </RetryUntilSuccessful>
 
-      <RetryUntilSuccessful name="TASK COMPLETE - Picnic bag ready" num_attempts="{task_complete_max_attempts}">
-        <Sequence name="Open task-complete gate, then wait for final verdict">
-          <OpenVLMGate name="Open task-complete gate" gate_name="{task_complete_gate}"/>
-          <WaitForGateVerdict name="Wait task complete" gate_name="{task_complete_gate}"/>
+      <RetryUntilSuccessful name="SCENE 3 - Robot inserts bread" num_attempts="{bag_bread_max_attempts}">
+        <Sequence name="Bag bread, then check scene 3">
+          <RunRobotSkill
+            name="Bag bread"
+            skill_name="{bag_bread_skill}"
+            timeout_s="{bag_bread_timeout_s}"/>
+          <WaitForSkillVerdict
+            name="Wait scene 3 ready - bread bagged"
+            skill_name="{bag_bread_skill}"/>
+        </Sequence>
+      </RetryUntilSuccessful>
+
+      <RetryUntilSuccessful name="SCENE 4 - Human inserts mustard" num_attempts="{human_insert_mustard_max_attempts}">
+        <Sequence name="Open human-insert-mustard gate, then wait for scene 4">
+          <OpenVLMGate name="Open human-insert-mustard gate" gate_name="{human_insert_mustard_gate}"/>
+          <WaitForGateVerdict
+            name="Wait scene 4 ready - mustard bagged"
+            gate_name="{human_insert_mustard_gate}"/>
+        </Sequence>
+      </RetryUntilSuccessful>
+
+      <RetryUntilSuccessful name="TASK COMPLETE - Robot inserts pear" num_attempts="{bag_pear_max_attempts}">
+        <Sequence name="Bag pear, then check final scene">
+          <RunRobotSkill
+            name="Bag pear"
+            skill_name="{bag_pear_skill}"
+            timeout_s="{bag_pear_timeout_s}"/>
+          <WaitForSkillVerdict
+            name="Wait task complete - pear bagged"
+            skill_name="{bag_pear_skill}"/>
         </Sequence>
       </RetryUntilSuccessful>
     </Sequence>

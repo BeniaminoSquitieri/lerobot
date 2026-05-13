@@ -8,10 +8,13 @@ lerobot_bt_runner:
       initial_scene_ready_max_attempts: -1
       human_open_bag_gate: "prepare_picnic_bag.human_open_bag"
       human_open_bag_max_attempts: -1
-      bag_next_picnic_item_skill: "bag_next_picnic_item"
-      bag_next_picnic_item_timeout_s: 120.0
-      bag_next_picnic_item_max_attempts: -1
-      human_close_bag_gate: "prepare_picnic_bag.human_close_bag"
-      human_close_bag_max_attempts: -1
-      task_complete_gate: "prepare_picnic_bag.task_complete"
-      task_complete_max_attempts: -1
+      human_insert_monster_gate: "prepare_picnic_bag.human_insert_monster"
+      human_insert_monster_max_attempts: -1
+      bag_bread_skill: "bag_bread"
+      bag_bread_timeout_s: 120.0
+      bag_bread_max_attempts: -1
+      human_insert_mustard_gate: "prepare_picnic_bag.human_insert_mustard"
+      human_insert_mustard_max_attempts: -1
+      bag_pear_skill: "bag_pear"
+      bag_pear_timeout_s: 120.0
+      bag_pear_max_attempts: -1

@@ -59,11 +59,11 @@ ros2 topic pub --once /lerobot_bt/vlm_result std_msgs/msg/String \
   "{data: '{\"skill_name\":\"make_coffee.scene_0_ready\",\"attempt_id\":0,\"status\":\"SUCCESS\",\"message\":\"coffee setup ready\"}'}"
 ```
 
-Cup placed under dispenser:
+Human placed the cup under the dispenser:
 
 ```bash
 ros2 topic pub --once /lerobot_bt/vlm_result std_msgs/msg/String \
-  "{data: '{\"skill_name\":\"place_cup_under_dispenser\",\"attempt_id\":0,\"status\":\"SUCCESS\",\"message\":\"cup is under the dispenser\"}'}"
+  "{data: '{\"skill_name\":\"make_coffee.cup_under_dispenser\",\"attempt_id\":0,\"status\":\"SUCCESS\",\"message\":\"cup is under the dispenser\"}'}"
 ```
 
 Capsule inserted:
@@ -73,25 +73,18 @@ ros2 topic pub --once /lerobot_bt/vlm_result std_msgs/msg/String \
   "{data: '{\"skill_name\":\"pick_and_insert_capsule\",\"attempt_id\":0,\"status\":\"SUCCESS\",\"message\":\"capsule inserted\"}'}"
 ```
 
-Human closes the machine:
+Robot closed the machine:
 
 ```bash
 ros2 topic pub --once /lerobot_bt/vlm_result std_msgs/msg/String \
-  "{data: '{\"skill_name\":\"make_coffee.human_close_machine\",\"attempt_id\":0,\"status\":\"SUCCESS\",\"message\":\"human closed the coffee machine\"}'}"
+  "{data: '{\"skill_name\":\"close_coffee_machine\",\"attempt_id\":0,\"status\":\"SUCCESS\",\"message\":\"coffee machine closed\"}'}"
 ```
 
-Start button pressed and extraction starts:
+Human pressed the start button and extraction starts. This is the final BT gate:
 
 ```bash
 ros2 topic pub --once /lerobot_bt/vlm_result std_msgs/msg/String \
-  "{data: '{\"skill_name\":\"press_start_button\",\"attempt_id\":0,\"status\":\"SUCCESS\",\"message\":\"coffee extraction started\"}'}"
-```
-
-Task complete:
-
-```bash
-ros2 topic pub --once /lerobot_bt/vlm_result std_msgs/msg/String \
-  "{data: '{\"skill_name\":\"make_coffee.task_complete\",\"attempt_id\":0,\"status\":\"SUCCESS\",\"message\":\"coffee task complete\"}'}"
+  "{data: '{\"skill_name\":\"make_coffee.human_press_start_button\",\"attempt_id\":0,\"status\":\"SUCCESS\",\"message\":\"coffee extraction started\"}'}"
 ```
 
 ## Failure and human help examples
@@ -107,7 +100,7 @@ Request human intervention:
 
 ```bash
 ros2 topic pub --once /lerobot_bt/vlm_result std_msgs/msg/String \
-  "{data: '{\"skill_name\":\"make_coffee.human_close_machine\",\"attempt_id\":0,\"status\":\"WAIT_HUMAN\",\"next_action\":\"REQUEST_MANUAL_INTERVENTION\",\"failure_reason\":\"machine_still_open\",\"required_human_action\":\"close the coffee machine before the robot presses start\",\"message\":\"human help required\"}'}"
+  "{data: '{\"skill_name\":\"make_coffee.human_press_start_button\",\"attempt_id\":0,\"status\":\"WAIT_HUMAN\",\"next_action\":\"REQUEST_MANUAL_INTERVENTION\",\"failure_reason\":\"button_not_pressed\",\"required_human_action\":\"press the coffee machine start button\",\"message\":\"human help required\"}'}"
 ```
 
 ## Useful checks
