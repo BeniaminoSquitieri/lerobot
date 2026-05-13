@@ -178,5 +178,7 @@ outputs/
 >>>>>>> origin/leap-branch
 # *.urdf
 *.xml
+!src/lerobot_bt_interfaces/package.xml
+!src/lerobot_bt_runtime_cpp/package.xml
 src/lerobot/robots/ergocub/ergocub_hand_left/
 src/lerobot/robots/ergocub/ergocub_hand_right/
