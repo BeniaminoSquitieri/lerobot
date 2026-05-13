@@ -11,11 +11,11 @@ lerobot_bt_runner:
       place_cup_under_dispenser_max_attempts: 3
       pick_and_insert_capsule_skill: "pick_and_insert_capsule"
       pick_and_insert_capsule_timeout_s: 60.0
-      pick_and_insert_capsule_max_attempts: 3
+      pick_and_insert_capsule_max_attempts: -1
       human_close_machine_gate: "make_coffee.human_close_machine"
       human_close_machine_max_attempts: -1
       press_start_button_skill: "press_start_button"
       press_start_button_timeout_s: 30.0
-      press_start_button_max_attempts: 3
+      press_start_button_max_attempts: -1
       task_complete_gate: "make_coffee.task_complete"
       task_complete_max_attempts: -1

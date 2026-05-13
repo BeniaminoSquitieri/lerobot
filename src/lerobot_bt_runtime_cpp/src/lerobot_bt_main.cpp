@@ -25,15 +25,18 @@
 
 #if __has_include(<behaviortree_cpp/loggers/groot2_publisher.h>)
 #include <behaviortree_cpp/loggers/groot2_publisher.h>
+// Compatibility with the available Groot publisher variants.
 using GrootPublisherT = BT::Groot2Publisher;
 #define LEROBOT_BT_HAS_GROOT 1
 #define LEROBOT_BT_HAS_GROOT2_PUBLISHER 1
 #elif __has_include(<behaviortree_cpp/loggers/bt_zmq_publisher.h>)
 #include <behaviortree_cpp/loggers/bt_zmq_publisher.h>
+// ZMQ publisher used by Groot v1.
 using GrootPublisherT = BT::PublisherZMQ;
 #define LEROBOT_BT_HAS_GROOT 1
 #elif __has_include(<behaviortree_cpp_v3/loggers/bt_zmq_publisher.h>)
 #include <behaviortree_cpp_v3/loggers/bt_zmq_publisher.h>
+// Compatibility with BehaviorTree.CPP v3.
 using GrootPublisherT = BT::PublisherZMQ;
 #define LEROBOT_BT_HAS_GROOT 1
 #else
@@ -99,6 +102,7 @@ void setBtBlackboardEntries(
       continue;
     }
 
+    // Blackboard key without the "bt." prefix.
     const auto blackboard_key = parameter_name.substr(std::string(bt_prefix).size());
     const auto parameter = node->get_parameter(parameter_name);
     switch (parameter.get_type()) {
@@ -150,14 +154,20 @@ int main(int argc, char** argv)
   // - where the BT polls VLM state
   // - BT tick period
   // - whether to publish to Groot
+  // The ROS2 node hosts parameters, logger, and service access for BT leaf nodes.
   const auto node_options = rclcpp::NodeOptions()
                               .allow_undeclared_parameters(true)
                               .automatically_declare_parameters_from_overrides(true);
   auto node = std::make_shared<rclcpp::Node>("lerobot_bt_runner", node_options);
+  // Path to the behavior tree XML file.
   const auto tree_xml_path = declareOrGetParameter<std::string>(node, "tree_xml_path", default_tree_xml_path());
+  // ROS2 service called by leaf nodes to run robot skills.
   const auto bt_command_service = declareOrGetParameter<std::string>(node, "bt_command_service", "/lerobot_bt/run");
+  // ROS2 service used to query VLM state (gates/decisions).
   const auto vlm_state_service = declareOrGetParameter<std::string>(node, "vlm_state_service", "/lerobot_bt/vlm_state");
+  // BT tick period.
   const auto tick_ms = declareOrGetParameter<int>(node, "tick_ms", 100);
+  // Enables the Groot publisher (BT graphical monitoring).
   const auto enable_groot = declareOrGetParameter<bool>(node, "enable_groot_publisher", true);
   const auto groot_port = declareOrGetParameter<int>(node, "groot_publisher_port", 1667);
 
@@ -170,11 +180,13 @@ int main(int argc, char** argv)
   declareOrGetParameter<std::string>(node, "bt.place_second_toast_skill", "place_second_toast");
   declareOrGetParameter<double>(node, "bt.place_second_toast_timeout_s", 30.0);
 
-  // Register each custom XML tag with a lambda that injects the already-created
-  // ROS2 node and service name into the BT node constructor.
+  // BehaviorTreeFactory maps XML tags -> C++ classes (BT nodes).
+  // Register custom tags with builders that inject the ROS2 node and
+  // service names needed by leaf nodes.
   BT::BehaviorTreeFactory factory;
   const auto robot_skill_builder =
     [node, bt_command_service](const std::string& instance_name, const BT::NodeConfiguration& config) {
+      // Leaf that invokes a robot skill via ROS2 service.
       return std::make_unique<lerobot_bt_runtime_cpp::RunRobotSkillNode>(
         instance_name,
         config,
@@ -183,6 +195,7 @@ int main(int argc, char** argv)
     };
   const auto vlm_gate_builder =
     [node, bt_command_service](const std::string& instance_name, const BT::NodeConfiguration& config) {
+      // Leaf that opens a VLM gate via ROS2 service.
       return std::make_unique<lerobot_bt_runtime_cpp::OpenVLMGateNode>(
         instance_name,
         config,
@@ -255,11 +268,13 @@ int main(int argc, char** argv)
         vlm_state_service);
     });
 
+  // Blackboard: shared key/value store across BT nodes (inputs/outputs).
   auto blackboard = BT::Blackboard::create();
   setBtBlackboardEntries(node, blackboard);
 
   // Loading from file keeps the BT topology editable without recompiling this
   // executable; malformed XML or missing node tags will fail at this point.
+  // Instantiate the BT from XML using the factory and populated blackboard.
   BT::Tree tree = factory.createTreeFromFile(tree_xml_path, blackboard);
 
 #if LEROBOT_BT_HAS_GROOT
@@ -292,8 +307,10 @@ int main(int argc, char** argv)
 #endif
 
   BT::NodeStatus status = BT::NodeStatus::RUNNING;
+  // WallRate controls the BT tick frequency.
   rclcpp::WallRate rate{std::chrono::milliseconds(tick_ms)};
 
+  // Centralized cleanup to stop BT, publisher, and ROS2 safely.
   const auto cleanup = [&](const char* reason) {
     const bool ros_context_active = rclcpp::ok();
     if (ros_context_active) {
