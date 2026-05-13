@@ -1,0 +1,17 @@
+# @file makesandwitch_bt.yaml
+# @brief ROS2 parameters that configure the active sandwich BT blackboard.
+#
+# Keep the BT control structure in trees/makesandwitch.xml. Put task-specific
+# names and timeouts here so future BTs can reuse the same runtime with a
+# different parameter profile.
+
+sandwich_bt_runner:
+  ros__parameters:
+    bt:
+      initial_scene_ready_gate: "initial_scene_ready"
+      place_first_toast_skill: "place_first_toast"
+      place_first_toast_timeout_s: 120.0
+      pour_ingredient_gate: "pour_ingredient"
+      second_toast_ready_gate: "second_toast_ready"
+      place_second_toast_skill: "place_second_toast"
+      place_second_toast_timeout_s: 30.0

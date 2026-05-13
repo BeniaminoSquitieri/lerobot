@@ -1,0 +1,46 @@
+// generated from rosidl_adapter/resource/srv.idl.em
+// with input from sandwich_bt_interfaces/srv/RunNamedCommand.srv
+// generated code does not contain a copyright notice
+
+
+module sandwich_bt_interfaces {
+  module srv {
+    @verbatim (language="comment", text=
+      "@file RunNamedCommand.srv" "\n"
+      "@brief C++ behavior-tree to Python executor command boundary." "\n"
+      "" "\n"
+      "Request fields:" "\n"
+      "kind selects the command path:" "\n"
+      "  - \"skill\"            -> run one learned primitive" "\n"
+      "  - \"vlm_gate_pending\" -> open one gate and wait for a VLM result")
+    struct RunNamedCommand_Request {
+      string kind;
+
+      @verbatim (language="comment", text=
+        "name must match one configured command entry on the Python side.")
+      string name;
+
+      @verbatim (language="comment", text=
+        "timeout_s optionally overrides the command duration; 0 lets the server decide.")
+      float timeout_s;
+    };
+    @verbatim (language="comment", text=
+      "Response fields:" "\n"
+      "success is the boolean outcome consumed by the BT leaf.")
+    struct RunNamedCommand_Response {
+      boolean success;
+
+      @verbatim (language="comment", text=
+        "status is the detailed executor state, for example SUCCESS, FAILURE, or TIMEOUT.")
+      string status;
+
+      @verbatim (language="comment", text=
+        "elapsed_s reports how long the Python command spent executing.")
+      float elapsed_s;
+
+      @verbatim (language="comment", text=
+        "message carries human-readable diagnostics for logs and tests.")
+      string message;
+    };
+  };
+};
