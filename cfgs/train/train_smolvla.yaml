@@ -1,10 +1,12 @@
 policy:
   type: smolvla
   repo_id: steb6/smolvla_roboarena_HRII
-  pretrained_path: steb6/smolvla_roboarena_hrii
+  pretrained_path: lerobot/smolvla_base
+  load_vlm_weights: true
   device: cuda
   chunk_size: 16
   n_action_steps: 16
+  compile_model: true
 
 dataset:
   repo_id: steb6/roboarena_HRII
@@ -12,3 +14,6 @@ dataset:
   revision: main
   image_transforms:
     enable: true
+
+batch_size: 64
+steps: 200000

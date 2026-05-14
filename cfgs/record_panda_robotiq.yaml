@@ -24,12 +24,9 @@ robot:
       # publish_ros_topic: true
       # ros_topic: /topic
 
-teleop:
-  type: metaquest_rail
-
 dataset:
   repo_id: steb6/hello_world
-  single_task: Pick.
+  single_task: Pick the metal block and put it in the box.
   fps: 10
   episode_time_s: 2000
   reset_time_s: 0
@@ -42,8 +39,11 @@ dataset:
   video_encoding_batch_size: 1
   rename_map: {}
 
-teleop_action_processor:
-  steps: [clutch_processor]  #, arm_absolute_to_delta]
+# teleop:
+#   type: metaquest_rail
+
+# teleop_action_processor:
+#   steps: [clutch_processor]  #, arm_absolute_to_delta]
 
 robot_action_processor:
   steps: []
@@ -56,3 +56,25 @@ teleop_recording_mode: corrections_only
 display_data: true
 play_sounds: true
 resume: true
+
+policy:
+  type: smolvla
+  pretrained_path: steb6/smolvla_roboarena_HRII
+  device: cuda
+  n_action_steps: 16
+  chunk_size: 16
+
+# policy:
+#   type: act
+#   pretrained_path: steb6/act_roboarena_HRII
+#   device: cuda
+#   n_action_steps: 16
+#   chunk_size: 16
+
+policy_server:
+  server_address: 192.168.100.174:8080
+  actions_per_chunk: 16
+  chunk_size_threshold: 0.25
+  aggregate_fn_name: latest_only
+  client_device: cpu
+  debug_visualize_queue_size: true
