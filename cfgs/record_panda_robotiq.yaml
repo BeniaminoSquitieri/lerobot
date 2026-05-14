@@ -2,6 +2,7 @@ robot:
   type: custom_manipulator
   arm:
     type: panda
+    # DECOMMENT TO USE DELTA ACTIONS
     # use_delta_actions: true
     visualize: true
   gripper:
@@ -21,6 +22,7 @@ robot:
       width: 640
       height: 480
       fps: 30
+      # DECOMMENT TO PUBLISH IMAGES AS ROS TOPIC
       # publish_ros_topic: true
       # ros_topic: /topic
 
@@ -39,11 +41,12 @@ dataset:
   video_encoding_batch_size: 1
   rename_map: {}
 
+# DECOMMENT TO USE DAGGER
 # teleop:
 #   type: metaquest_rail
-
 # teleop_action_processor:
 #   steps: [clutch_processor]  #, arm_absolute_to_delta]
+# teleop_recording_mode: all  # corrections_only, all
 
 robot_action_processor:
   steps: []
@@ -64,13 +67,6 @@ policy:
   n_action_steps: 16
   chunk_size: 16
 
-# policy:
-#   type: act
-#   pretrained_path: steb6/act_roboarena_HRII
-#   device: cuda
-#   n_action_steps: 16
-#   chunk_size: 16
-
 policy_server:
   server_address: 192.168.100.174:8080
   actions_per_chunk: 16
@@ -78,3 +74,20 @@ policy_server:
   aggregate_fn_name: latest_only
   client_device: cpu
   debug_visualize_queue_size: true
+
+# DECOMMENT TO READ ENV VARIABLES FROM ROS TOPICS
+# ros_environment_state:
+#   enabled: true
+#   topics:
+#     - topic: /hand_center
+#       message_type: geometry_msgs.msg.PointStamped
+#       value_fields: [point.x, point.y]
+#       output_keys: [rob_x, rob_y]
+#     - topic: /obj_1_center
+#       message_type: geometry_msgs.msg.PointStamped
+#       value_fields: [point.x, point.y]
+#       output_keys: [obj_x, obj_y]
+#     - topic: /ksg_mi
+#       message_type: std_msgs.msg.Float64
+#       value_fields: [data]
+#       output_keys: [mi_mine]
