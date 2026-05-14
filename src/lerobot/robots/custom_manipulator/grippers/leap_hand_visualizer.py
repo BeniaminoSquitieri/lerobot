@@ -81,8 +81,10 @@ class LeapHandDebugTools:
 
         self.rr = rr
 
+        created_rerun_session = False
         if not rr.is_enabled():
             rr.init("leap_hand_debug", spawn=True)
+            created_rerun_session = True
 
         self.urdf_tree = UrdfTree.from_file_path(
             urdf_path,
@@ -102,11 +104,12 @@ class LeapHandDebugTools:
             )
         # Set the initial view so +X is up, +Y points toward the viewer, +Z points right.
         rr.log(self.root_entity_path, rr.ViewCoordinates.UBR, static=True)
-        send_leap_hand_blueprint(
-            hand_view_name="LeapHand",
-            hand_contents=["/leap_hand/**", "/leap_targets/**", "/leap_tips/**"],
-            hand_target_frame=self.root_frame_id,
-        )
+        if created_rerun_session:
+            send_leap_hand_blueprint(
+                hand_view_name="LeapHand",
+                hand_contents=["/leap_hand/**", "/leap_targets/**", "/leap_tips/**"],
+                hand_target_frame=self.root_frame_id,
+            )
 
     def close(self):
         return None
