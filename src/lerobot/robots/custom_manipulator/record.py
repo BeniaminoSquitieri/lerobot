@@ -436,7 +436,8 @@ def record_loop(
                 )
 
                 if display_data:
-                    log_policy_rollout(action_values, list(policy._action_queue), dataset.features, postprocessor)
+                    queued_actions = getattr(policy, "_action_queue", getattr(policy, "_queues", {}).get(ACTION, []))
+                    log_policy_rollout(action_values, list(queued_actions), dataset.features, postprocessor)
 
                 selected_action = make_robot_action(action_values, dataset.features)
                 action_values = selected_action
