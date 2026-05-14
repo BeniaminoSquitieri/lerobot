@@ -44,14 +44,14 @@ def _make_frame(*, include_ring: bool = True, include_little: bool = False) -> T
     )
 
 
-def test_frame_to_action_adds_wrist_and_tracking_valid():
+def test_frame_to_action_adds_wrist_and_keeps_engaged():
     teleop = MetaReaderTeleoperator(MetaReaderConfig())
     action = teleop._frame_to_action(_make_frame(include_ring=True, include_little=False))
 
     wrist_expected = METAREADER_TRANSFORM @ np.array([0.0, 0.0, -0.1], dtype=float)
     thumb_expected = METAREADER_TRANSFORM @ np.array([0.03, 0.01, 0.02], dtype=float)
 
-    assert action["hand_tracking_valid"] == 1.0
+    assert action["is_engaged"] == 1.0
     assert np.allclose(
         [action[f"wrist.position.{axis}"] for axis in "xyz"],
         wrist_expected,
@@ -62,11 +62,11 @@ def test_frame_to_action_adds_wrist_and_tracking_valid():
     )
 
 
-def test_frame_to_action_ignores_little_for_tracking_validity():
+def test_frame_to_action_disengages_when_required_tracking_is_missing():
     teleop = MetaReaderTeleoperator(MetaReaderConfig())
 
     valid_without_little = teleop._frame_to_action(_make_frame(include_ring=True, include_little=False))
     invalid_without_ring = teleop._frame_to_action(_make_frame(include_ring=False, include_little=True))
 
-    assert valid_without_little["hand_tracking_valid"] == 1.0
-    assert invalid_without_ring["hand_tracking_valid"] == 0.0
+    assert valid_without_little["is_engaged"] == 1.0
+    assert invalid_without_ring["is_engaged"] == 0.0
