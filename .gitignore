@@ -29,6 +29,8 @@ Pipfile.lock
 
 ### Build & Distribution ###
 build/
+install/
+log/
 dist/
 sdist/
 wheels/

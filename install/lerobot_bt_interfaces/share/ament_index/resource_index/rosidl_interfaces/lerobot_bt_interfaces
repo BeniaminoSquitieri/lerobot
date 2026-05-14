@@ -1,6 +1,0 @@
-srv/GetSkillVerification.idl
-srv/GetSkillVerification.srv
-srv/ReportSkillVerification.idl
-srv/ReportSkillVerification.srv
-srv/RunNamedCommand.idl
-srv/RunNamedCommand.srv
