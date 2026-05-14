@@ -133,7 +133,8 @@ class RemotePolicyClient:
         self.receiver_thread: threading.Thread | None = None
 
     def start(self) -> None:
-        self._handshake()
+        self._ready()
+        self._configure_policy()
         self.shutdown_event.clear()
         self.receiver_thread = threading.Thread(target=self._receive_actions, daemon=True)
         self.receiver_thread.start()
@@ -150,10 +151,12 @@ class RemotePolicyClient:
             self.latest_action = -1
         self.action_chunk_size = -1
         self.must_go.set()
-        self._handshake()
+        self._ready()
 
-    def _handshake(self) -> None:
+    def _ready(self) -> None:
         self.stub.Ready(services_pb2.Empty())
+
+    def _configure_policy(self) -> None:
         policy_config_bytes = pickle.dumps(self.policy_config)
         self.stub.SendPolicyInstructions(services_pb2.PolicySetup(data=policy_config_bytes))
 
