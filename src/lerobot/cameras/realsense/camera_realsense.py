@@ -28,12 +28,14 @@ from numpy.typing import NDArray  # type: ignore  # TODO: add type stubs for num
 try:
     import rclpy  # type: ignore
     from rclpy.node import Node  # type: ignore
+    from sensor_msgs.msg import CompressedImage as RosCompressedImage  # type: ignore
     from sensor_msgs.msg import Image as RosImage  # type: ignore
 
     _ros_import_error: Exception | None = None
 except Exception as e:
     rclpy = None  # type: ignore[assignment]
     Node = None  # type: ignore[assignment,misc]
+    RosCompressedImage = None  # type: ignore[assignment,misc]
     RosImage = None  # type: ignore[assignment,misc]
     _ros_import_error = e
 
@@ -163,10 +165,13 @@ class RealSenseCamera(Camera):
         self.warmup_s = config.warmup_s
         self.publish_ros_topic = bool(getattr(config, "publish_ros_topic", False))
         self.ros_topic = getattr(config, "ros_topic", None)
+        self.ros_transport = getattr(config, "ros_transport", "raw")
+        self.ros_jpeg_quality = int(getattr(config, "ros_jpeg_quality", 75))
 
         self.rs_pipeline: rs.pipeline | None = None
         self.rs_profile: rs.pipeline_profile | None = None
         self._ros_pub = None
+        self._ros_topic_name: str | None = None
 
         self.thread: Thread | None = None
         self.stop_event: Event | None = None
@@ -245,20 +250,63 @@ class RealSenseCamera(Camera):
     def _maybe_setup_ros_publisher(self) -> None:
         if not self.publish_ros_topic:
             return
-        if rclpy is None or RosImage is None:
+        if rclpy is None:
             logger.warning(f"{self} publish_ros_topic=true but ROS2 python deps missing: {_ros_import_error}")
             self.publish_ros_topic = False
             return
+
+        message_type = RosImage
+        if self.ros_transport == "compressed":
+            message_type = RosCompressedImage
+        if message_type is None:
+            logger.warning(
+                f"{self} publish_ros_topic=true but ROS2 image message deps missing: {_ros_import_error}"
+            )
+            self.publish_ros_topic = False
+            return
+
         node = _get_ros_node()
         topic = self.ros_topic or f"/lerobot/realsense/{self.serial_number}/color"
-        self._ros_pub = node.create_publisher(RosImage, topic, 10)
+        if self.ros_transport == "compressed" and not topic.endswith("/compressed"):
+            topic = f"{topic}/compressed"
+        self._ros_topic_name = topic
+        self._ros_pub = node.create_publisher(message_type, topic, 10)
 
     def _maybe_publish_ros(self, image: NDArray[Any]) -> None:
-        if not self.publish_ros_topic or self._ros_pub is None or RosImage is None:
+        if not self.publish_ros_topic or self._ros_pub is None:
             return
         # Best-effort publish; no need to spin for publishing only.
+        stamp = _get_ros_node().get_clock().now().to_msg()
+        if self.ros_transport == "compressed":
+            if RosCompressedImage is None:
+                return
+
+            original_encoding = "bgr8" if self.color_mode == ColorMode.BGR else "rgb8"
+            encoded_image = image
+            if self.color_mode == ColorMode.RGB:
+                encoded_image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
+
+            ok, buffer = cv2.imencode(
+                ".jpg",
+                encoded_image,
+                [cv2.IMWRITE_JPEG_QUALITY, self.ros_jpeg_quality],
+            )
+            if not ok:
+                logger.warning(f"{self} failed to JPEG-encode frame for ROS publishing.")
+                return
+
+            msg = RosCompressedImage()
+            msg.header.stamp = stamp
+            msg.header.frame_id = str(self)
+            msg.format = f"{original_encoding}; jpeg compressed bgr8"
+            msg.data = buffer.tobytes()
+            self._ros_pub.publish(msg)
+            return
+
+        if RosImage is None:
+            return
         msg = RosImage()
-        msg.header.stamp = _get_ros_node().get_clock().now().to_msg()
+        msg.header.stamp = stamp
         msg.header.frame_id = str(self)
         msg.height, msg.width = int(image.shape[0]), int(image.shape[1])
         msg.encoding = "bgr8" if self.color_mode == ColorMode.BGR else "rgb8"
