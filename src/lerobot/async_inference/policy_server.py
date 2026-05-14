@@ -87,6 +87,7 @@ class PolicyServer(services_pb2_grpc.AsyncInferenceServicer):
         self.policy = None
         self.preprocessor: PolicyProcessorPipeline[dict[str, Any], dict[str, Any]] | None = None
         self.postprocessor: PolicyProcessorPipeline[PolicyAction, PolicyAction] | None = None
+        self.loaded_policy_specs: RemotePolicyConfig | None = None
 
     @property
     def running(self):
@@ -141,6 +142,17 @@ class PolicyServer(services_pb2_grpc.AsyncInferenceServicer):
             f"Device: {policy_specs.device}"
         )
 
+        if self.policy is not None and self.loaded_policy_specs == policy_specs:
+            self.logger.info(
+                "Policy already loaded with identical configuration; reusing existing model on %s.",
+                self.device,
+            )
+            self.device = policy_specs.device
+            self.policy_type = policy_specs.policy_type
+            self.lerobot_features = policy_specs.lerobot_features
+            self.actions_per_chunk = policy_specs.actions_per_chunk
+            return services_pb2.Empty()
+
         self.device = policy_specs.device
         self.policy_type = policy_specs.policy_type  # act, pi0, etc.
         self.lerobot_features = policy_specs.lerobot_features
@@ -165,6 +177,7 @@ class PolicyServer(services_pb2_grpc.AsyncInferenceServicer):
         )
 
         end = time.perf_counter()
+        self.loaded_policy_specs = policy_specs
 
         self.logger.info(f"Time taken to put policy on {self.device}: {end - start:.4f} seconds")
 

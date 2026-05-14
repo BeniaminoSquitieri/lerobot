@@ -1,24 +1,12 @@
-num_workers: 10
-batch_size: 8
-
-wandb:
-  enable: true
-  disable_artifact: true
-  mode: online
-
 policy:
   type: pi05
-  repo_id: ar0s/pi05_hri
+  repo_id: steb6/pi0_roboarena_HRII
   device: cuda
-  chunk_size: 50
-  n_action_steps: 10
-  train_expert_only: false
-  n_obs_steps: 1
-  compile_model: true
-  gradient_checkpointing: true
+  chunk_size: 16
+  n_action_steps: 16
 
 dataset:
-  repo_id: steb6/ROBOARENA_ONLY_YAW_FINAL
+  repo_id: steb6/roboarena_HRII
+  revision: main
   image_transforms:
     enable: true
-  

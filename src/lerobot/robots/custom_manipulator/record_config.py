@@ -23,6 +23,17 @@ def get_policy_loading_source(policy: PreTrainedConfig | None) -> str | None:
     return str(policy.pretrained_path)
 
 
+def get_remote_policy_loading_source(policy: PreTrainedConfig | None) -> str | None:
+    """Return the source the remote policy server should load from."""
+    if policy is None:
+        return None
+    if policy.pretrained_path is not None:
+        return str(policy.pretrained_path)
+    if policy.repo_id is not None:
+        return str(policy.repo_id)
+    return None
+
+
 def get_missing_policy_source_message(policy: PreTrainedConfig) -> str:
     repo_hint = str(policy.repo_id or "<hub-repo-or-local-dir>")
     return (
@@ -31,6 +42,38 @@ def get_missing_policy_source_message(policy: PreTrainedConfig) -> str:
         f"`policy.repo_id={policy.repo_id!r}` does not load weights in this script. "
         f"Use `--policy.path={repo_hint}` or set `policy.pretrained_path: {repo_hint}` in the config."
     )
+
+
+def get_missing_remote_policy_source_message(policy: PreTrainedConfig) -> str:
+    repo_hint = str(policy.repo_id or "<hub-repo-or-local-dir-on-server>")
+    return (
+        f"Remote custom manipulator policy execution requires a loadable source for the policy server. "
+        f"A policy of type '{policy.type}' was configured without `policy.pretrained_path` or `policy.repo_id`. "
+        f"Use `--policy.path={repo_hint}`, set `policy.pretrained_path: {repo_hint}`, "
+        f"or set `policy.repo_id: {repo_hint}` in the config."
+    )
+
+
+@dataclass
+class RemotePolicyServerConfig:
+    server_address: str | None = None
+    actions_per_chunk: int = 10
+    chunk_size_threshold: float = 0.5
+    aggregate_fn_name: str = "weighted_average"
+    client_device: str = "cpu"
+    debug_visualize_queue_size: bool = False
+
+    @property
+    def enabled(self) -> bool:
+        return bool(self.server_address)
+
+    def __post_init__(self):
+        if self.actions_per_chunk <= 0:
+            raise ValueError("policy_server.actions_per_chunk must be positive.")
+        if not 0 <= self.chunk_size_threshold <= 1:
+            raise ValueError("policy_server.chunk_size_threshold must be between 0 and 1.")
+        if not self.client_device:
+            raise ValueError("policy_server.client_device cannot be empty.")
 
 
 @dataclass
@@ -79,6 +122,8 @@ class RecordConfig:
     teleop: TeleoperatorConfig | None = None
     # Whether to control the robot with a policy
     policy: PreTrainedConfig | None = None
+    # Optional remote async inference server. If server_address is set, policy inference runs remotely.
+    policy_server: RemotePolicyServerConfig = field(default_factory=RemotePolicyServerConfig)
     # Display all cameras on screen
     display_data: bool = False
     # Use vocal synthesis to read events.
@@ -108,8 +153,12 @@ class RecordConfig:
                 f"got {self.robot.type!r}."
             )
 
-        if self.policy is not None and get_policy_loading_source(self.policy) is None:
-            raise ValueError(get_missing_policy_source_message(self.policy))
+        if self.policy is not None:
+            if self.policy_server.enabled:
+                if get_remote_policy_loading_source(self.policy) is None:
+                    raise ValueError(get_missing_remote_policy_source_message(self.policy))
+            elif get_policy_loading_source(self.policy) is None:
+                raise ValueError(get_missing_policy_source_message(self.policy))
 
     @classmethod
     def __get_path_fields__(cls) -> list[str]:

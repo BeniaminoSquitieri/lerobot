@@ -111,7 +111,7 @@ if __name__ == "__main__":
     from lerobot.robots.custom_manipulator.custom_manipulator import CustomManipulator
     from lerobot.utils.visualization_utils import init_rerun
 
-    repo_id = "HSP-IIT/toast_pick_and_place"
+    repo_id = "HSP-IIT/roboarena_HRII"
     left_serial = "123622270882"
     episode_indices = list(range(10,30))
     dataset = LeRobotDataset(repo_id)

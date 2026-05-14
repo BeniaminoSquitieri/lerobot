@@ -32,11 +32,14 @@ class XHandDebugTools:
         self._root_frame_id = "tf#/xhand/right_hand_link"
 
         if self._enable_rerun_visualization:
+            created_rerun_session = False
             if not rr.is_enabled():
                 rr.init("custom_manipulator_debug", spawn=True)
+                created_rerun_session = True
             self.urdf_tree = UrdfTree.from_file_path(urdf_path, entity_path_prefix="xhand", frame_prefix="tf#/xhand/")
             self.urdf_tree.log_urdf_to_recording()
-            send_custom_manipulator_blueprint()
+            if created_rerun_session:
+                send_custom_manipulator_blueprint()
 
         if enable_tip_scale_tuner:
             import tkinter as tk
