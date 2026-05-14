@@ -51,6 +51,8 @@ robot_action_processor:
 robot_observation_processor:
   steps: []
 
+teleop_recording_mode: corrections_only
+
 display_data: true
 play_sounds: true
 resume: true

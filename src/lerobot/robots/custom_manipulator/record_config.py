@@ -115,6 +115,41 @@ class DatasetRecordConfig:
 
 
 @dataclass
+class RosObservationTopicConfig:
+    topic: str
+    message_type: str
+    value_fields: list[str]
+    output_keys: list[str]
+    queue_size: int = 10
+
+    def __post_init__(self) -> None:
+        if len(self.value_fields) != len(self.output_keys):
+            raise ValueError(
+                "`value_fields` and `output_keys` must have the same length for a ROS observation topic."
+            )
+        if not self.topic:
+            raise ValueError("A ROS observation topic requires a non-empty `topic`.")
+
+
+@dataclass
+class RosEnvironmentStateConfig:
+    enabled: bool = False
+    topics: list[RosObservationTopicConfig] = field(default_factory=list)
+    startup_timeout_s: float = 5.0
+
+    @property
+    def ordered_output_keys(self) -> list[str]:
+        return [key for topic in self.topics for key in topic.output_keys]
+
+    def __post_init__(self) -> None:
+        ordered_keys = self.ordered_output_keys
+        if self.enabled and not ordered_keys:
+            raise ValueError("`ros_environment_state.enabled=true` requires at least one configured topic.")
+        if len(ordered_keys) != len(set(ordered_keys)):
+            raise ValueError("`ros_environment_state` output keys must be unique.")
+
+
+@dataclass
 class RecordConfig:
     robot: RobotConfig
     dataset: DatasetRecordConfig
@@ -135,6 +170,8 @@ class RecordConfig:
     )
     robot_action_processor: dict[str, Any] = field(default_factory=lambda: {"steps": []})
     robot_observation_processor: dict[str, Any] = field(default_factory=lambda: {"steps": []})
+    teleop_recording_mode: str = "corrections_only"
+    ros_environment_state: RosEnvironmentStateConfig = field(default_factory=RosEnvironmentStateConfig)
 
     def __post_init__(self):
         # HACK: We parse again the cli args here to get the pretrained path if there was one.
@@ -153,6 +190,10 @@ class RecordConfig:
                 f"got {self.robot.type!r}."
             )
 
+        if self.policy is not None and get_policy_loading_source(self.policy) is None:
+            raise ValueError(get_missing_policy_source_message(self.policy))
+        if self.teleop_recording_mode not in {"corrections_only", "all"}:
+            raise ValueError("`teleop_recording_mode` must be one of {'corrections_only', 'all'}.")
         if self.policy is not None:
             if self.policy_server.enabled:
                 if get_remote_policy_loading_source(self.policy) is None:
