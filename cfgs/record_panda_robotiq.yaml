@@ -27,8 +27,8 @@ robot:
       # ros_topic: /topic
 
 dataset:
-  repo_id: HSP-IIT/eval_act_toast_pick_and_place
-  single_task: pick bread.
+  repo_id: Squitieri/eval_smolvla_default_toast_prep
+  single_task: Place the bread on the plate
   fps: 10
   episode_time_s: 2000
   reset_time_s: 0
@@ -40,7 +40,7 @@ dataset:
   num_image_writer_threads_per_camera: 4
   video_encoding_batch_size: 1
   rename_map: {}
-  force_cache_sync: true
+  force_cache_sync: false
 
 # DECOMMENT TO USE DAGGER
 # teleop:
@@ -59,22 +59,33 @@ teleop_recording_mode: corrections_only
 
 display_data: true
 play_sounds: true
-resume: true
+resume: false
 
 policy:
-  type: act
-  pretrained_path: HSP-IIT/act_toast_pick_and_place
+  type: smolvla
+  pretrained_path: Squitieri/smolvla_default_toast_prep
   device: cuda
+  chunk_size: 50
   n_action_steps: 16
-  chunk_size: 16
+  load_vlm_weights: false
+  compile_model: false
+  use_amp: false
+  
 
-policy_server:
-  server_address: 192.168.100.174:8080
-  actions_per_chunk: 16
-  chunk_size_threshold: 0.25
-  aggregate_fn_name: latest_only
-  client_device: cpu
-  debug_visualize_queue_size: true
+# policy:
+#   type: act
+#   pretrained_path: Squitieri/smolvla_default_toast_prep
+#   device: cuda
+#   n_action_steps: 16
+#   chunk_size: 16
+
+# policy_server:
+#   server_address: 192.168.100.174:8080
+#   actions_per_chunk: 16
+#   chunk_size_threshold: 0.25
+#   aggregate_fn_name: latest_only
+#   client_device: cpu
+#   debug_visualize_queue_size: true
 
 # DECOMMENT TO READ ENV VARIABLES FROM ROS TOPICS
 # ros_environment_state:
