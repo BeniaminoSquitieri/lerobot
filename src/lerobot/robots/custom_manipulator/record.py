@@ -799,11 +799,14 @@ def record(cfg: RecordConfig):
 
     if cfg.resume:
         resume_root = _resolve_resume_root(cfg)
-        LeRobotDataset(cfg.dataset.repo_id, root=resume_root)
+        if cfg.dataset.force_cache_sync:
+            logging.info("Force-syncing dataset '%s' from the Hub before resuming.", cfg.dataset.repo_id)
+        LeRobotDataset(cfg.dataset.repo_id, root=resume_root, force_cache_sync=cfg.dataset.force_cache_sync)
         num_cameras = len(robot.cameras) if hasattr(robot, "cameras") else 0
         dataset = LeRobotDataset.resume(
             cfg.dataset.repo_id,
             root=resume_root,
+            force_cache_sync=cfg.dataset.force_cache_sync,
             batch_encoding_size=cfg.dataset.video_encoding_batch_size,
             image_writer_processes=cfg.dataset.num_image_writer_processes if num_cameras > 0 else 0,
             image_writer_threads=cfg.dataset.num_image_writer_threads_per_camera * num_cameras

@@ -108,6 +108,8 @@ class DatasetRecordConfig:
     video_encoding_batch_size: int = 1
     # Rename map for the observation to override the image and state keys
     rename_map: dict[str, str] = field(default_factory=dict)
+    # Re-download dataset metadata/data from the Hub before resuming, instead of trusting the local cache.
+    force_cache_sync: bool = False
 
     def __post_init__(self):
         if self.single_task is None:
