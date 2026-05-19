@@ -27,6 +27,7 @@ def _resize_like(image, shape):
     x = np.linspace(0, image.shape[1] - 1, shape[1]).astype(int)
     return image[y][:, x]
 
+
 def _load_episode_start_frame(dataset, dataset_camera_key, episode):
     def episode_value(key):
         value = episode[key]
@@ -67,15 +68,13 @@ def make_initial_state_composite(dataset, camera_key, episodes):
     return np.clip((1.0 - alpha) * background + alpha * foreground, 0.0, 255.0).astype(np.uint8)
 
 
-def make_episode_start_overlay(dataset, camera_key="left_rgb", alpha=0.5, path="episode_start_overlay", episode_indices=None):
+def make_episode_start_overlay(dataset, camera_key="left_rgb", alpha=0.5, path="episode_start_overlay"):
     camera_keys = [key.removeprefix("observation.images.") for key in (dataset.meta.camera_keys or [])]
     camera_key = camera_key if camera_key in camera_keys else (camera_keys[0] if camera_keys else None)
     if camera_key is None:
         return None
 
     episodes = list(dataset.meta.episodes) if dataset.meta.episodes is not None else []
-    if episode_indices is not None:
-        episodes = [episodes[i] for i in episode_indices]
     composite = make_initial_state_composite(dataset, camera_key, episodes)
     base_path = f"{path}/{camera_key}"
 
@@ -111,14 +110,18 @@ if __name__ == "__main__":
     from lerobot.robots.custom_manipulator.custom_manipulator import CustomManipulator
     from lerobot.utils.visualization_utils import init_rerun
 
-    repo_id = "Squitieri/put_coffee"
+    repo_id = "Squitieri/close_machine"
     revision = "main"
     left_serial = "123622270882"
-    episode_indices = list(range(10,30))
-    dataset = LeRobotDataset(repo_id, revision=revision)
+    force_cache_sync = True
+    dataset = LeRobotDataset(repo_id, revision=revision, force_cache_sync=force_cache_sync)
+    print(
+        f"Loaded {dataset.meta.total_episodes} episodes from {repo_id}@{revision} "
+        f"(root: {dataset.root}, force_cache_sync={force_cache_sync})."
+    )
     robot = CustomManipulator(CustomManipulatorConfig(cameras={"left": RealSenseCameraConfig(serial_number_or_name=left_serial, fps=30, width=640, height=480, use_depth=False,publish_ros_topic=True, ros_topic="/topic_camera")}))
     init_rerun(session_name="episode_start_overlay")
-    overlay = make_episode_start_overlay(dataset, camera_key="left_rgb", episode_indices=episode_indices)
+    overlay = make_episode_start_overlay(dataset, camera_key="left_rgb")
     robot.connect()
     while True:
         overlay.show(robot.get_observation())
