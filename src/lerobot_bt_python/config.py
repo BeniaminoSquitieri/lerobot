@@ -22,6 +22,18 @@ from lerobot.configs.policies import PreTrainedConfig
 from lerobot.policies.act.configuration_act import ACTConfig  # noqa: F401
 from lerobot.policies.diffusion.configuration_diffusion import DiffusionConfig  # noqa: F401
 from lerobot.policies.groot.configuration_groot import GrootConfig  # noqa: F401
+from lerobot.policies.multi_task_dit.configuration_multi_task_dit import MultiTaskDiTConfig  # noqa: F401
+from lerobot.policies.pi0.configuration_pi0 import PI0Config  # noqa: F401
+from lerobot.policies.pi0_fast.configuration_pi0_fast import PI0FastConfig  # noqa: F401
+from lerobot.policies.pi05.configuration_pi05 import PI05Config  # noqa: F401
+from lerobot.policies.sac.configuration_sac import SACConfig  # noqa: F401
+from lerobot.policies.sac.reward_model.configuration_classifier import RewardClassifierConfig  # noqa: F401
+from lerobot.policies.sarm.configuration_sarm import SARMConfig  # noqa: F401
+from lerobot.policies.smolvla.configuration_smolvla import SmolVLAConfig  # noqa: F401
+from lerobot.policies.tdmpc.configuration_tdmpc import TDMPCConfig  # noqa: F401
+from lerobot.policies.vqbet.configuration_vqbet import VQBeTConfig  # noqa: F401
+from lerobot.policies.wall_x.configuration_wall_x import WallXConfig  # noqa: F401
+from lerobot.policies.xvla.configuration_xvla import XVLAConfig  # noqa: F401
 from lerobot.robots.custom_manipulator.config_custom_manipulator import CustomManipulatorConfig
 
 
@@ -97,8 +109,15 @@ class PrimitiveSkillConfig:
     dataset_repo_id: str
     # Natural language or short description of the task this skill performs.
     task: str
-    # The policy config (a PreTrainedConfig subclass) that points to the model.
-    policy: PreTrainedConfig
+    # Active policy config selected from `policy_variants`, or the legacy direct
+    # policy config used by older YAML files.
+    policy: PreTrainedConfig | None = None
+    # Optional named policies for the same BT skill, e.g. "act", "smolvla",
+    # "diffusion", or any other registered LeRobot policy type.
+    policy_variants: dict[str, PreTrainedConfig] = field(default_factory=dict)
+    # Optional per-skill override. When unset, the top-level/default
+    # policy_variant is used.
+    policy_variant: str | None = None
     # How and when the skill should stop executing.
     transition: SkillTransitionConfig = field(default_factory=SkillTransitionConfig)
     # Optional local dataset root for metadata lookup
@@ -119,10 +138,34 @@ class PrimitiveSkillConfig:
                 f"Skill '{self.name}' has unsupported metadata_source={self.metadata_source!r}. "
                 "Expected 'dataset' or 'robot'."
             )
-        # The skill must reference a pretrained model path (either local folder
-        # or a Hugging Face Hub id). This prevents accidental runtime failures
-        # where a skill is declared but has no model to run.
-        pretrained_path = self.policy.pretrained_path
+        if self.policy is None and not self.policy_variants:
+            raise ValueError(
+                f"Skill '{self.name}' requires either policy or policy_variants."
+            )
+        if self.policy is not None and not self.policy_variants:
+            self._validate_policy(self.policy)
+
+    def select_policy_variant(self, variant_name: str) -> None:
+        """@brief Select and validate the policy variant used for this skill."""
+        selected_variant = self.policy_variant or variant_name
+        if self.policy_variants:
+            if selected_variant not in self.policy_variants:
+                available = sorted(self.policy_variants)
+                raise ValueError(
+                    f"Skill '{self.name}' has no policy variant {selected_variant!r}. "
+                    f"Available variants: {available}."
+                )
+            self.policy = self.policy_variants[selected_variant]
+        if self.policy is None:
+            raise ValueError(f"Skill '{self.name}' has no active policy config.")
+        self._validate_policy(self.policy)
+
+    def _validate_policy(self, policy: PreTrainedConfig) -> None:
+        """@brief Validate the active pretrained policy checkpoint reference."""
+        # The active skill must reference a pretrained model path (either local
+        # folder or a Hugging Face Hub id). This prevents accidental runtime
+        # failures where a skill is declared but has no model to run.
+        pretrained_path = policy.pretrained_path
         if pretrained_path is None:
             raise ValueError(
                 f"Skill '{self.name}' requires a pretrained checkpoint. "
@@ -133,7 +176,7 @@ class PrimitiveSkillConfig:
             raise ValueError(
                 f"Skill '{self.name}' requires a non-empty pretrained checkpoint path."
             )
-        if pretrained_path_str.upper().startswith("TODO_MODEL"):
+        if pretrained_path_str.upper().startswith("TODO"):
             raise ValueError(
                 f"Skill '{self.name}' still uses placeholder checkpoint "
                 f"{pretrained_path_str!r}. Replace it with a real local path or Hub model id."
@@ -188,6 +231,10 @@ class SkillCommandServerConfig:
     robot_action_processor: dict = field(default_factory=lambda: {"steps": []})
     # Processor pipeline applied to observations read from the robot.
     robot_observation_processor: dict = field(default_factory=lambda: {"steps": []})
+    # Default variant selected from each skill.policy_variants. Individual
+    # skills may override it with their own `policy_variant`, allowing one YAML
+    # to mix ACT, SmolVLA, Diffusion, GROOT, XVLA, or any registered policy.
+    policy_variant: str = "act"
 
     def __post_init__(self) -> None:
         """@brief Validate top-level server invariants after config loading."""
@@ -211,6 +258,10 @@ class SkillCommandServerConfig:
         )
         if duplicate_expected_names:
             raise ValueError(f"Duplicate expected_skill_names entries: {duplicate_expected_names}.")
+        if not self.policy_variant:
+            raise ValueError("policy_variant must not be empty.")
+        for skill in self.skills:
+            skill.select_policy_variant(self.policy_variant)
         missing_expected_skills = sorted(set(self.expected_skill_names) - set(skill_names))
         if missing_expected_skills:
             raise ValueError(

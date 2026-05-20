@@ -50,24 +50,32 @@ motions. A VLM `FAILURE` is handled by the BT retrying the same BC skill.
 - `server.py`: ROS2 service node for command execution and VLM check relay.
 - `verification.py`: in-memory registry for VLM pending/success/failure verdicts.
 - `make_sandwich_executor.yaml`: active sandwich skill profile.
-- `lunch_table_bussing_executor.yaml`: lunch table bussing skill profile template.
+- `clear_table_executor.yaml`: table clearing skill profile template.
 - `items_in_drawer_executor.yaml`: drawer insertion skill profile template.
 - `make_coffee_executor.yaml`: coffee task skill profile template.
 - `prepare_picnic_bag_executor.yaml`: picnic bag preparation skill profile template.
 
 The scene-task profile templates follow the same structure as the sandwich
-profile. Keep the `name` fields aligned with the BT XML and replace only each
-`policy.pretrained_path` with the real local checkpoint path or Hugging Face
-model id. Because these templates use `metadata_source: robot`, their
+profile. Keep the `name` fields aligned with the BT XML. Each skill can expose
+multiple `policy_variants`; set the top-level `policy_variant` as the default,
+then override it per skill with `skill.policy_variant` when a task mixes
+different policy families. The variant key must match a registered LeRobot
+policy type such as `act`, `smolvla`, `diffusion`, `groot`, `multi_task_dit`,
+`pi0`, `pi0_fast`, `pi05`, `sac`, `reward_classifier`, `sarm`, `tdmpc`,
+`vqbet`, `wall_x`, or `xvla`. Replace only the selected variants'
+`pretrained_path` values with real local checkpoint paths or Hugging Face model
+ids. Because these templates use `metadata_source: robot`, their
 `dataset_repo_id` values are labels for logging/metadata identity; the live
-robot feature schema is used during rollout.
+robot feature schema is used during rollout. The SmolVLA templates use
+`n_action_steps: 50` and `chunk_size: 50`; adjust those if a checkpoint was
+trained with a different horizon.
 
 The server performs strict startup validation:
 
 - every `expected_skill_names` entry must exist in `skills`
 - every skill name must be unique
-- every `policy.pretrained_path` must be a real path or Hub id, not a
-  `TODO_MODEL...` placeholder
+- every selected policy variant must have a real `pretrained_path`, not a
+  `TODO_...` placeholder
 - every `required_cameras` entry must exist in `robot.cameras`
 
 ## Manual VLM Result
@@ -166,7 +174,7 @@ ros2 launch lerobot_bt_runtime_cpp prepare_picnic_bag.launch.py
 
 The same pairing applies to:
 
-- `lunch_table_bussing_executor.yaml` with `lunch_table_bussing_bt.yaml` and `lunch_table_bussing.xml`
+- `clear_table_executor.yaml` with `clear_table_bt.yaml` and `clear_table.xml`
 - `items_in_drawer_executor.yaml` with `items_in_drawer_bt.yaml` and `items_in_drawer.xml`
 - `make_coffee_executor.yaml` with `make_coffee_bt.yaml` and `make_coffee.xml`
 - `prepare_picnic_bag_executor.yaml` with `prepare_picnic_bag_bt.yaml` and `prepare_picnic_bag.xml`

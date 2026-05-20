@@ -12,7 +12,7 @@ lerobot_bt_runner:
       pick_and_insert_capsule_timeout_s: 60.0
       pick_and_insert_capsule_max_attempts: -1
       close_coffee_machine_skill: "close_coffee_machine"
-      close_coffee_machine_timeout_s: 30.0
+      close_coffee_machine_timeout_s: 10.0
       close_coffee_machine_max_attempts: -1
       human_press_start_button_gate: "make_coffee.human_press_start_button"
       human_press_start_button_max_attempts: -1

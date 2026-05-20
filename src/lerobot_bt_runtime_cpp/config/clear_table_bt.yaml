@@ -1,10 +1,10 @@
-# @file lunch_table_bussing_bt.yaml
-# @brief ROS2 parameters that configure lunch_table_bussing.xml blackboard values.
+# @file clear_table_bt.yaml
+# @brief ROS2 parameters that configure clear_table.xml blackboard values.
 
 lerobot_bt_runner:
   ros__parameters:
     bt:
-      initial_scene_ready_gate: "lunch_table_bussing.scene_0_ready"
+      initial_scene_ready_gate: "clear_table.scene_0_ready"
       initial_scene_ready_max_attempts: -1
       pick_and_dispose_trash_skill: "pick_and_dispose_trash"
       pick_and_dispose_trash_timeout_s: 120.0
@@ -18,5 +18,5 @@ lerobot_bt_runner:
       pick_and_store_dishware_skill: "pick_and_store_dishware"
       pick_and_store_dishware_timeout_s: 120.0
       pick_and_store_dishware_max_attempts: 3
-      task_complete_gate: "lunch_table_bussing.task_complete"
+      task_complete_gate: "clear_table.task_complete"
       task_complete_max_attempts: -1

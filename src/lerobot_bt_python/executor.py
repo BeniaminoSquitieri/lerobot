@@ -9,7 +9,7 @@ and returns compact command results to the ROS2 server.
 Flow role:
 1. The Python ROS2 server receives a named command from the BT.
 2. This backend resolves the name to a configured skill.
-3. It runs the ACT inference loop on the real robot.
+3. It runs the selected policy inference loop on the real robot.
 4. It returns SUCCESS/FAILURE/ERROR back to the server.
 """
 
@@ -153,6 +153,9 @@ def _build_skill_runtime(
     This is where a skill name becomes dataset metadata, a policy checkpoint, and
     processor pipelines that can run inside the control loop.
     """
+    if skill_cfg.policy is None:
+        raise ValueError(f"Skill '{skill_cfg.name}' has no active policy selected.")
+
     if skill_cfg.metadata_source == "robot":
         from lerobot.datasets.pipeline_features import (
             aggregate_pipeline_dataset_features,

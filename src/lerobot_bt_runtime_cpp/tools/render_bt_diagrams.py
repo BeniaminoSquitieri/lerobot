@@ -21,7 +21,7 @@ from PIL import Image, ImageDraw, ImageFont
 
 TREE_TO_PROFILE = {
     "make_sandwich.xml": "make_sandwich_bt.yaml",
-    "lunch_table_bussing.xml": "lunch_table_bussing_bt.yaml",
+    "clear_table.xml": "clear_table_bt.yaml",
     "prepare_picnic_bag.xml": "prepare_picnic_bag_bt.yaml",
     "items_in_drawer.xml": "items_in_drawer_bt.yaml",
     "make_coffee.xml": "make_coffee_bt.yaml",

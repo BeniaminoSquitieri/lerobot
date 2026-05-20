@@ -1,4 +1,4 @@
-"""Launch the LeRobot BT runner with the lunch_table_bussing task profile."""
+"""Launch the LeRobot BT runner with the clear_table task profile."""
 
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument
@@ -18,13 +18,13 @@ def generate_launch_description():
             DeclareLaunchArgument(
                 "params_file",
                 default_value=PathJoinSubstitution(
-                    [pkg_share, "config", "lunch_table_bussing_bt.yaml"]
+                    [pkg_share, "config", "clear_table_bt.yaml"]
                 ),
             ),
             DeclareLaunchArgument(
                 "tree_xml_path",
                 default_value=PathJoinSubstitution(
-                    [pkg_share, "trees", "lunch_table_bussing.xml"]
+                    [pkg_share, "trees", "clear_table.xml"]
                 ),
             ),
             Node(

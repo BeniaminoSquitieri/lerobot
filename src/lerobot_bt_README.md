@@ -338,7 +338,7 @@ ros2 service call /lerobot_bt/vlm_result_legacy lerobot_bt_interfaces/srv/Report
 The same command format is documented for the additional scene-gated BTs:
 
 - [VLM, BT, and BC conventions](lerobot_bt_vlm_conventions_README.md)
-- [Lunch Table Bussing](lerobot_bt_lunch_table_bussing_README.md)
+- [Clear Table](lerobot_bt_clear_table_README.md)
 - [Items In Drawer](lerobot_bt_items_in_drawer_README.md)
 - [Make Coffee](lerobot_bt_make_coffee_README.md)
 - [Prepare Picnic Bag](lerobot_bt_prepare_picnic_bag_README.md)
@@ -346,7 +346,7 @@ The same command format is documented for the additional scene-gated BTs:
 Rendered PNG diagrams:
 
 - [Make Sandwich BT](lerobot_bt_runtime_cpp/diagrams/make_sandwich_bt.png)
-- [Lunch Table Bussing BT](lerobot_bt_runtime_cpp/diagrams/lunch_table_bussing_bt.png)
+- [Clear Table BT](lerobot_bt_runtime_cpp/diagrams/clear_table_bt.png)
 - [Items In Drawer BT](lerobot_bt_runtime_cpp/diagrams/items_in_drawer_bt.png)
 - [Make Coffee BT](lerobot_bt_runtime_cpp/diagrams/make_coffee_bt.png)
 - [Prepare Picnic Bag BT](lerobot_bt_runtime_cpp/diagrams/prepare_picnic_bag_bt.png)

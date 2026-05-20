@@ -42,7 +42,7 @@ Those belong to `lerobot_bt_python`.
 - `src/wait_for_vlm_verdict_node.cpp`: BT leaf that polls VLM check state
 - `include/lerobot_bt_runtime_cpp/wait_for_vlm_verdict_node.hpp`: VLM check leaf declaration
 - `trees/make_sandwich.xml`: active two-real-skill sandwich task with manual/VLM topic gates
-- `trees/lunch_table_bussing.xml`: scene-gated lunch table cleanup task
+- `trees/clear_table.xml`: scene-gated table clearing task
 - `trees/items_in_drawer.xml`: scene-gated drawer insertion task
 - `trees/make_coffee.xml`: scene-gated coffee preparation task
 - `trees/prepare_picnic_bag.xml`: scene-gated picnic bag preparation task

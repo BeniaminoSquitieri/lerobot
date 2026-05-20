@@ -63,21 +63,21 @@ install(DIRECTORY include/
 # Explicit tree list prevents accidentally installing scratch or duplicate XML.
 set(LEROBOT_BT_TREE_FILES
   trees/items_in_drawer.xml
-  trees/lunch_table_bussing.xml
+  trees/clear_table.xml
   trees/make_coffee.xml
   trees/make_sandwich.xml
   trees/prepare_picnic_bag.xml
 )
 set(LEROBOT_BT_CONFIG_FILES
   config/items_in_drawer_bt.yaml
-  config/lunch_table_bussing_bt.yaml
+  config/clear_table_bt.yaml
   config/make_coffee_bt.yaml
   config/make_sandwich_bt.yaml
   config/prepare_picnic_bag_bt.yaml
 )
 set(LEROBOT_BT_DIAGRAM_FILES
   diagrams/items_in_drawer_bt.png
-  diagrams/lunch_table_bussing_bt.png
+  diagrams/clear_table_bt.png
   diagrams/make_coffee_bt.png
   diagrams/make_sandwich_bt.png
   diagrams/prepare_picnic_bag_bt.png

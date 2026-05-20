@@ -27,27 +27,26 @@ robot:
       # ros_topic: /topic
 
 dataset:
-  repo_id: Squitieri/eval_smolvla_default_toast_prep
-  single_task: Place the bread on the plate
+  repo_id: Squitieri/eval_close_machine_smolvla_bs8_5k
+  single_task: close the coffee machine
   fps: 10
   episode_time_s: 2000
   reset_time_s: 0
-  num_episodes: 5
+  num_episodes: 10
   video: true
-  push_to_hub: false
+  push_to_hub: true
   private: true
   num_image_writer_processes: 0
   num_image_writer_threads_per_camera: 4
   video_encoding_batch_size: 1
   rename_map: {}
-  force_cache_sync: false
+  force_cache_sync: true
 
 # DECOMMENT TO USE DAGGER
 # teleop:
 #   type: metaquest_rail
 # teleop_action_processor:
 #   steps: [clutch_processor]  #, arm_absolute_to_delta]
-# teleop_recording_mode: all  # corrections_only, all
 
 robot_action_processor:
   steps: []
@@ -63,7 +62,7 @@ resume: false
 
 policy:
   type: smolvla
-  pretrained_path: Squitieri/smolvla_default_toast_prep
+  pretrained_path: Squitieri/close_machine_smolvla_bs8_5k
   device: cuda
   chunk_size: 50
   n_action_steps: 16
@@ -74,7 +73,7 @@ policy:
 
 # policy:
 #   type: act
-#   pretrained_path: Squitieri/smolvla_default_toast_prep
+#   pretrained_path: Squitieri/act_put_coffee
 #   device: cuda
 #   n_action_steps: 16
 #   chunk_size: 16

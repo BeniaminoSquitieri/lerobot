@@ -12,7 +12,7 @@ VLM check state managed here. VLM/manual verifiers use topics only.
 
 Flow role:
 1. Wait for the C++ BT to send a named command.
-2. Dispatch that command to a learned ACT skill or a VLM/manual gate.
+2. Dispatch that command to a learned policy skill or a VLM/manual gate.
 3. Return the result to the BT so the tree can continue or retry.
 """
 
