@@ -50,7 +50,7 @@ motions. A VLM `FAILURE` is handled by the BT retrying the same BC skill.
 - `server.py`: ROS2 service node for command execution and VLM check relay.
 - `verification.py`: in-memory registry for VLM pending/success/failure verdicts.
 - `make_sandwich_executor.yaml`: active sandwich skill profile.
-- `clear_table_executor.yaml`: table clearing skill profile template.
+- `set_breakfast_table_executor.yaml`: breakfast table setup skill profile template.
 - `items_in_drawer_executor.yaml`: drawer insertion skill profile template.
 - `make_coffee_executor.yaml`: coffee task skill profile template.
 - `prepare_picnic_bag_executor.yaml`: picnic bag preparation skill profile template.
@@ -174,7 +174,7 @@ ros2 launch lerobot_bt_runtime_cpp prepare_picnic_bag.launch.py
 
 The same pairing applies to:
 
-- `clear_table_executor.yaml` with `clear_table_bt.yaml` and `clear_table.xml`
+- `set_breakfast_table_executor.yaml` with `set_breakfast_table_bt.yaml` and `set_breakfast_table.xml`
 - `items_in_drawer_executor.yaml` with `items_in_drawer_bt.yaml` and `items_in_drawer.xml`
 - `make_coffee_executor.yaml` with `make_coffee_bt.yaml` and `make_coffee.xml`
 - `prepare_picnic_bag_executor.yaml` with `prepare_picnic_bag_bt.yaml` and `prepare_picnic_bag.xml`

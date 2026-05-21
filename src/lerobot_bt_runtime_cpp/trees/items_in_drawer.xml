@@ -1,25 +1,24 @@
 <!--
   @file items_in_drawer.xml
-  @brief Task collaborativo human-robot per inserire oggetti in un cassetto.
+  @brief Human-robot collaborative task for placing objects into a drawer.
 
-  Contesto:
-  - Il BT coordina una scena in cui umano e robot lavorano insieme.
-  - Il VLM/verificatore controlla quando una scena e pronta o completata.
-  - L'umano si occupa delle azioni fisiche sul cassetto: aprirlo all'inizio e
-    chiuderlo alla fine.
-  - Il robot esegue una singola skill BC ripetibile: prende il prossimo oggetto
-    disponibile e lo inserisce nel cassetto.
+  Context:
+  - The BT coordinates a scene where the human and robot work together.
+  - The VLM/verifier checks when a scene is ready or completed.
+  - The human handles the physical drawer actions: opening it at the beginning
+    and closing it at the end.
+  - The robot runs one repeatable BC skill: it picks the next available object
+    and inserts it into the drawer.
 
-  Logica:
-  1. Aspetta che la scena iniziale sia pronta.
-  2. Chiede all'umano di aprire il cassetto e attende conferma dal VLM.
-  3. Esegue la skill robotica "insert next drawer item".
-  4. Dopo ogni inserimento, il VLM decide se il contenuto del cassetto e completo:
-     - FAILURE: ci sono ancora oggetti da inserire, quindi la stessa skill viene
-       ritentata.
-     - SUCCESS: tutti gli oggetti previsti sono nel cassetto.
-  5. Chiede all'umano di chiudere il cassetto.
-  6. Attende il verdetto finale di task completato.
+  Logic:
+  1. Wait for the initial scene to be ready.
+  2. Ask the human to open the drawer and wait for VLM confirmation.
+  3. Run the robot skill "insert next drawer item".
+  4. After each insertion, the VLM decides whether the drawer is complete:
+     - FAILURE: there are still objects to insert, so the same skill is retried.
+     - SUCCESS: all expected objects are in the drawer.
+  5. Ask the human to close the drawer.
+  6. Wait for the final task-complete verdict.
 -->
 <root BTCPP_format="4" main_tree_to_execute="MainTree">
   <BehaviorTree ID="MainTree">

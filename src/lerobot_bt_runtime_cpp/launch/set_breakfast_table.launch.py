@@ -1,4 +1,4 @@
-"""Launch the LeRobot BT runner with the clear_table task profile."""
+"""Launch the LeRobot BT runner with the set_breakfast_table profile."""
 
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument
@@ -8,7 +8,7 @@ from launch_ros.substitutions import FindPackageShare
 
 
 def generate_launch_description():
-    """Build the ROS2 launch description for this task-specific BT profile."""
+    """Build the ROS2 launch description for this breakfast-table setup profile."""
     pkg_share = FindPackageShare("lerobot_bt_runtime_cpp")
     params_file = LaunchConfiguration("params_file")
     tree_xml_path = LaunchConfiguration("tree_xml_path")
@@ -18,13 +18,13 @@ def generate_launch_description():
             DeclareLaunchArgument(
                 "params_file",
                 default_value=PathJoinSubstitution(
-                    [pkg_share, "config", "clear_table_bt.yaml"]
+                    [pkg_share, "config", "set_breakfast_table_bt.yaml"]
                 ),
             ),
             DeclareLaunchArgument(
                 "tree_xml_path",
                 default_value=PathJoinSubstitution(
-                    [pkg_share, "trees", "clear_table.xml"]
+                    [pkg_share, "trees", "set_breakfast_table.xml"]
                 ),
             ),
             Node(

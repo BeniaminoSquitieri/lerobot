@@ -9,7 +9,7 @@
 -->
 <root BTCPP_format="4" main_tree_to_execute="MainTree">
   <BehaviorTree ID="MainTree">
-    <Sequence name="Preparare la borsa del picnic - VLM scene gates">
+    <Sequence name="Prepare picnic bag - VLM scene gates">
       <RetryUntilSuccessful name="SCENE 0 - Picnic scene ready" num_attempts="{initial_scene_ready_max_attempts}">
         <Sequence name="Open setup gate, then wait for scene 0">
           <OpenVLMGate name="Open scene 0 gate" gate_name="{initial_scene_ready_gate}"/>

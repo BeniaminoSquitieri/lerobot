@@ -1,5 +1,5 @@
-# @file clear_table_executor.yaml
-# @brief Real-robot Python execution config for clear_table.xml.
+# @file set_breakfast_table_executor.yaml
+# @brief Real-robot Python execution config for the breakfast-table version of set_breakfast_table.xml.
 #
 # Each skill can choose its own policy_variant. The top-level policy_variant is
 # only the default for skills that do not override it.
@@ -17,10 +17,10 @@ vlm_timeout_s: 0.0
 policy_variant: act
 
 expected_skill_names:
-  - pick_and_dispose_trash
-  - clear_plate
-  - pick_and_store_cutlery
-  - pick_and_store_dishware
+  - place_cereal_box
+  - place_bottle
+  - place_cup
+  - place_bowl
 
 required_cameras:
   - wrist
@@ -61,393 +61,393 @@ robot_observation_processor:
   steps: []
 
 skills:
-  - name: pick_and_dispose_trash
-    dataset_repo_id: "scene-transition/pick_and_dispose_trash"
+  - name: place_cereal_box
+    dataset_repo_id: "scene-transition/place_cereal_box"
     metadata_source: robot
-    task: "Pick one loose trash item from the table and place it in the trash bin."
+    task: "Pick the cereal box from the left side of the table and place it on the tablecloth."
     policy_variant: act
     policy_variants:
       act:
         type: act
         device: cuda
-        pretrained_path: "TODO_ACT_PICK_AND_DISPOSE_TRASH"
+        pretrained_path: "TODO_ACT_PLACE_CEREAL_BOX"
         n_action_steps: 16
         chunk_size: 16
       smolvla:
         type: smolvla
         device: cuda
-        pretrained_path: "TODO_SMOLVLA_PICK_AND_DISPOSE_TRASH"
+        pretrained_path: "TODO_SMOLVLA_PLACE_CEREAL_BOX"
         n_action_steps: 50
         chunk_size: 50
         num_steps: 10
       diffusion:
         type: diffusion
         device: cuda
-        pretrained_path: "TODO_DIFFUSION_PICK_AND_DISPOSE_TRASH"
+        pretrained_path: "TODO_DIFFUSION_PLACE_CEREAL_BOX"
         n_action_steps: 8
         horizon: 16
       multi_task_dit:
         type: multi_task_dit
         device: cuda
-        pretrained_path: "TODO_MULTI_TASK_DIT_PICK_AND_DISPOSE_TRASH"
+        pretrained_path: "TODO_MULTI_TASK_DIT_PLACE_CEREAL_BOX"
         n_action_steps: 24
         horizon: 32
       vqbet:
         type: vqbet
         device: cuda
-        pretrained_path: "TODO_VQBET_PICK_AND_DISPOSE_TRASH"
+        pretrained_path: "TODO_VQBET_PLACE_CEREAL_BOX"
         n_obs_steps: 5
         n_action_pred_token: 3
         action_chunk_size: 5
       pi0:
         type: pi0
         device: cuda
-        pretrained_path: "TODO_PI0_PICK_AND_DISPOSE_TRASH"
+        pretrained_path: "TODO_PI0_PLACE_CEREAL_BOX"
         n_action_steps: 50
         chunk_size: 50
       pi0_fast:
         type: pi0_fast
         device: cuda
-        pretrained_path: "TODO_PI0_FAST_PICK_AND_DISPOSE_TRASH"
+        pretrained_path: "TODO_PI0_FAST_PLACE_CEREAL_BOX"
         n_action_steps: 50
         chunk_size: 50
       pi05:
         type: pi05
         device: cuda
-        pretrained_path: "TODO_PI05_PICK_AND_DISPOSE_TRASH"
+        pretrained_path: "TODO_PI05_PLACE_CEREAL_BOX"
         n_action_steps: 50
         chunk_size: 50
       groot:
         type: groot
         device: cuda
-        pretrained_path: "TODO_GROOT_PICK_AND_DISPOSE_TRASH"
+        pretrained_path: "TODO_GROOT_PLACE_CEREAL_BOX"
         n_action_steps: 50
         chunk_size: 50
       xvla:
         type: xvla
         device: cuda
-        pretrained_path: "TODO_XVLA_PICK_AND_DISPOSE_TRASH"
+        pretrained_path: "TODO_XVLA_PLACE_CEREAL_BOX"
         n_action_steps: 32
         chunk_size: 32
       wall_x:
         type: wall_x
         device: cuda
-        pretrained_path: "TODO_WALL_X_PICK_AND_DISPOSE_TRASH"
+        pretrained_path: "TODO_WALL_X_PLACE_CEREAL_BOX"
         n_action_steps: 32
         chunk_size: 32
       tdmpc:
         type: tdmpc
         device: cuda
-        pretrained_path: "TODO_TDMPC_PICK_AND_DISPOSE_TRASH"
+        pretrained_path: "TODO_TDMPC_PLACE_CEREAL_BOX"
         n_action_steps: 1
         horizon: 5
         n_action_repeats: 2
       sac:
         type: sac
         device: cuda
-        pretrained_path: "TODO_SAC_PICK_AND_DISPOSE_TRASH"
+        pretrained_path: "TODO_SAC_PLACE_CEREAL_BOX"
       reward_classifier:
         type: reward_classifier
         device: cuda
-        pretrained_path: "TODO_REWARD_CLASSIFIER_PICK_AND_DISPOSE_TRASH"
+        pretrained_path: "TODO_REWARD_CLASSIFIER_PLACE_CEREAL_BOX"
       sarm:
         type: sarm
         device: cuda
-        pretrained_path: "TODO_SARM_PICK_AND_DISPOSE_TRASH"
+        pretrained_path: "TODO_SARM_PLACE_CEREAL_BOX"
     transition:
       mode: timeout
       max_duration_s: 120.0
     settle_time_s: 0.0
 
-  - name: clear_plate
-    dataset_repo_id: "scene-transition/clear_plate"
+  - name: place_bottle
+    dataset_repo_id: "scene-transition/place_bottle"
     metadata_source: robot
-    task: "Move one plate to the dishware container and dispose visible trash from it."
+    task: "Pick the bottle from the left side of the table and place it on the tablecloth."
     policy_variant: act
     policy_variants:
       act:
         type: act
         device: cuda
-        pretrained_path: "TODO_ACT_CLEAR_PLATE"
+        pretrained_path: "TODO_ACT_PLACE_BOTTLE"
         n_action_steps: 16
         chunk_size: 16
       smolvla:
         type: smolvla
         device: cuda
-        pretrained_path: "TODO_SMOLVLA_CLEAR_PLATE"
+        pretrained_path: "TODO_SMOLVLA_PLACE_BOTTLE"
         n_action_steps: 50
         chunk_size: 50
         num_steps: 10
       diffusion:
         type: diffusion
         device: cuda
-        pretrained_path: "TODO_DIFFUSION_CLEAR_PLATE"
+        pretrained_path: "TODO_DIFFUSION_PLACE_BOTTLE"
         n_action_steps: 8
         horizon: 16
       multi_task_dit:
         type: multi_task_dit
         device: cuda
-        pretrained_path: "TODO_MULTI_TASK_DIT_CLEAR_PLATE"
+        pretrained_path: "TODO_MULTI_TASK_DIT_PLACE_BOTTLE"
         n_action_steps: 24
         horizon: 32
       vqbet:
         type: vqbet
         device: cuda
-        pretrained_path: "TODO_VQBET_CLEAR_PLATE"
+        pretrained_path: "TODO_VQBET_PLACE_BOTTLE"
         n_obs_steps: 5
         n_action_pred_token: 3
         action_chunk_size: 5
       pi0:
         type: pi0
         device: cuda
-        pretrained_path: "TODO_PI0_CLEAR_PLATE"
+        pretrained_path: "TODO_PI0_PLACE_BOTTLE"
         n_action_steps: 50
         chunk_size: 50
       pi0_fast:
         type: pi0_fast
         device: cuda
-        pretrained_path: "TODO_PI0_FAST_CLEAR_PLATE"
+        pretrained_path: "TODO_PI0_FAST_PLACE_BOTTLE"
         n_action_steps: 50
         chunk_size: 50
       pi05:
         type: pi05
         device: cuda
-        pretrained_path: "TODO_PI05_CLEAR_PLATE"
+        pretrained_path: "TODO_PI05_PLACE_BOTTLE"
         n_action_steps: 50
         chunk_size: 50
       groot:
         type: groot
         device: cuda
-        pretrained_path: "TODO_GROOT_CLEAR_PLATE"
+        pretrained_path: "TODO_GROOT_PLACE_BOTTLE"
         n_action_steps: 50
         chunk_size: 50
       xvla:
         type: xvla
         device: cuda
-        pretrained_path: "TODO_XVLA_CLEAR_PLATE"
+        pretrained_path: "TODO_XVLA_PLACE_BOTTLE"
         n_action_steps: 32
         chunk_size: 32
       wall_x:
         type: wall_x
         device: cuda
-        pretrained_path: "TODO_WALL_X_CLEAR_PLATE"
+        pretrained_path: "TODO_WALL_X_PLACE_BOTTLE"
         n_action_steps: 32
         chunk_size: 32
       tdmpc:
         type: tdmpc
         device: cuda
-        pretrained_path: "TODO_TDMPC_CLEAR_PLATE"
+        pretrained_path: "TODO_TDMPC_PLACE_BOTTLE"
         n_action_steps: 1
         horizon: 5
         n_action_repeats: 2
       sac:
         type: sac
         device: cuda
-        pretrained_path: "TODO_SAC_CLEAR_PLATE"
+        pretrained_path: "TODO_SAC_PLACE_BOTTLE"
       reward_classifier:
         type: reward_classifier
         device: cuda
-        pretrained_path: "TODO_REWARD_CLASSIFIER_CLEAR_PLATE"
+        pretrained_path: "TODO_REWARD_CLASSIFIER_PLACE_BOTTLE"
       sarm:
         type: sarm
         device: cuda
-        pretrained_path: "TODO_SARM_CLEAR_PLATE"
+        pretrained_path: "TODO_SARM_PLACE_BOTTLE"
     transition:
       mode: timeout
       max_duration_s: 120.0
     settle_time_s: 0.0
 
-  - name: pick_and_store_cutlery
-    dataset_repo_id: "scene-transition/pick_and_store_cutlery"
+  - name: place_cup
+    dataset_repo_id: "scene-transition/place_cup"
     metadata_source: robot
-    task: "Pick one cutlery item from the table and place it in the cutlery container."
+    task: "Pick the cup from the left side of the table and place it on the tablecloth."
     policy_variant: act
     policy_variants:
       act:
         type: act
         device: cuda
-        pretrained_path: "TODO_ACT_PICK_AND_STORE_CUTLERY"
+        pretrained_path: "TODO_ACT_PLACE_CUP"
         n_action_steps: 16
         chunk_size: 16
       smolvla:
         type: smolvla
         device: cuda
-        pretrained_path: "TODO_SMOLVLA_PICK_AND_STORE_CUTLERY"
+        pretrained_path: "TODO_SMOLVLA_PLACE_CUP"
         n_action_steps: 50
         chunk_size: 50
         num_steps: 10
       diffusion:
         type: diffusion
         device: cuda
-        pretrained_path: "TODO_DIFFUSION_PICK_AND_STORE_CUTLERY"
+        pretrained_path: "TODO_DIFFUSION_PLACE_CUP"
         n_action_steps: 8
         horizon: 16
       multi_task_dit:
         type: multi_task_dit
         device: cuda
-        pretrained_path: "TODO_MULTI_TASK_DIT_PICK_AND_STORE_CUTLERY"
+        pretrained_path: "TODO_MULTI_TASK_DIT_PLACE_CUP"
         n_action_steps: 24
         horizon: 32
       vqbet:
         type: vqbet
         device: cuda
-        pretrained_path: "TODO_VQBET_PICK_AND_STORE_CUTLERY"
+        pretrained_path: "TODO_VQBET_PLACE_CUP"
         n_obs_steps: 5
         n_action_pred_token: 3
         action_chunk_size: 5
       pi0:
         type: pi0
         device: cuda
-        pretrained_path: "TODO_PI0_PICK_AND_STORE_CUTLERY"
+        pretrained_path: "TODO_PI0_PLACE_CUP"
         n_action_steps: 50
         chunk_size: 50
       pi0_fast:
         type: pi0_fast
         device: cuda
-        pretrained_path: "TODO_PI0_FAST_PICK_AND_STORE_CUTLERY"
+        pretrained_path: "TODO_PI0_FAST_PLACE_CUP"
         n_action_steps: 50
         chunk_size: 50
       pi05:
         type: pi05
         device: cuda
-        pretrained_path: "TODO_PI05_PICK_AND_STORE_CUTLERY"
+        pretrained_path: "TODO_PI05_PLACE_CUP"
         n_action_steps: 50
         chunk_size: 50
       groot:
         type: groot
         device: cuda
-        pretrained_path: "TODO_GROOT_PICK_AND_STORE_CUTLERY"
+        pretrained_path: "TODO_GROOT_PLACE_CUP"
         n_action_steps: 50
         chunk_size: 50
       xvla:
         type: xvla
         device: cuda
-        pretrained_path: "TODO_XVLA_PICK_AND_STORE_CUTLERY"
+        pretrained_path: "TODO_XVLA_PLACE_CUP"
         n_action_steps: 32
         chunk_size: 32
       wall_x:
         type: wall_x
         device: cuda
-        pretrained_path: "TODO_WALL_X_PICK_AND_STORE_CUTLERY"
+        pretrained_path: "TODO_WALL_X_PLACE_CUP"
         n_action_steps: 32
         chunk_size: 32
       tdmpc:
         type: tdmpc
         device: cuda
-        pretrained_path: "TODO_TDMPC_PICK_AND_STORE_CUTLERY"
+        pretrained_path: "TODO_TDMPC_PLACE_CUP"
         n_action_steps: 1
         horizon: 5
         n_action_repeats: 2
       sac:
         type: sac
         device: cuda
-        pretrained_path: "TODO_SAC_PICK_AND_STORE_CUTLERY"
+        pretrained_path: "TODO_SAC_PLACE_CUP"
       reward_classifier:
         type: reward_classifier
         device: cuda
-        pretrained_path: "TODO_REWARD_CLASSIFIER_PICK_AND_STORE_CUTLERY"
+        pretrained_path: "TODO_REWARD_CLASSIFIER_PLACE_CUP"
       sarm:
         type: sarm
         device: cuda
-        pretrained_path: "TODO_SARM_PICK_AND_STORE_CUTLERY"
+        pretrained_path: "TODO_SARM_PLACE_CUP"
     transition:
       mode: timeout
       max_duration_s: 120.0
     settle_time_s: 0.0
 
-  - name: pick_and_store_dishware
-    dataset_repo_id: "scene-transition/pick_and_store_dishware"
+  - name: place_bowl
+    dataset_repo_id: "scene-transition/place_bowl"
     metadata_source: robot
-    task: "Pick one glass, cup, or bowl from the table and place it in the dishware container."
+    task: "Pick the bowl from the left side of the table and place it on the tablecloth."
     policy_variant: act
     policy_variants:
       act:
         type: act
         device: cuda
-        pretrained_path: "TODO_ACT_PICK_AND_STORE_DISHWARE"
+        pretrained_path: "TODO_ACT_PLACE_BOWL"
         n_action_steps: 16
         chunk_size: 16
       smolvla:
         type: smolvla
         device: cuda
-        pretrained_path: "TODO_SMOLVLA_PICK_AND_STORE_DISHWARE"
+        pretrained_path: "TODO_SMOLVLA_PLACE_BOWL"
         n_action_steps: 50
         chunk_size: 50
         num_steps: 10
       diffusion:
         type: diffusion
         device: cuda
-        pretrained_path: "TODO_DIFFUSION_PICK_AND_STORE_DISHWARE"
+        pretrained_path: "TODO_DIFFUSION_PLACE_BOWL"
         n_action_steps: 8
         horizon: 16
       multi_task_dit:
         type: multi_task_dit
         device: cuda
-        pretrained_path: "TODO_MULTI_TASK_DIT_PICK_AND_STORE_DISHWARE"
+        pretrained_path: "TODO_MULTI_TASK_DIT_PLACE_BOWL"
         n_action_steps: 24
         horizon: 32
       vqbet:
         type: vqbet
         device: cuda
-        pretrained_path: "TODO_VQBET_PICK_AND_STORE_DISHWARE"
+        pretrained_path: "TODO_VQBET_PLACE_BOWL"
         n_obs_steps: 5
         n_action_pred_token: 3
         action_chunk_size: 5
       pi0:
         type: pi0
         device: cuda
-        pretrained_path: "TODO_PI0_PICK_AND_STORE_DISHWARE"
+        pretrained_path: "TODO_PI0_PLACE_BOWL"
         n_action_steps: 50
         chunk_size: 50
       pi0_fast:
         type: pi0_fast
         device: cuda
-        pretrained_path: "TODO_PI0_FAST_PICK_AND_STORE_DISHWARE"
+        pretrained_path: "TODO_PI0_FAST_PLACE_BOWL"
         n_action_steps: 50
         chunk_size: 50
       pi05:
         type: pi05
         device: cuda
-        pretrained_path: "TODO_PI05_PICK_AND_STORE_DISHWARE"
+        pretrained_path: "TODO_PI05_PLACE_BOWL"
         n_action_steps: 50
         chunk_size: 50
       groot:
         type: groot
         device: cuda
-        pretrained_path: "TODO_GROOT_PICK_AND_STORE_DISHWARE"
+        pretrained_path: "TODO_GROOT_PLACE_BOWL"
         n_action_steps: 50
         chunk_size: 50
       xvla:
         type: xvla
         device: cuda
-        pretrained_path: "TODO_XVLA_PICK_AND_STORE_DISHWARE"
+        pretrained_path: "TODO_XVLA_PLACE_BOWL"
         n_action_steps: 32
         chunk_size: 32
       wall_x:
         type: wall_x
         device: cuda
-        pretrained_path: "TODO_WALL_X_PICK_AND_STORE_DISHWARE"
+        pretrained_path: "TODO_WALL_X_PLACE_BOWL"
         n_action_steps: 32
         chunk_size: 32
       tdmpc:
         type: tdmpc
         device: cuda
-        pretrained_path: "TODO_TDMPC_PICK_AND_STORE_DISHWARE"
+        pretrained_path: "TODO_TDMPC_PLACE_BOWL"
         n_action_steps: 1
         horizon: 5
         n_action_repeats: 2
       sac:
         type: sac
         device: cuda
-        pretrained_path: "TODO_SAC_PICK_AND_STORE_DISHWARE"
+        pretrained_path: "TODO_SAC_PLACE_BOWL"
       reward_classifier:
         type: reward_classifier
         device: cuda
-        pretrained_path: "TODO_REWARD_CLASSIFIER_PICK_AND_STORE_DISHWARE"
+        pretrained_path: "TODO_REWARD_CLASSIFIER_PLACE_BOWL"
       sarm:
         type: sarm
         device: cuda
-        pretrained_path: "TODO_SARM_PICK_AND_STORE_DISHWARE"
+        pretrained_path: "TODO_SARM_PLACE_BOWL"
     transition:
       mode: timeout
       max_duration_s: 120.0
