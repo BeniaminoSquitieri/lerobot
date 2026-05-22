@@ -1,0 +1,116 @@
+<!--
+  @file set_breakfast_table.xml
+  @brief Robot task for setting the breakfast table with VLM verification.
+
+  Context:
+  - The task describes how to set the table for breakfast.
+  - At the beginning, all objects are on the left side, outside the tablecloth.
+  - The VLM does not perform actions: it only checks whether the expected scene
+    is present.
+  - If the tablecloth has not been laid out, the BT does not start and keeps
+    waiting for the verdict that indicates the tablecloth is missing.
+
+  Sequence:
+  1. The human lays out the tablecloth.
+  2. The robot places the cereal box.
+  3. The human places the tea box.
+  4. The robot places the bottle.
+  5. The robot places the cup.
+  6. The robot places the bowl.
+  7. The human places the spoon.
+  8. The VLM confirms that the breakfast table is fully set.
+-->
+<root BTCPP_format="4" main_tree_to_execute="MainTree">
+  <BehaviorTree ID="MainTree">
+    <Sequence name="Breakfast table setup with VLM checks">
+      <RetryUntilSuccessful name="SCENE 0 - Tablecloth must be placed before starting" num_attempts="{tablecloth_ready_max_attempts}">
+        <Sequence name="Wait until the human has placed the tablecloth">
+          <OpenVLMGate name="Ask VLM to confirm tablecloth is placed" gate_name="{tablecloth_ready_gate}"/>
+          <WaitForVLMVerdict name="Wait until tablecloth is present on the table" check_name="{tablecloth_ready_gate}"/>
+        </Sequence>
+      </RetryUntilSuccessful>
+
+      <RetryUntilSuccessful name="SCENE 1 - Robot places the cereal box" num_attempts="{place_cereal_box_max_attempts}">
+        <Sequence name="Place cereal box, then verify it is on the tablecloth">
+          <RunRobotSkill
+            name="Robot places the cereal box"
+            skill_name="{place_cereal_box_skill}"
+            timeout_s="{place_cereal_box_timeout_s}"/>
+          <WaitForVLMVerdict
+            name="Wait until cereal box is correctly placed"
+            check_name="{place_cereal_box_skill}"/>
+        </Sequence>
+      </RetryUntilSuccessful>
+
+      <RetryUntilSuccessful name="SCENE 2 - Human places the tea box" num_attempts="{tea_box_ready_max_attempts}">
+        <Sequence name="Wait until the human has placed the tea box">
+          <OpenVLMGate name="Ask VLM to confirm tea box placement" gate_name="{tea_box_ready_gate}"/>
+          <WaitForVLMVerdict name="Wait until tea box is correctly placed" check_name="{tea_box_ready_gate}"/>
+        </Sequence>
+      </RetryUntilSuccessful>
+
+      <RetryUntilSuccessful name="SCENE 3 - Robot places the bottle" num_attempts="{place_bottle_max_attempts}">
+        <Sequence name="Place bottle, then verify it is on the tablecloth">
+          <RunRobotSkill
+            name="Robot places the bottle"
+            skill_name="{place_bottle_skill}"
+            timeout_s="{place_bottle_timeout_s}"/>
+          <WaitForVLMVerdict
+            name="Wait until bottle is correctly placed"
+            check_name="{place_bottle_skill}"/>
+        </Sequence>
+      </RetryUntilSuccessful>
+
+      <RetryUntilSuccessful name="SCENE 4 - Robot places the cup" num_attempts="{place_cup_max_attempts}">
+        <Sequence name="Place cup, then verify it is on the tablecloth">
+          <RunRobotSkill
+            name="Robot places the cup"
+            skill_name="{place_cup_skill}"
+            timeout_s="{place_cup_timeout_s}"/>
+          <WaitForVLMVerdict
+            name="Wait until cup is correctly placed"
+            check_name="{place_cup_skill}"/>
+        </Sequence>
+      </RetryUntilSuccessful>
+
+      <RetryUntilSuccessful name="SCENE 5 - Robot places the bowl" num_attempts="{place_bowl_max_attempts}">
+        <Sequence name="Place bowl, then verify it is on the tablecloth">
+          <RunRobotSkill
+            name="Robot places the bowl"
+            skill_name="{place_bowl_skill}"
+            timeout_s="{place_bowl_timeout_s}"/>
+          <WaitForVLMVerdict
+            name="Wait until bowl is correctly placed"
+            check_name="{place_bowl_skill}"/>
+        </Sequence>
+      </RetryUntilSuccessful>
+
+      <RetryUntilSuccessful name="SCENE 6 - Human places the spoon" num_attempts="{spoon_ready_max_attempts}">
+        <Sequence name="Wait until the human has placed the spoon">
+          <OpenVLMGate name="Ask VLM to confirm spoon placement" gate_name="{spoon_ready_gate}"/>
+          <WaitForVLMVerdict name="Wait until spoon is correctly placed" check_name="{spoon_ready_gate}"/>
+        </Sequence>
+      </RetryUntilSuccessful>
+
+      <RetryUntilSuccessful name="TASK COMPLETE - Breakfast table is ready" num_attempts="{task_complete_max_attempts}">
+        <Sequence name="Enable final breakfast-table check, then wait for final verdict">
+          <OpenVLMGate name="Ask VLM to check final breakfast-table state" gate_name="{task_complete_gate}"/>
+          <WaitForVLMVerdict name="Wait for final breakfast-table verdict" check_name="{task_complete_gate}"/>
+        </Sequence>
+      </RetryUntilSuccessful>
+    </Sequence>
+  </BehaviorTree>
+
+  <TreeNodesModel>
+    <Action ID="OpenVLMGate">
+      <input_port name="gate_name"/>
+    </Action>
+    <Action ID="RunRobotSkill">
+      <input_port name="skill_name"/>
+      <input_port name="timeout_s"/>
+    </Action>
+    <Action ID="WaitForVLMVerdict">
+      <input_port name="check_name"/>
+    </Action>
+  </TreeNodesModel>
+</root>
