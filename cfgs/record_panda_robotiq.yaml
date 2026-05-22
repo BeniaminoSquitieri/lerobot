@@ -27,12 +27,12 @@ robot:
       # ros_topic: /topic
 
 dataset:
-  repo_id: Squitieri/eval_close_machine_smolvla_bs8_5k
-  single_task: close the coffee machine
+  repo_id: Squitieri/pick_cereal_box
+  single_task: pick the cereal box on the table 
   fps: 10
   episode_time_s: 2000
   reset_time_s: 0
-  num_episodes: 10
+  num_episodes: 20
   video: true
   push_to_hub: true
   private: true
@@ -43,10 +43,10 @@ dataset:
   force_cache_sync: true
 
 # DECOMMENT TO USE DAGGER
-# teleop:
-#   type: metaquest_rail
-# teleop_action_processor:
-#   steps: [clutch_processor]  #, arm_absolute_to_delta]
+teleop:
+  type: metaquest_rail
+teleop_action_processor:
+  steps: [clutch_processor]  #, arm_absolute_to_delta]
 
 robot_action_processor:
   steps: []
@@ -58,17 +58,17 @@ teleop_recording_mode: corrections_only
 
 display_data: true
 play_sounds: true
-resume: false
+resume: true
 
-policy:
-  type: smolvla
-  pretrained_path: Squitieri/close_machine_smolvla_bs8_5k
-  device: cuda
-  chunk_size: 50
-  n_action_steps: 16
-  load_vlm_weights: false
-  compile_model: false
-  use_amp: false
+# policy:
+#   type: smolvla
+#   pretrained_path: Squitieri/close_machine_smolvla_bs8_5k
+#   device: cuda
+#   chunk_size: 50
+#   n_action_steps: 16
+#   load_vlm_weights: false
+#   compile_model: false
+#   use_amp: false
   
 
 # policy:
