@@ -73,7 +73,14 @@
         </Sequence>
       </RetryUntilSuccessful>
 
-      <RetryUntilSuccessful name="SCENE 5 - Robot places the bowl" num_attempts="{place_bowl_max_attempts}">
+      <RetryUntilSuccessful name="SCENE 5 - Human places the spoon" num_attempts="{spoon_ready_max_attempts}">
+        <Sequence name="Wait until the human has placed the spoon">
+          <OpenVLMGate name="Ask VLM to confirm spoon placement" gate_name="{spoon_ready_gate}"/>
+          <WaitForVLMVerdict name="Wait until spoon is correctly placed" check_name="{spoon_ready_gate}"/>
+        </Sequence>
+      </RetryUntilSuccessful>
+
+      <RetryUntilSuccessful name="SCENE 6 - Robot places the bowl" num_attempts="{place_bowl_max_attempts}">
         <Sequence name="Place bowl, then verify it is on the tablecloth">
           <RunRobotSkill
             name="Robot places the bowl"
@@ -82,13 +89,6 @@
           <WaitForVLMVerdict
             name="Wait until bowl is correctly placed"
             check_name="{place_bowl_skill}"/>
-        </Sequence>
-      </RetryUntilSuccessful>
-
-      <RetryUntilSuccessful name="SCENE 6 - Human places the spoon" num_attempts="{spoon_ready_max_attempts}">
-        <Sequence name="Wait until the human has placed the spoon">
-          <OpenVLMGate name="Ask VLM to confirm spoon placement" gate_name="{spoon_ready_gate}"/>
-          <WaitForVLMVerdict name="Wait until spoon is correctly placed" check_name="{spoon_ready_gate}"/>
         </Sequence>
       </RetryUntilSuccessful>
 

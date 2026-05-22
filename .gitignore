@@ -174,11 +174,8 @@ outputs/
 
 # Dev folders
 .cache/*
-<<<<<<< HEAD
 *.stl
-=======
->>>>>>> origin/leap-branch
 # *.urdf
 *.xml
-src/lerobot/robots/ergocub/ergocub_hand_left/
-src/lerobot/robots/ergocub/ergocub_hand_right/
+!src/**/package.xml
+!src/lerobot_bt_runtime_cpp/trees/*.xml

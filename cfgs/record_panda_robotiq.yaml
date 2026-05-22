@@ -27,12 +27,12 @@ robot:
       # ros_topic: /topic
 
 dataset:
-  repo_id: Squitieri/pick_cereal_box
-  single_task: pick the cereal box on the table 
+  repo_id: Squitieri/breakfast_pick_bowl
+  single_task: Pick the bowl on the table 
   fps: 10
   episode_time_s: 2000
   reset_time_s: 0
-  num_episodes: 20
+  num_episodes: 10
   video: true
   push_to_hub: true
   private: true
@@ -73,7 +73,7 @@ resume: true
 
 # policy:
 #   type: act
-#   pretrained_path: Squitieri/act_put_coffee
+#   pretrained_path: act_toast_pick_and_place
 #   device: cuda
 #   n_action_steps: 16
 #   chunk_size: 16
