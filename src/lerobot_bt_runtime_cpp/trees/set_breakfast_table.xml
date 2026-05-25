@@ -16,8 +16,8 @@
   3. The human places the tea box.
   4. The robot places the bottle.
   5. The robot places the cup.
-  6. The robot places the bowl.
-  7. The human places the spoon.
+  6. The human places the spoon.
+  7. The robot places the bowl.
   8. The VLM confirms that the breakfast table is fully set.
 -->
 <root BTCPP_format="4" main_tree_to_execute="MainTree">
@@ -25,8 +25,8 @@
     <Sequence name="Breakfast table setup with VLM checks">
       <RetryUntilSuccessful name="SCENE 0 - Tablecloth must be placed before starting" num_attempts="{tablecloth_ready_max_attempts}">
         <Sequence name="Wait until the human has placed the tablecloth">
-          <OpenVLMGate name="Ask VLM to confirm tablecloth is placed" gate_name="{tablecloth_ready_gate}"/>
-          <WaitForVLMVerdict name="Wait until tablecloth is present on the table" check_name="{tablecloth_ready_gate}"/>
+          <OpenVLMGate name="Check tablecloth is placed" gate_name="{tablecloth_ready_gate}"/>
+          <WaitForVLMVerdict name="Wait for tablecloth on the table" check_name="{tablecloth_ready_gate}"/>
         </Sequence>
       </RetryUntilSuccessful>
 
@@ -37,15 +37,15 @@
             skill_name="{place_cereal_box_skill}"
             timeout_s="{place_cereal_box_timeout_s}"/>
           <WaitForVLMVerdict
-            name="Wait until cereal box is correctly placed"
+            name="Wait for cereal box placed"
             check_name="{place_cereal_box_skill}"/>
         </Sequence>
       </RetryUntilSuccessful>
 
       <RetryUntilSuccessful name="SCENE 2 - Human places the tea box" num_attempts="{tea_box_ready_max_attempts}">
         <Sequence name="Wait until the human has placed the tea box">
-          <OpenVLMGate name="Ask VLM to confirm tea box placement" gate_name="{tea_box_ready_gate}"/>
-          <WaitForVLMVerdict name="Wait until tea box is correctly placed" check_name="{tea_box_ready_gate}"/>
+          <OpenVLMGate name="Check tea box is placed" gate_name="{tea_box_ready_gate}"/>
+          <WaitForVLMVerdict name="Wait for tea box placed" check_name="{tea_box_ready_gate}"/>
         </Sequence>
       </RetryUntilSuccessful>
 
@@ -56,7 +56,7 @@
             skill_name="{place_bottle_skill}"
             timeout_s="{place_bottle_timeout_s}"/>
           <WaitForVLMVerdict
-            name="Wait until bottle is correctly placed"
+            name="Wait for bottle placed"
             check_name="{place_bottle_skill}"/>
         </Sequence>
       </RetryUntilSuccessful>
@@ -68,15 +68,15 @@
             skill_name="{place_cup_skill}"
             timeout_s="{place_cup_timeout_s}"/>
           <WaitForVLMVerdict
-            name="Wait until cup is correctly placed"
+            name="Wait for cup placed"
             check_name="{place_cup_skill}"/>
         </Sequence>
       </RetryUntilSuccessful>
 
       <RetryUntilSuccessful name="SCENE 5 - Human places the spoon" num_attempts="{spoon_ready_max_attempts}">
         <Sequence name="Wait until the human has placed the spoon">
-          <OpenVLMGate name="Ask VLM to confirm spoon placement" gate_name="{spoon_ready_gate}"/>
-          <WaitForVLMVerdict name="Wait until spoon is correctly placed" check_name="{spoon_ready_gate}"/>
+          <OpenVLMGate name="Check spoon is placed" gate_name="{spoon_ready_gate}"/>
+          <WaitForVLMVerdict name="Wait for spoon placed" check_name="{spoon_ready_gate}"/>
         </Sequence>
       </RetryUntilSuccessful>
 
@@ -87,15 +87,15 @@
             skill_name="{place_bowl_skill}"
             timeout_s="{place_bowl_timeout_s}"/>
           <WaitForVLMVerdict
-            name="Wait until bowl is correctly placed"
+            name="Wait for bowl placed"
             check_name="{place_bowl_skill}"/>
         </Sequence>
       </RetryUntilSuccessful>
 
       <RetryUntilSuccessful name="TASK COMPLETE - Breakfast table is ready" num_attempts="{task_complete_max_attempts}">
         <Sequence name="Enable final breakfast-table check, then wait for final verdict">
-          <OpenVLMGate name="Ask VLM to check final breakfast-table state" gate_name="{task_complete_gate}"/>
-          <WaitForVLMVerdict name="Wait for final breakfast-table verdict" check_name="{task_complete_gate}"/>
+          <OpenVLMGate name="Check breakfast table is ready" gate_name="{task_complete_gate}"/>
+          <WaitForVLMVerdict name="Wait for final confirmation" check_name="{task_complete_gate}"/>
         </Sequence>
       </RetryUntilSuccessful>
     </Sequence>

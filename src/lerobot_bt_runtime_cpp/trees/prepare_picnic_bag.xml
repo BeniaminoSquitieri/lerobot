@@ -12,25 +12,25 @@
     <Sequence name="Prepare picnic bag - VLM scene gates">
       <RetryUntilSuccessful name="SCENE 0 - Picnic scene ready" num_attempts="{initial_scene_ready_max_attempts}">
         <Sequence name="Open setup gate, then wait for scene 0">
-          <OpenVLMGate name="Open scene 0 gate" gate_name="{initial_scene_ready_gate}"/>
-          <WaitForVLMVerdict name="Wait scene 0 ready" check_name="{initial_scene_ready_gate}"/>
+          <OpenVLMGate name="Check picnic scene is ready" gate_name="{initial_scene_ready_gate}"/>
+          <WaitForVLMVerdict name="Wait for scene ready" check_name="{initial_scene_ready_gate}"/>
         </Sequence>
       </RetryUntilSuccessful>
 
       <RetryUntilSuccessful name="SCENE 1 - Human opens the bag" num_attempts="{human_open_bag_max_attempts}">
         <Sequence name="Open human-open-bag gate, then wait for bag ready">
-          <OpenVLMGate name="Open human-open-bag gate" gate_name="{human_open_bag_gate}"/>
+          <OpenVLMGate name="Check bag is open and held" gate_name="{human_open_bag_gate}"/>
           <WaitForVLMVerdict
-            name="Wait scene 1 ready - bag open"
+            name="Wait for bag open"
             check_name="{human_open_bag_gate}"/>
         </Sequence>
       </RetryUntilSuccessful>
 
       <RetryUntilSuccessful name="SCENE 2 - Human inserts Monster drink" num_attempts="{human_insert_monster_max_attempts}">
         <Sequence name="Open human-insert-monster gate, then wait for scene 2">
-          <OpenVLMGate name="Open human-insert-monster gate" gate_name="{human_insert_monster_gate}"/>
+          <OpenVLMGate name="Check Monster drink is inside" gate_name="{human_insert_monster_gate}"/>
           <WaitForVLMVerdict
-            name="Wait scene 2 ready - Monster drink bagged"
+            name="Wait for Monster drink bagged"
             check_name="{human_insert_monster_gate}"/>
         </Sequence>
       </RetryUntilSuccessful>
@@ -42,16 +42,16 @@
             skill_name="{bag_bread_skill}"
             timeout_s="{bag_bread_timeout_s}"/>
           <WaitForVLMVerdict
-            name="Wait scene 3 ready - bread bagged"
+            name="Wait for bread bagged"
             check_name="{bag_bread_skill}"/>
         </Sequence>
       </RetryUntilSuccessful>
 
       <RetryUntilSuccessful name="SCENE 4 - Human inserts mustard" num_attempts="{human_insert_mustard_max_attempts}">
         <Sequence name="Open human-insert-mustard gate, then wait for scene 4">
-          <OpenVLMGate name="Open human-insert-mustard gate" gate_name="{human_insert_mustard_gate}"/>
+          <OpenVLMGate name="Check mustard is inside" gate_name="{human_insert_mustard_gate}"/>
           <WaitForVLMVerdict
-            name="Wait scene 4 ready - mustard bagged"
+            name="Wait for mustard bagged"
             check_name="{human_insert_mustard_gate}"/>
         </Sequence>
       </RetryUntilSuccessful>
@@ -63,7 +63,7 @@
             skill_name="{bag_pear_skill}"
             timeout_s="{bag_pear_timeout_s}"/>
           <WaitForVLMVerdict
-            name="Wait task complete - pear bagged"
+            name="Wait for pear bagged"
             check_name="{bag_pear_skill}"/>
         </Sequence>
       </RetryUntilSuccessful>

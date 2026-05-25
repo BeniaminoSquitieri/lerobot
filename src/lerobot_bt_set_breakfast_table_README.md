@@ -87,18 +87,18 @@ ros2 topic pub --once /lerobot_bt/vlm_result std_msgs/msg/String \
   "{data: '{\"skill_name\":\"place_cup\",\"attempt_id\":0,\"status\":\"SUCCESS\",\"message\":\"cup placed\"}'}"
 ```
 
-Robot places bowl:
-
-```bash
-ros2 topic pub --once /lerobot_bt/vlm_result std_msgs/msg/String \
-  "{data: '{\"skill_name\":\"place_bowl\",\"attempt_id\":0,\"status\":\"SUCCESS\",\"message\":\"bowl placed\"}'}"
-```
-
 Human places spoon:
 
 ```bash
 ros2 topic pub --once /lerobot_bt/vlm_result std_msgs/msg/String \
   "{data: '{\"skill_name\":\"breakfast_table.spoon_ready\",\"attempt_id\":0,\"status\":\"SUCCESS\",\"message\":\"spoon placed\"}'}"
+```
+
+Robot places bowl:
+
+```bash
+ros2 topic pub --once /lerobot_bt/vlm_result std_msgs/msg/String \
+  "{data: '{\"skill_name\":\"place_bowl\",\"attempt_id\":0,\"status\":\"SUCCESS\",\"message\":\"bowl placed\"}'}"
 ```
 
 Task complete:

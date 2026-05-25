@@ -12,16 +12,16 @@
     <Sequence name="Make coffee - VLM scene gates">
       <RetryUntilSuccessful name="SCENE 0 - Coffee setup ready" num_attempts="{initial_scene_ready_max_attempts}">
         <Sequence name="Open setup gate, then wait for scene 0">
-          <OpenVLMGate name="Open scene 0 gate" gate_name="{initial_scene_ready_gate}"/>
-          <WaitForVLMVerdict name="Wait scene 0 ready" check_name="{initial_scene_ready_gate}"/>
+          <OpenVLMGate name="Check coffee setup is ready" gate_name="{initial_scene_ready_gate}"/>
+          <WaitForVLMVerdict name="Wait for setup ready" check_name="{initial_scene_ready_gate}"/>
         </Sequence>
       </RetryUntilSuccessful>
 
       <RetryUntilSuccessful name="SCENE 1 - Human places cup under dispenser" num_attempts="{cup_under_dispenser_max_attempts}">
         <Sequence name="Open cup-placement gate, then wait for scene 1">
-          <OpenVLMGate name="Open cup-under-dispenser gate" gate_name="{cup_under_dispenser_gate}"/>
+          <OpenVLMGate name="Check cup is under dispenser" gate_name="{cup_under_dispenser_gate}"/>
           <WaitForVLMVerdict
-            name="Wait scene 1 ready - cup under dispenser"
+            name="Wait for cup under dispenser"
             check_name="{cup_under_dispenser_gate}"/>
         </Sequence>
       </RetryUntilSuccessful>
@@ -33,7 +33,7 @@
             skill_name="{pick_and_insert_capsule_skill}"
             timeout_s="{pick_and_insert_capsule_timeout_s}"/>
           <WaitForVLMVerdict
-            name="Wait scene 2 ready - capsule inserted"
+            name="Wait for capsule inserted"
             check_name="{pick_and_insert_capsule_skill}"/>
         </Sequence>
       </RetryUntilSuccessful>
@@ -45,16 +45,16 @@
             skill_name="{close_coffee_machine_skill}"
             timeout_s="{close_coffee_machine_timeout_s}"/>
           <WaitForVLMVerdict
-            name="Wait scene 3 ready - machine closed"
+            name="Wait for machine closed"
             check_name="{close_coffee_machine_skill}"/>
         </Sequence>
       </RetryUntilSuccessful>
 
       <RetryUntilSuccessful name="TASK COMPLETE - Human starts coffee" num_attempts="{human_press_start_button_max_attempts}">
         <Sequence name="Open human-start gate, then wait for extraction">
-          <OpenVLMGate name="Open human-press-start gate" gate_name="{human_press_start_button_gate}"/>
+          <OpenVLMGate name="Check coffee extraction started" gate_name="{human_press_start_button_gate}"/>
           <WaitForVLMVerdict
-            name="Wait task complete - extraction started"
+            name="Wait for extraction started"
             check_name="{human_press_start_button_gate}"/>
         </Sequence>
       </RetryUntilSuccessful>

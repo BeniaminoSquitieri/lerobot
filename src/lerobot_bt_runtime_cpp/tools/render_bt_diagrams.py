@@ -36,6 +36,23 @@ NODE_STYLE = {
     "WaitForVLMVerdict": ("#ffe8dc", "#b85c2e"),
 }
 DEFAULT_STYLE = ("#f6f7f9", "#667085")
+
+# Human-friendly labels that replace technical C++ node-type names in rendered diagrams.
+TAG_HUMAN_LABEL: dict[str, str] = {
+    "Sequence": "",
+    "RetryUntilSuccessful": "↻ Retry on failure",
+    "OpenVLMGate": "Scene check",
+    "WaitForVLMVerdict": "Wait for OK",
+    "RunRobotSkill": "Robot action",
+}
+
+# Human-friendly attribute names shown in diagram nodes.
+ATTR_HUMAN_LABEL: dict[str, str] = {
+    "skill_name": "action",
+    "timeout_s": "timeout",
+    "num_attempts": "max tries",
+}
+
 BOX_RADIUS = 12
 BOX_GAP_X = 36
 BOX_GAP_Y = 64
@@ -97,18 +114,40 @@ def resolve_value(raw_value: str, profile: dict[str, str]) -> str:
 
 
 def node_lines(element: ElementTree.Element, profile: dict[str, str]) -> list[str]:
-    """Build plain-text lines shared by Graphviz and Pillow renderers."""
-    rows = [element.attrib.get("name", element.tag), element.tag]
+    """Build plain-text lines shared by Graphviz and Pillow renderers.
 
-    for key in ("skill_name", "gate_name", "check_name", "timeout_s", "num_attempts"):
-        if key in element.attrib:
-            value = resolve_value(element.attrib[key], profile)
-            rows.append(f"{key}={value}")
+    Technical C++ node-type names and ROS-specific details are replaced with
+    human-friendly labels so that every diagram reads like a natural task
+    description.
+    """
+    rows = [element.attrib.get("name", element.tag)]
 
+    # Second line: human-friendly node-type label (hidden for Sequence).
+    human_tag = TAG_HUMAN_LABEL.get(element.tag, element.tag)
+    if human_tag:
+        rows.append(human_tag)
+
+    # Show only the skill/action name (not internal gate/checkpoint keys).
+    if "skill_name" in element.attrib:
+        value = resolve_value(element.attrib["skill_name"], profile)
+        rows.append(f"action: {value}")
+
+    # Timeout – only when it carries information.
+    if "timeout_s" in element.attrib:
+        value = resolve_value(element.attrib["timeout_s"], profile)
+        rows.append(f"timeout: {value}s")
+
+    # Max attempts – skip the "-1" (infinite) placeholder.
+    if "num_attempts" in element.attrib:
+        value = resolve_value(element.attrib["num_attempts"], profile)
+        if value != "-1":
+            rows.append(f"max tries: {value}")
+
+    # Human-friendly descriptions instead of ROS topic internals.
     if element.tag == "OpenVLMGate":
-        rows.append("publish /lerobot_bt/vlm_request")
+        rows.append("→ asks for scene verification")
     if element.tag == "WaitForVLMVerdict":
-        rows.append("wait /lerobot_bt/vlm_result to advance")
+        rows.append("→ waits for confirmation")
 
     return rows
 

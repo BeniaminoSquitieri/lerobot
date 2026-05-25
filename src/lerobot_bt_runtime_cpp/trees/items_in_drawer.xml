@@ -25,14 +25,14 @@
     <Sequence name="Items in drawer - human opens, robot inserts, human closes">
       <RetryUntilSuccessful name="SCENE 0 - Initial drawer workspace is ready" num_attempts="{initial_scene_ready_max_attempts}">
         <Sequence name="Enable initial-scene check, then wait for VLM readiness">
-          <OpenVLMGate name="Ask VLM to check initial drawer workspace" gate_name="{initial_scene_ready_gate}"/>
+          <OpenVLMGate name="Check initial drawer workspace" gate_name="{initial_scene_ready_gate}"/>
           <WaitForVLMVerdict name="Wait until workspace is ready" check_name="{initial_scene_ready_gate}"/>
         </Sequence>
       </RetryUntilSuccessful>
 
       <RetryUntilSuccessful name="SCENE 1 - Human has opened the drawer" num_attempts="{drawer_open_gate_max_attempts}">
         <Sequence name="Enable drawer-open check, then wait for human action">
-          <OpenVLMGate name="Ask VLM to check drawer is open" gate_name="{drawer_open_gate}"/>
+          <OpenVLMGate name="Check drawer is open" gate_name="{drawer_open_gate}"/>
           <WaitForVLMVerdict
             name="Wait until drawer is open"
             check_name="{drawer_open_gate}"/>
@@ -46,14 +46,14 @@
             skill_name="{insert_next_drawer_item_skill}"
             timeout_s="{insert_next_drawer_item_timeout_s}"/>
           <WaitForVLMVerdict
-            name="Wait for VLM verdict: complete or retry insertion"
+            name="Wait for confirmation: all items inside?"
             check_name="{insert_next_drawer_item_skill}"/>
         </Sequence>
       </RetryUntilSuccessful>
 
       <RetryUntilSuccessful name="SCENE 3 - Human has closed the drawer" num_attempts="{drawer_closed_gate_max_attempts}">
         <Sequence name="Enable drawer-closed check, then wait for human action">
-          <OpenVLMGate name="Ask VLM to check drawer is closed" gate_name="{drawer_closed_gate}"/>
+          <OpenVLMGate name="Check drawer is closed" gate_name="{drawer_closed_gate}"/>
           <WaitForVLMVerdict
             name="Wait until drawer is closed"
             check_name="{drawer_closed_gate}"/>
@@ -62,8 +62,8 @@
 
       <RetryUntilSuccessful name="TASK COMPLETE - Drawer insertion task is complete" num_attempts="{task_complete_max_attempts}">
         <Sequence name="Enable final task-complete check, then wait for final verdict">
-          <OpenVLMGate name="Ask VLM to check final drawer task state" gate_name="{task_complete_gate}"/>
-          <WaitForVLMVerdict name="Wait for final task-complete verdict" check_name="{task_complete_gate}"/>
+          <OpenVLMGate name="Check final drawer task state" gate_name="{task_complete_gate}"/>
+          <WaitForVLMVerdict name="Wait for final confirmation" check_name="{task_complete_gate}"/>
         </Sequence>
       </RetryUntilSuccessful>
     </Sequence>
