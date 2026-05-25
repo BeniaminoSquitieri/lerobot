@@ -2,75 +2,43 @@
   @file make_coffee.xml
   @brief Scene-gated coffee preparation task.
 
-  The human places the cup under the dispenser and later presses the start
-  button. The robot inserts the capsule and closes the coffee machine. Every
-  robot BC stage advances only after the VLM topic confirms the post-skill
-  scene; human-only steps are represented as VLM gates.
+  The human places the cup and presses the start button. The robot inserts the
+  capsule and closes the machine. Every stage is a single merged leaf
+  (AwaitScene or DoSkill) that combines action with VLM verification — halving
+  the node count vs. the old OpenVLMGate+WaitForVLMVerdict pairs.
 -->
 <root BTCPP_format="4" main_tree_to_execute="MainTree">
   <BehaviorTree ID="MainTree">
-    <Sequence name="Make coffee - VLM scene gates">
-      <RetryUntilSuccessful name="SCENE 0 - Coffee setup ready" num_attempts="{initial_scene_ready_max_attempts}">
-        <Sequence name="Open setup gate, then wait for scene 0">
-          <OpenVLMGate name="Check coffee setup is ready" gate_name="{initial_scene_ready_gate}"/>
-          <WaitForVLMVerdict name="Wait for setup ready" check_name="{initial_scene_ready_gate}"/>
-        </Sequence>
+    <Sequence name="Make coffee">
+      <RetryUntilSuccessful name="Setup ready" num_attempts="{initial_scene_ready_max_attempts}">
+        <AwaitScene name="Check coffee setup is ready" scene_name="{initial_scene_ready_gate}"/>
       </RetryUntilSuccessful>
 
-      <RetryUntilSuccessful name="SCENE 1 - Human places cup under dispenser" num_attempts="{cup_under_dispenser_max_attempts}">
-        <Sequence name="Open cup-placement gate, then wait for scene 1">
-          <OpenVLMGate name="Check cup is under dispenser" gate_name="{cup_under_dispenser_gate}"/>
-          <WaitForVLMVerdict
-            name="Wait for cup under dispenser"
-            check_name="{cup_under_dispenser_gate}"/>
-        </Sequence>
+      <RetryUntilSuccessful name="Cup under dispenser" num_attempts="{cup_under_dispenser_max_attempts}">
+        <AwaitScene name="Check cup is under dispenser" scene_name="{cup_under_dispenser_gate}"/>
       </RetryUntilSuccessful>
 
-      <RetryUntilSuccessful name="SCENE 2 - Capsule inserted" num_attempts="{pick_and_insert_capsule_max_attempts}">
-        <Sequence name="Insert capsule, then check scene 2">
-          <RunRobotSkill
-            name="Pick and insert capsule"
-            skill_name="{pick_and_insert_capsule_skill}"
-            timeout_s="{pick_and_insert_capsule_timeout_s}"/>
-          <WaitForVLMVerdict
-            name="Wait for capsule inserted"
-            check_name="{pick_and_insert_capsule_skill}"/>
-        </Sequence>
+      <RetryUntilSuccessful name="Insert capsule" num_attempts="{pick_and_insert_capsule_max_attempts}">
+        <DoSkill name="Pick and insert capsule" skill_name="{pick_and_insert_capsule_skill}" timeout_s="{pick_and_insert_capsule_timeout_s}"/>
       </RetryUntilSuccessful>
 
-      <RetryUntilSuccessful name="SCENE 3 - Robot closes machine" num_attempts="{close_coffee_machine_max_attempts}">
-        <Sequence name="Close machine, then check scene 3">
-          <RunRobotSkill
-            name="Close coffee machine"
-            skill_name="{close_coffee_machine_skill}"
-            timeout_s="{close_coffee_machine_timeout_s}"/>
-          <WaitForVLMVerdict
-            name="Wait for machine closed"
-            check_name="{close_coffee_machine_skill}"/>
-        </Sequence>
+      <RetryUntilSuccessful name="Close machine" num_attempts="{close_coffee_machine_max_attempts}">
+        <DoSkill name="Close coffee machine" skill_name="{close_coffee_machine_skill}" timeout_s="{close_coffee_machine_timeout_s}"/>
       </RetryUntilSuccessful>
 
-      <RetryUntilSuccessful name="TASK COMPLETE - Human starts coffee" num_attempts="{human_press_start_button_max_attempts}">
-        <Sequence name="Open human-start gate, then wait for extraction">
-          <OpenVLMGate name="Check coffee extraction started" gate_name="{human_press_start_button_gate}"/>
-          <WaitForVLMVerdict
-            name="Wait for extraction started"
-            check_name="{human_press_start_button_gate}"/>
-        </Sequence>
+      <RetryUntilSuccessful name="Start extraction" num_attempts="{human_press_start_button_max_attempts}">
+        <AwaitScene name="Check coffee extraction started" scene_name="{human_press_start_button_gate}"/>
       </RetryUntilSuccessful>
     </Sequence>
   </BehaviorTree>
 
   <TreeNodesModel>
-    <Action ID="OpenVLMGate">
-      <input_port name="gate_name"/>
+    <Action ID="AwaitScene">
+      <input_port name="scene_name"/>
     </Action>
-    <Action ID="RunRobotSkill">
+    <Action ID="DoSkill">
       <input_port name="skill_name"/>
       <input_port name="timeout_s"/>
-    </Action>
-    <Action ID="WaitForVLMVerdict">
-      <input_port name="check_name"/>
     </Action>
   </TreeNodesModel>
 </root>

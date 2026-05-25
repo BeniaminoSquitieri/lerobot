@@ -34,6 +34,8 @@ NODE_STYLE = {
     "RunRobotSkill": ("#e4f8ec", "#16834a"),
     "OpenVLMGate": ("#f2e9ff", "#7353b6"),
     "WaitForVLMVerdict": ("#ffe8dc", "#b85c2e"),
+    "AwaitScene": ("#f2e9ff", "#7353b6"),
+    "DoSkill": ("#e4f8ec", "#16834a"),
 }
 DEFAULT_STYLE = ("#f6f7f9", "#667085")
 
@@ -44,6 +46,8 @@ TAG_HUMAN_LABEL: dict[str, str] = {
     "OpenVLMGate": "Scene check",
     "WaitForVLMVerdict": "Wait for OK",
     "RunRobotSkill": "Robot action",
+    "AwaitScene": "Check & wait",
+    "DoSkill": "Action & verify",
 }
 
 # Human-friendly attribute names shown in diagram nodes.
@@ -127,10 +131,11 @@ def node_lines(element: ElementTree.Element, profile: dict[str, str]) -> list[st
     if human_tag:
         rows.append(human_tag)
 
-    # Show only the skill/action name (not internal gate/checkpoint keys).
-    if "skill_name" in element.attrib:
-        value = resolve_value(element.attrib["skill_name"], profile)
-        rows.append(f"action: {value}")
+    # Show the action/scene name (not internal gate/checkpoint keys).
+    for port in ("skill_name", "scene_name"):
+        if port in element.attrib:
+            value = resolve_value(element.attrib[port], profile)
+            rows.append(f"action: {value}")
 
     # Timeout – only when it carries information.
     if "timeout_s" in element.attrib:

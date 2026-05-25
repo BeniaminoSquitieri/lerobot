@@ -47,6 +47,7 @@ using GrootPublisherT = BT::PublisherZMQ;
 #define LEROBOT_BT_HAS_GROOT2_PUBLISHER 0
 #endif
 
+#include "lerobot_bt_runtime_cpp/await_scene_node.hpp"
 #include "lerobot_bt_runtime_cpp/run_named_command_node.hpp"
 #include "lerobot_bt_runtime_cpp/wait_for_vlm_verdict_node.hpp"
 
@@ -216,6 +217,22 @@ int main(int argc, char** argv)
         config,
         node,
         vlm_state_service);
+    });
+
+  // ---- Merged leaves: one node = action + VLM verification ------------
+  factory.registerBuilder<lerobot_bt_runtime_cpp::AwaitSceneNode>(
+    "AwaitScene",
+    [node, bt_command_service, vlm_state_service](
+      const std::string& instance_name, const BT::NodeConfiguration& config) {
+      return std::make_unique<lerobot_bt_runtime_cpp::AwaitSceneNode>(
+        instance_name, config, node, bt_command_service, vlm_state_service);
+    });
+  factory.registerBuilder<lerobot_bt_runtime_cpp::DoSkillNode>(
+    "DoSkill",
+    [node, bt_command_service, vlm_state_service](
+      const std::string& instance_name, const BT::NodeConfiguration& config) {
+      return std::make_unique<lerobot_bt_runtime_cpp::DoSkillNode>(
+        instance_name, config, node, bt_command_service, vlm_state_service);
     });
 
   // Blackboard: shared key/value store across BT nodes (inputs/outputs).

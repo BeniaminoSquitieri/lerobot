@@ -2,84 +2,46 @@
   @file prepare_picnic_bag.xml
   @brief Scene-gated picnic bag preparation task.
 
-  The VLM/manual verifier starts the BT only when the scene is ready, waits for
-  the human to open and hold the bag, then gates explicit human and robot item
-  insertion steps: human inserts the Monster drink, robot inserts the bread,
-  human inserts the mustard, and robot inserts the pear.
+  Human and robot alternate inserting items into a picnic bag: human opens the
+  bag and inserts Monster+mustard, robot inserts bread+pear. Every stage is a
+  single merged leaf (AwaitScene or DoSkill).
 -->
 <root BTCPP_format="4" main_tree_to_execute="MainTree">
   <BehaviorTree ID="MainTree">
-    <Sequence name="Prepare picnic bag - VLM scene gates">
-      <RetryUntilSuccessful name="SCENE 0 - Picnic scene ready" num_attempts="{initial_scene_ready_max_attempts}">
-        <Sequence name="Open setup gate, then wait for scene 0">
-          <OpenVLMGate name="Check picnic scene is ready" gate_name="{initial_scene_ready_gate}"/>
-          <WaitForVLMVerdict name="Wait for scene ready" check_name="{initial_scene_ready_gate}"/>
-        </Sequence>
+    <Sequence name="Prepare picnic bag">
+      <RetryUntilSuccessful name="Scene ready" num_attempts="{initial_scene_ready_max_attempts}">
+        <AwaitScene name="Check picnic scene is ready" scene_name="{initial_scene_ready_gate}"/>
       </RetryUntilSuccessful>
 
-      <RetryUntilSuccessful name="SCENE 1 - Human opens the bag" num_attempts="{human_open_bag_max_attempts}">
-        <Sequence name="Open human-open-bag gate, then wait for bag ready">
-          <OpenVLMGate name="Check bag is open and held" gate_name="{human_open_bag_gate}"/>
-          <WaitForVLMVerdict
-            name="Wait for bag open"
-            check_name="{human_open_bag_gate}"/>
-        </Sequence>
+      <RetryUntilSuccessful name="Human opens bag" num_attempts="{human_open_bag_max_attempts}">
+        <AwaitScene name="Check bag is open and held" scene_name="{human_open_bag_gate}"/>
       </RetryUntilSuccessful>
 
-      <RetryUntilSuccessful name="SCENE 2 - Human inserts Monster drink" num_attempts="{human_insert_monster_max_attempts}">
-        <Sequence name="Open human-insert-monster gate, then wait for scene 2">
-          <OpenVLMGate name="Check Monster drink is inside" gate_name="{human_insert_monster_gate}"/>
-          <WaitForVLMVerdict
-            name="Wait for Monster drink bagged"
-            check_name="{human_insert_monster_gate}"/>
-        </Sequence>
+      <RetryUntilSuccessful name="Human inserts Monster" num_attempts="{human_insert_monster_max_attempts}">
+        <AwaitScene name="Check Monster drink is inside" scene_name="{human_insert_monster_gate}"/>
       </RetryUntilSuccessful>
 
-      <RetryUntilSuccessful name="SCENE 3 - Robot inserts bread" num_attempts="{bag_bread_max_attempts}">
-        <Sequence name="Bag bread, then check scene 3">
-          <RunRobotSkill
-            name="Bag bread"
-            skill_name="{bag_bread_skill}"
-            timeout_s="{bag_bread_timeout_s}"/>
-          <WaitForVLMVerdict
-            name="Wait for bread bagged"
-            check_name="{bag_bread_skill}"/>
-        </Sequence>
+      <RetryUntilSuccessful name="Robot inserts bread" num_attempts="{bag_bread_max_attempts}">
+        <DoSkill name="Bag bread" skill_name="{bag_bread_skill}" timeout_s="{bag_bread_timeout_s}"/>
       </RetryUntilSuccessful>
 
-      <RetryUntilSuccessful name="SCENE 4 - Human inserts mustard" num_attempts="{human_insert_mustard_max_attempts}">
-        <Sequence name="Open human-insert-mustard gate, then wait for scene 4">
-          <OpenVLMGate name="Check mustard is inside" gate_name="{human_insert_mustard_gate}"/>
-          <WaitForVLMVerdict
-            name="Wait for mustard bagged"
-            check_name="{human_insert_mustard_gate}"/>
-        </Sequence>
+      <RetryUntilSuccessful name="Human inserts mustard" num_attempts="{human_insert_mustard_max_attempts}">
+        <AwaitScene name="Check mustard is inside" scene_name="{human_insert_mustard_gate}"/>
       </RetryUntilSuccessful>
 
-      <RetryUntilSuccessful name="TASK COMPLETE - Robot inserts pear" num_attempts="{bag_pear_max_attempts}">
-        <Sequence name="Bag pear, then check final scene">
-          <RunRobotSkill
-            name="Bag pear"
-            skill_name="{bag_pear_skill}"
-            timeout_s="{bag_pear_timeout_s}"/>
-          <WaitForVLMVerdict
-            name="Wait for pear bagged"
-            check_name="{bag_pear_skill}"/>
-        </Sequence>
+      <RetryUntilSuccessful name="Robot inserts pear" num_attempts="{bag_pear_max_attempts}">
+        <DoSkill name="Bag pear" skill_name="{bag_pear_skill}" timeout_s="{bag_pear_timeout_s}"/>
       </RetryUntilSuccessful>
     </Sequence>
   </BehaviorTree>
 
   <TreeNodesModel>
-    <Action ID="OpenVLMGate">
-      <input_port name="gate_name"/>
+    <Action ID="AwaitScene">
+      <input_port name="scene_name"/>
     </Action>
-    <Action ID="RunRobotSkill">
+    <Action ID="DoSkill">
       <input_port name="skill_name"/>
       <input_port name="timeout_s"/>
-    </Action>
-    <Action ID="WaitForVLMVerdict">
-      <input_port name="check_name"/>
     </Action>
   </TreeNodesModel>
 </root>

@@ -35,6 +35,7 @@ endif()
 # The runner contains two custom BT leaves and the executable entry point.
 add_executable(lerobot_bt_runner
   src/run_named_command_node.cpp
+  src/await_scene_node.cpp
   src/lerobot_bt_main.cpp
   src/wait_for_vlm_verdict_node.cpp
 )
