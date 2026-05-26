@@ -49,7 +49,6 @@ using GrootPublisherT = BT::PublisherZMQ;
 
 #include "lerobot_bt_runtime_cpp/await_scene_node.hpp"
 #include "lerobot_bt_runtime_cpp/run_named_command_node.hpp"
-#include "lerobot_bt_runtime_cpp/wait_for_vlm_verdict_node.hpp"
 
 namespace
 {
@@ -181,45 +180,10 @@ int main(int argc, char** argv)
   declareOrGetParameter<std::string>(node, "bt.place_second_toast_skill", "place_second_toast");
   declareOrGetParameter<double>(node, "bt.place_second_toast_timeout_s", 30.0);
 
-  // BehaviorTreeFactory maps XML tags -> C++ classes (BT nodes).
-  // Register custom tags with builders that inject the ROS2 node and
-  // service names needed by leaf nodes.
-  BT::BehaviorTreeFactory factory;
-  const auto robot_skill_builder =
-    [node, bt_command_service](const std::string& instance_name, const BT::NodeConfiguration& config) {
-      // Leaf that invokes a robot skill via ROS2 service.
-      return std::make_unique<lerobot_bt_runtime_cpp::RunRobotSkillNode>(
-        instance_name,
-        config,
-        node,
-        bt_command_service);
-    };
-  const auto vlm_gate_builder =
-    [node, bt_command_service](const std::string& instance_name, const BT::NodeConfiguration& config) {
-      // Leaf that opens a VLM gate via ROS2 service.
-      return std::make_unique<lerobot_bt_runtime_cpp::OpenVLMGateNode>(
-        instance_name,
-        config,
-        node,
-        bt_command_service);
-    };
-  factory.registerBuilder<lerobot_bt_runtime_cpp::RunRobotSkillNode>(
-    "RunRobotSkill",
-    robot_skill_builder);
-  factory.registerBuilder<lerobot_bt_runtime_cpp::OpenVLMGateNode>(
-    "OpenVLMGate",
-    vlm_gate_builder);
-  factory.registerBuilder<lerobot_bt_runtime_cpp::WaitForVLMVerdictNode>(
-    "WaitForVLMVerdict",
-    [node, vlm_state_service](const std::string& instance_name, const BT::NodeConfiguration& config) {
-      return std::make_unique<lerobot_bt_runtime_cpp::WaitForVLMVerdictNode>(
-        instance_name,
-        config,
-        node,
-        vlm_state_service);
-    });
-
   // ---- Merged leaves: one node = action + VLM verification ------------
+  // These replace the old OpenVLMGate + WaitForVLMVerdict and
+  // RunRobotSkill + WaitForVLMVerdict pairs.
+  BT::BehaviorTreeFactory factory;
   factory.registerBuilder<lerobot_bt_runtime_cpp::AwaitSceneNode>(
     "AwaitScene",
     [node, bt_command_service, vlm_state_service](

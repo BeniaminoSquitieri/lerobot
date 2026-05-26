@@ -20,8 +20,7 @@ This package owns BT orchestration.
 It owns:
 
 - loading BT XML trees
-- registering command-start leaves: `OpenVLMGate` and `RunRobotSkill`
-- registering the VLM-wait leaf: `WaitForVLMVerdict`
+- registering merged command+verify leaves: `AwaitScene` and `DoSkill`
 - ticking the tree until success or failure
 - converting service replies into BT `RUNNING`, `SUCCESS`, or `FAILURE`
 - publishing to Groot when supported by the installed BehaviorTree.CPP version
@@ -37,11 +36,11 @@ Those belong to `lerobot_bt_python`.
 ## Files
 
 - `src/lerobot_bt_main.cpp`: runner executable
-- `src/run_named_command_node.cpp`: service-backed BT leaf implementation
-- `include/lerobot_bt_runtime_cpp/run_named_command_node.hpp`: BT leaf declaration
-- `src/wait_for_vlm_verdict_node.cpp`: BT leaf that polls VLM check state
-- `include/lerobot_bt_runtime_cpp/wait_for_vlm_verdict_node.hpp`: VLM check leaf declaration
-- `trees/make_sandwich.xml`: active two-real-skill sandwich task with manual/VLM topic gates
+- `src/run_named_command_node.cpp`: service-backed BT leaf implementation (base class used by merged nodes)
+- `include/lerobot_bt_runtime_cpp/run_named_command_node.hpp`: BT leaf declarations
+- `src/await_scene_node.cpp`: merged skill+verify and gate+verify BT leaves
+- `include/lerobot_bt_runtime_cpp/await_scene_node.hpp`: merged leaf declarations
+- `trees/make_sandwich.xml`: active two-real-skill sandwich task with VLM gates
 - `trees/set_breakfast_table.xml`: scene-gated breakfast table setup task
 - `trees/items_in_drawer.xml`: scene-gated drawer insertion task
 - `trees/make_coffee.xml`: scene-gated coffee preparation task
@@ -62,8 +61,8 @@ At startup it:
 2. reads the runtime parameters `tree_xml_path`, `bt_command_service`,
    `vlm_state_service`, `tick_ms`, `enable_groot_publisher`,
    `groot_publisher_port`, and the `bt.*` task profile values
-3. registers `OpenVLMGate`, `RunRobotSkill`, and `WaitForVLMVerdict` as custom
-   BT builders
+3. registers `AwaitScene` and `DoSkill` as custom merged BT builders
+   (each combines action execution with VLM verification)
 4. writes the `bt.*` task profile values to the BT blackboard
 5. loads the XML tree from disk
 6. optionally enables a Groot publisher if the installed BT.CPP version has a
@@ -81,46 +80,37 @@ limits, and timeouts. Pass the matching `config/*_bt.yaml` profile together with
 `tree_xml_path`. The Python execution config must still define each referenced
 BC skill before the tree can execute on the robot.
 
-## Command-Start Leaf Lifecycle
+## Merged Leaf Lifecycle
 
-`OpenVLMGate` and `RunRobotSkill` are thin BT wrappers around the same ROS2
-command service. They are implemented as
-`BT::StatefulActionNode`, not synchronous actions, because the service reply
-may arrive after multiple tree ticks.
+`AwaitScene` and `DoSkill` are merged BT leaves that combine action execution
+with VLM verification in a single node. Each replaces the old two-node pair
+(`OpenVLMGate` + `WaitForVLMVerdict` or `RunRobotSkill` + `WaitForVLMVerdict`).
 
-Its behavior is:
+They are implemented as `BT::StatefulActionNode` with a two-phase state machine:
 
-1. `onStart()` validates the visible BT input port, waits for the configured
-   ROS2 service, and sends an asynchronous request.
-2. The node returns `RUNNING` immediately after sending the request.
-3. `onRunning()` polls the future. While the service call is incomplete, the
-   node keeps returning `RUNNING`.
-4. Once the future completes, the node maps `response.success` to BT
-   `SUCCESS` or `FAILURE`.
-5. `onHalted()` clears the local waiting state, but it does not cancel work
-   already executing on the Python server.
+1. **Phase 1 — Send command**: `onStart()` sends the ROS2 service request
+   (skill or gate). The node returns `RUNNING`.
+2. **Phase 2 — Poll VLM**: After the command completes, the node automatically
+   switches to polling the VLM state service. It returns `RUNNING` while
+   waiting, `SUCCESS` on VLM approval, or `FAILURE` on VLM rejection.
 
-## Verdict-Wait Leaf Lifecycle
+`onHalted()` clears pending state but does not cancel in-flight server work.
 
-This second custom leaf is also a `BT::StatefulActionNode`.
+## VLM Integration
 
-The XML trees use one polling node for both gate verdicts and skill verdicts:
-`WaitForVLMVerdict`. The XML files include a `TreeNodesModel` entry for this
-custom node so Groot can display/edit its port when opening the tree file
-directly.
+The merged leaves (`AwaitScene` and `DoSkill`) handle VLM verdict polling
+internally — there is no separate verdict-wait leaf. The C++ node queries the
+`/lerobot_bt/vlm_state` service (provided by the Python skill server) which
+returns the latest VLM check status for the given skill/gate name.
 
-Its behavior is:
+External verifiers (manual terminal or the live Panda VLM) publish verdicts
+to the `/lerobot_bt/vlm_result` topic. The Python server consumes these and
+updates the check registry that the C++ node polls.
 
-1. `onStart()` validates the `check_name` input port and sends a
-   `VLM state service` request.
-2. While the Python side reports `PENDING`, `RUNNING`, `WAIT_HUMAN`, or
-   `MANUAL_INTERVENTION_REQUIRED`, the leaf keeps polling and returns BT
-   `RUNNING`.
-3. If the Python side reports `SUCCESS`, the leaf returns BT `SUCCESS`.
-4. If the Python side reports `FAILURE`, or no attempt exists for that check,
-   the leaf returns BT `FAILURE`.
-
-This is the point where the post-skill VLM check gates the BT. The C++ node
+For live VLM verification, run `bt_vlm_bridge.py` from the `panda_live_camera`
+directory. It translates between the BT protocol (`/lerobot_bt/vlm_request` →
+`/lerobot_bt/vlm_result`) and the Panda VLM Verifier (`/panda/vlm/request` →
+`/panda/vlm/status`).
 polls Python-side state; the VLM/manual implementation itself is decoupled and
 reports verdicts through `/lerobot_bt/vlm_result`.
 
