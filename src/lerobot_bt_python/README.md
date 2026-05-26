@@ -125,6 +125,43 @@ marks the attempt as `FAILURE`; the BT VLM check node then returns failure
 and the XML retry wrapper reruns the same skill. Set `vlm_timeout_s: 0`
 to disable this automatic timeout.
 
+## Panda Live VLM Bridge
+
+The Panda live VLM verifier uses a simpler protocol:
+
+```text
+/panda/vlm/request  std_msgs/String  task text
+/panda/vlm/status   std_msgs/String  SUCCESS, FAILED, or STILL_RUNNING
+```
+
+The BT stack needs JSON with `skill_name`, `attempt_id`, and BT-compatible
+statuses. Run the bridge to translate both protocols:
+
+```bash
+lerobot-bt-vlm-bridge
+```
+
+The bridge subscribes to `/lerobot_bt/vlm_request`, publishes a formatted
+request on `/panda/vlm/request`, listens to `/panda/vlm/status`, and publishes
+JSON on `/lerobot_bt/vlm_result`.
+
+Status mapping:
+
+```text
+SUCCESS       -> SUCCESS
+FAILED        -> FAILURE
+STILL_RUNNING -> RUNNING
+```
+
+Useful overrides:
+
+```bash
+lerobot-bt-vlm-bridge --ros-args \
+  -p panda_vlm_request_topic:=/panda/vlm/request \
+  -p panda_vlm_status_topic:=/panda/vlm/status \
+  -p command_template:="Verify BT check {skill_name}. Context: {message}"
+```
+
 ## Active Sandwich Tree
 
 Use `make_sandwich.xml` for the active task with two real BC skills and manual

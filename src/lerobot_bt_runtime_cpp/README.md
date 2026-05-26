@@ -9,9 +9,11 @@ For build/run instructions and the architecture overview, use the shared guide:
 Architecture diagram:
 
 - [`lerobot_bt_architecture.svg`](./lerobot_bt_architecture.svg)
+- [`diagrams/bt_architecture_detailed.svg`](./diagrams/bt_architecture_detailed.svg)
+- [`diagrams/bt_sequence_detailed.svg`](./diagrams/bt_sequence_detailed.svg)
+- [`diagrams/bt_contracts_detailed.svg`](./diagrams/bt_contracts_detailed.svg)
 
-This README focuses on the C++ runtime behavior. It intentionally avoids
-duplicating setup, build, and launch material from the shared guide.
+This README focuses on the C++ runtime behavior.
 
 ## Responsibility
 
@@ -88,9 +90,9 @@ with VLM verification in a single node. Each replaces the old two-node pair
 
 They are implemented as `BT::StatefulActionNode` with a two-phase state machine:
 
-1. **Phase 1 — Send command**: `onStart()` sends the ROS2 service request
+1. **Phase 1 Send command**: `onStart()` sends the ROS2 service request
    (skill or gate). The node returns `RUNNING`.
-2. **Phase 2 — Poll VLM**: After the command completes, the node automatically
+2. **Phase 2 Poll VLM**: After the command completes, the node automatically
    switches to polling the VLM state service. It returns `RUNNING` while
    waiting, `SUCCESS` on VLM approval, or `FAILURE` on VLM rejection.
 
@@ -99,7 +101,7 @@ They are implemented as `BT::StatefulActionNode` with a two-phase state machine:
 ## VLM Integration
 
 The merged leaves (`AwaitScene` and `DoSkill`) handle VLM verdict polling
-internally — there is no separate verdict-wait leaf. The C++ node queries the
+internally there is no separate verdict-wait leaf. The C++ node queries the
 `/lerobot_bt/vlm_state` service (provided by the Python skill server) which
 returns the latest VLM check status for the given skill/gate name.
 
@@ -107,12 +109,11 @@ External verifiers (manual terminal or the live Panda VLM) publish verdicts
 to the `/lerobot_bt/vlm_result` topic. The Python server consumes these and
 updates the check registry that the C++ node polls.
 
-For live VLM verification, run `bt_vlm_bridge.py` from the `panda_live_camera`
-directory. It translates between the BT protocol (`/lerobot_bt/vlm_request` →
-`/lerobot_bt/vlm_result`) and the Panda VLM Verifier (`/panda/vlm/request` →
-`/panda/vlm/status`).
+For live VLM verification, run `lerobot-bt-vlm-bridge`. It translates between
+the BT protocol (`/lerobot_bt/vlm_request` → `/lerobot_bt/vlm_result`) and the
+Panda VLM Verifier (`/panda/vlm/request` → `/panda/vlm/status`). The BT only
 polls Python-side state; the VLM/manual implementation itself is decoupled and
-reports verdicts through `/lerobot_bt/vlm_result`.
+reports verdicts through the bridge.
 
 ## XML Contract Used In This Repository
 

@@ -1,0 +1,111 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1050" viewBox="0 0 1600 1050">
+  <defs>
+    <style>
+      .bg { fill: #fbfbf8; }
+      .title { font-family: Verdana, DejaVu Sans, sans-serif; font-size: 34px; font-weight: 700; fill: #111827; }
+      .lane { fill: #ffffff; stroke: #334155; stroke-width: 2; rx: 16; }
+      .h { font-family: Verdana, DejaVu Sans, sans-serif; font-size: 20px; font-weight: 700; fill: #111827; }
+      .small { font-family: Verdana, DejaVu Sans, sans-serif; font-size: 13px; fill: #334155; }
+      .mono { font-family: DejaVu Sans Mono, monospace; font-size: 12px; fill: #0f172a; }
+      .arrow { stroke: #0f172a; stroke-width: 2.5; fill: none; marker-end: url(#arrowhead); }
+      .topic { stroke: #b45309; stroke-width: 2.5; stroke-dasharray: 8 6; fill: none; marker-end: url(#orange); }
+      .service { stroke: #1d4ed8; stroke-width: 2.5; fill: none; marker-end: url(#blue); }
+      .note { fill: #f8fafc; stroke: #64748b; stroke-width: 1.5; rx: 10; }
+    </style>
+    <marker id="arrowhead" markerWidth="12" markerHeight="8" refX="11" refY="4" orient="auto">
+      <polygon points="0 0, 12 4, 0 8" fill="#0f172a"/>
+    </marker>
+    <marker id="blue" markerWidth="12" markerHeight="8" refX="11" refY="4" orient="auto">
+      <polygon points="0 0, 12 4, 0 8" fill="#1d4ed8"/>
+    </marker>
+    <marker id="orange" markerWidth="12" markerHeight="8" refX="11" refY="4" orient="auto">
+      <polygon points="0 0, 12 4, 0 8" fill="#b45309"/>
+    </marker>
+  </defs>
+
+  <rect class="bg" width="1600" height="1050"/>
+  <text class="title" x="48" y="58">Detailed Runtime Sequence</text>
+  <text class="small" x="48" y="88">One BT leaf: send command, then poll VLM state.</text>
+  <text class="small" x="48" y="108">The leaf returns only when a terminal verdict arrives.</text>
+
+  <rect class="lane" x="45" y="130" width="250" height="830" fill="#dbeafe"/>
+  <rect class="lane" x="345" y="130" width="280" height="830" fill="#fef3c7"/>
+  <rect class="lane" x="675" y="130" width="250" height="830" fill="#dcfce7"/>
+  <rect class="lane" x="975" y="130" width="250" height="830" fill="#fff7ed"/>
+  <rect class="lane" x="1275" y="130" width="250" height="830" fill="#fee2e2"/>
+
+  <text class="h" x="88" y="170">BT Leaf</text>
+  <text class="mono" x="74" y="198">AwaitScene / DoSkill</text>
+  <text class="h" x="385" y="170">Python Server</text>
+  <text class="mono" x="374" y="198">SkillCommandServer</text>
+  <text class="h" x="713" y="170">BC Executor</text>
+  <text class="mono" x="704" y="198">Policy + Robot</text>
+  <text class="h" x="1010" y="170">VLM Bridge</text>
+  <text class="mono" x="997" y="198">BT/Panda adapter</text>
+  <text class="h" x="1313" y="170">Panda VLM</text>
+  <text class="mono" x="1301" y="198">Qwen3-VL + cameras</text>
+
+  <line x1="170" y1="220" x2="170" y2="930" stroke="#64748b" stroke-width="2"/>
+  <line x1="485" y1="220" x2="485" y2="930" stroke="#64748b" stroke-width="2"/>
+  <line x1="800" y1="220" x2="800" y2="930" stroke="#64748b" stroke-width="2"/>
+  <line x1="1100" y1="220" x2="1100" y2="930" stroke="#64748b" stroke-width="2"/>
+  <line x1="1400" y1="220" x2="1400" y2="930" stroke="#64748b" stroke-width="2"/>
+
+  <path class="service" d="M170 260 L485 260"/>
+  <text class="mono" x="205" y="246">1. /lerobot_bt/run</text>
+  <text class="small" x="205" y="280">kind, name, timeout_s</text>
+  <text class="small" x="205" y="300">kind = skill or vlm_gate_pending</text>
+
+  <path class="arrow" d="M485 330 L800 330"/>
+  <text class="mono" x="518" y="315">2a. execute_skill(name)</text>
+  <text class="small" x="518" y="350">only for DoSkill; gates skip robot motion</text>
+
+  <path class="arrow" d="M800 390 L485 390"/>
+  <text class="mono" x="538" y="376">2b. CommandResult</text>
+  <text class="small" x="538" y="410">success, status, elapsed_s, message</text>
+
+  <path class="arrow" d="M485 455 C455 455 455 500 485 500"/>
+  <text class="mono" x="510" y="466">3. begin_attempt(name)</text>
+  <text class="small" x="510" y="490">creates PENDING attempt_id</text>
+
+  <path class="service" d="M485 550 L170 550"/>
+  <text class="mono" x="212" y="535">4. command response</text>
+  <text class="small" x="212" y="570">BT switches phase:</text>
+  <text class="small" x="212" y="590">SEND_COMMAND -> POLL_VLM</text>
+
+  <path class="topic" d="M485 620 L1100 620"/>
+  <text class="mono" x="560" y="605">5. /lerobot_bt/vlm_request</text>
+  <text class="small" x="560" y="640">JSON: event, skill_name, attempt_id</text>
+  <text class="small" x="560" y="660">allowed_statuses, allowed_next_actions</text>
+
+  <path class="topic" d="M1100 675 L1400 675"/>
+  <text class="mono" x="1145" y="660">6. /panda/vlm/request</text>
+  <text class="small" x="1145" y="694">plain text prompt built from BT request</text>
+
+  <path class="arrow" d="M1400 720 C1450 720 1450 770 1400 770"/>
+  <text class="mono" x="1262" y="736">7. inspect live scene</text>
+  <text class="small" x="1262" y="758">front + wrist composed image</text>
+
+  <path class="topic" d="M1400 815 L1100 815"/>
+  <text class="mono" x="1135" y="800">8. /panda/vlm/status</text>
+  <text class="small" x="1135" y="834">SUCCESS, FAILED, STILL_RUNNING</text>
+
+  <path class="topic" d="M1100 875 L485 875"/>
+  <text class="mono" x="560" y="860">9. /lerobot_bt/vlm_result</text>
+  <text class="small" x="560" y="894">JSON: skill_name, attempt_id</text>
+  <text class="small" x="560" y="914">status, message</text>
+
+  <path class="service" d="M170 735 L485 735"/>
+  <text class="mono" x="205" y="720">loop. /lerobot_bt/vlm_state</text>
+  <text class="small" x="205" y="756">BT keeps polling while status is waiting</text>
+
+  <path class="service" d="M485 790 L170 790"/>
+  <text class="mono" x="205" y="776">state response</text>
+  <text class="small" x="205" y="810">SUCCESS -> BT SUCCESS</text>
+  <text class="small" x="205" y="830">FAILURE -> BT FAILURE</text>
+
+  <rect class="note" x="70" y="965" width="1450" height="78"/>
+  <text class="mono" x="92" y="994">Bridge status mapping:</text>
+  <text class="mono" x="92" y="1016">SUCCESS -> SUCCESS, FAILED -> FAILURE.</text>
+  <text class="mono" x="92" y="1036">STILL_RUNNING -> RUNNING.</text>
+</svg>

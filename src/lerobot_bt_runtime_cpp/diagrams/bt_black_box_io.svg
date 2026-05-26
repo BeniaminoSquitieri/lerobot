@@ -1,0 +1,75 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="720" viewBox="0 0 1280 720">
+  <defs>
+    <style>
+      .bg { fill: #f7f3ea; }
+      .box { fill: #fffaf0; stroke: #2f2a24; stroke-width: 3; rx: 22; }
+      .dark { fill: #263238; }
+      .green { fill: #d8f3dc; stroke: #1b4332; stroke-width: 2; rx: 16; }
+      .blue { fill: #dbeafe; stroke: #1e3a8a; stroke-width: 2; rx: 16; }
+      .orange { fill: #ffedd5; stroke: #9a3412; stroke-width: 2; rx: 16; }
+      .red { fill: #fee2e2; stroke: #991b1b; stroke-width: 2; rx: 16; }
+      .text { font-family: "Verdana", "DejaVu Sans", sans-serif; fill: #1f2937; font-size: 24px; }
+      .small { font-size: 19px; }
+      .tiny { font-size: 16px; }
+      .title { font-size: 34px; font-weight: 700; }
+      .label { font-size: 21px; font-weight: 700; }
+      .mono { font-family: "DejaVu Sans Mono", monospace; font-size: 16px; }
+      .arrow { stroke: #2f2a24; stroke-width: 3; fill: none; marker-end: url(#arrowhead); }
+      .dash { stroke-dasharray: 8 8; }
+    </style>
+    <marker id="arrowhead" markerWidth="12" markerHeight="8" refX="11" refY="4" orient="auto">
+      <polygon points="0 0, 12 4, 0 8" fill="#2f2a24"/>
+    </marker>
+  </defs>
+
+  <rect class="bg" x="0" y="0" width="1280" height="720"/>
+  <text class="text title" x="48" y="58">Modulo BT come Black Box</text>
+  <text class="text small" x="48" y="91">Il BT decide ordine, retry e blocchi di attesa. Non vede le immagini: riceve solo verdict simbolici.</text>
+
+  <rect class="box" x="430" y="145" width="420" height="420"/>
+  <text class="text title" x="511" y="202">BT Runtime</text>
+  <text class="text small" x="477" y="240">BehaviorTree.CPP runner</text>
+  <text class="text mono" x="480" y="286">Input: tree XML + YAML profile</text>
+  <text class="text mono" x="480" y="318">Input: service replies</text>
+  <text class="text mono" x="480" y="350">Input: VLM check status</text>
+  <text class="text mono" x="480" y="398">Output: next gate/skill</text>
+  <text class="text mono" x="480" y="430">Output: BT RUNNING/SUCCESS/FAILURE</text>
+  <text class="text mono" x="480" y="462">Output: retry same stage on FAILURE</text>
+
+  <rect class="blue" x="44" y="155" width="290" height="170"/>
+  <text class="text label" x="72" y="196">Task Config</text>
+  <text class="text small" x="72" y="232">XML tree</text>
+  <text class="text small" x="72" y="262">YAML names/timeouts</text>
+  <text class="text small" x="72" y="292">Retry limits</text>
+  <path class="arrow" d="M334 240 L430 260"/>
+
+  <rect class="green" x="935" y="120" width="300" height="210"/>
+  <text class="text label" x="968" y="162">BC Skill Layer</text>
+  <text class="text small" x="968" y="198">Input from BT:</text>
+  <text class="text mono" x="968" y="226">kind=skill, name, timeout</text>
+  <text class="text small" x="968" y="264">Output to BT:</text>
+  <text class="text mono" x="968" y="292">success/status/message</text>
+  <path class="arrow" d="M850 260 L935 222"/>
+  <path class="arrow dash" d="M935 286 L850 350"/>
+
+  <rect class="orange" x="935" y="390" width="300" height="230"/>
+  <text class="text label" x="968" y="432">VLM Verifier</text>
+  <text class="text small" x="968" y="468">Input via bridge:</text>
+  <text class="text mono" x="968" y="496">task/check text</text>
+  <text class="text mono" x="968" y="522">front + wrist cameras</text>
+  <text class="text small" x="968" y="560">Output:</text>
+  <text class="text mono" x="968" y="588">SUCCESS/FAILURE/RUNNING</text>
+  <path class="arrow" d="M850 470 L935 486"/>
+  <path class="arrow dash" d="M935 562 L850 426"/>
+
+  <rect class="red" x="44" y="405" width="300" height="170"/>
+  <text class="text label" x="72" y="448">External Outcome</text>
+  <text class="text small" x="72" y="484">Robot continues</text>
+  <text class="text small" x="72" y="514">Retry current step</text>
+  <text class="text small" x="72" y="544">Task final SUCCESS/FAILURE</text>
+  <path class="arrow" d="M430 430 L344 486"/>
+
+  <text class="text tiny" x="474" y="610">Compatible only if the Panda VLM is connected through a bridge:</text>
+  <text class="text mono" x="474" y="638">/lerobot_bt/vlm_request -> /panda/vlm/request</text>
+  <text class="text mono" x="474" y="664">/panda/vlm/status -> /lerobot_bt/vlm_result JSON</text>
+</svg>

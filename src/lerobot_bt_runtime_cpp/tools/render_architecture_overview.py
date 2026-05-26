@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# Comment: executes this BT logic statement.
 """Render the repository-level LeRobot BT architecture overview PNG.
 
 The checked-in `src/Architecture.png` is a visual summary used during bring-up.
@@ -6,13 +7,19 @@ Keeping the source in this script prevents the image from drifting when ROS2
 package names, services, or task profiles change.
 """
 
+# Comment: imports dependencies or symbols required by the module.
 from __future__ import annotations
 
+# Comment: imports dependencies or symbols required by the module.
 import argparse
+# Comment: imports dependencies or symbols required by the module.
 import subprocess
+# Comment: imports dependencies or symbols required by the module.
 import tempfile
+# Comment: imports dependencies or symbols required by the module.
 from pathlib import Path
 
+# Comment: assigns or prepares a value used by later statements.
 DOT_SOURCE = r"""
 digraph LeRobotBTArchitecture {
   graph [
@@ -135,32 +142,55 @@ digraph LeRobotBTArchitecture {
 """
 
 
+# Comment: defines the function or method render_architecture.
 def render_architecture(output_path: Path) -> None:
+    # Comment: executes this BT logic statement.
     """Render the architecture overview DOT source to a PNG file."""
+    # Comment: assigns or prepares a value used by later statements.
     output_path.parent.mkdir(parents=True, exist_ok=True)
+    # Comment: opens a managed context and guarantees its cleanup.
     with tempfile.NamedTemporaryFile("w", suffix=".dot", encoding="utf-8", delete=False) as dot_file:
+        # Comment: closes a call, data structure, or multiline block.
         dot_file.write(DOT_SOURCE)
+        # Comment: assigns or prepares a value used by later statements.
         dot_path = Path(dot_file.name)
+    # Comment: opens a protected block to catch possible errors.
     try:
+        # Comment: assigns or prepares a value used by later statements.
         subprocess.run(["dot", "-Tpng", str(dot_path), "-o", str(output_path)], check=True)
+    # Comment: always runs the final cleanup for the protected block.
     finally:
+        # Comment: assigns or prepares a value used by later statements.
         dot_path.unlink(missing_ok=True)
 
 
+# Comment: defines the function or method parse_args.
 def parse_args() -> argparse.Namespace:
+    # Comment: executes this BT logic statement.
     """Parse the optional output path used by local documentation refreshes."""
+    # Comment: assigns or prepares a value used by later statements.
     repo_root = Path(__file__).resolve().parents[3]
+    # Comment: assigns or prepares a value used by later statements.
     parser = argparse.ArgumentParser(description=__doc__)
+    # Comment: assigns or prepares a value used by later statements.
     parser.add_argument("--output", type=Path, default=repo_root / "src" / "Architecture.png")
+    # Comment: returns the computed value to the caller.
     return parser.parse_args()
 
 
+# Comment: defines the function or method main.
 def main() -> None:
+    # Comment: executes this BT logic statement.
     """Console entry point for regenerating `src/Architecture.png`."""
+    # Comment: assigns or prepares a value used by later statements.
     args = parse_args()
+    # Comment: closes a call, data structure, or multiline block.
     render_architecture(args.output)
+    # Comment: closes a call, data structure, or multiline block.
     print(args.output)
 
 
+# Comment: evaluates a condition and chooses the branch to run.
 if __name__ == "__main__":
+    # Comment: closes a call, data structure, or multiline block.
     main()
