@@ -13,6 +13,28 @@ deterministic Panda recovery motions between attempts. If the VLM reports
 `FAILURE`, the XML-level `RetryUntilSuccessful` node starts the same BC skill
 again from the beginning.
 
+## Architecture (multi-machine)
+
+The BT stack and the VLM run on **two separate machines** communicating over
+ROS 2:
+
+```text
+┌── IITICB001DW001 (robot machine) ──┐    ┌── iitbmp014srv002 (GPU server) ──┐
+│                                     │    │                                  │
+│  panda_camera_publisher.py          │─── │  panda_vlm_live.py               │
+│  (RealSense → CompressedImage)      │ROS2│  (Qwen3-VL model, inference)     │
+│                                     │    │                                  │
+│  lerobot-bt-skill-server  (Python)  │─── │  listens on:                     │
+│  lerobot_bt_runner        (C++ BT)  │ROS2│  /lerobot_bt/vlm_request         │
+│                                     │    │  publishes on:                   │
+│  Panda robot + Robotiq gripper      │    │  /lerobot_bt/vlm_result           │
+│  RealSense cameras (USB)            │    │                                  │
+└─────────────────────────────────────┘    └──────────────────────────────────┘
+```
+
+Both machines must be on the same ROS 2 domain (default: 0). No special
+configuration is needed if they can reach each other over the network.
+
 ## Packages
 
 | Package | Role |
@@ -20,6 +42,192 @@ again from the beginning.
 | `lerobot_bt_runtime_cpp` | Loads/ticks BT XML and bridges BT leaves to ROS2 services. |
 | `lerobot_bt_python` | Executes real BC skills and manages VLM check attempts. |
 | `lerobot_bt_interfaces` | Generates the three ROS2 service contracts used by the stack. |
+
+## Quick Preflight Checks
+
+Before launching anything, run the preflight script to validate the
+environment:
+
+```bash
+conda activate lerobot_ben
+cd /home/panda-admin/users/sben/lerobot
+python3 scripts/bt_preflight_check.py --task make_sandwich
+```
+
+This checks (in order):
+1. ROS 2 environment (Jazzy sourced, `ros2` available)
+2. Workspace build (`install/setup.bash`, ROS2 packages built)
+3. Python environment (`lerobot`, `rclpy`, `torch`, `lerobot_bt_python` importable)
+4. YAML consistency (skill names match between BT params and executor config)
+5. Policy checkpoints (local HuggingFace cache)
+6. Robot hardware (cameras, Panda ping) — only with `--real` flag
+
+Exit code 0 = all mandatory checks passed.
+
+## How To Swap Policy Models
+
+You only need to edit **one file**: the executor YAML
+(`src/lerobot_bt_python/<task>_executor.yaml`).
+
+**These files NEVER need changes for policy swaps:**
+- BT tree XML (`src/lerobot_bt_runtime_cpp/trees/<task>.xml`)
+- BT params YAML (`src/lerobot_bt_runtime_cpp/config/<task>_bt.yaml`)
+- Launch files
+
+### Option A: Change the active variant
+
+```yaml
+skills:
+  - name: place_first_toast
+    policy_variant: smolvla    # ← change this (act, smolvla, diffusion, pi0, ...)
+```
+
+### Option B: Update a pretrained_path
+
+```yaml
+policy_variants:
+  act:
+    pretrained_path: "YourOrg/your-model-name"   # ← change this
+```
+
+### Option C: Add a new variant
+
+```yaml
+policy_variant: my_new_model
+policy_variants:
+  my_new_model:
+    type: act
+    device: cuda
+    pretrained_path: "YourOrg/my-trained-checkpoint"
+    n_action_steps: 16
+    chunk_size: 16
+```
+
+## VLM Communication Test (simulated, no robot motion)
+
+Use this to verify the BT ↔ VLM protocol **without running the full BT stack**
+or moving the robot. Only the VLM node and camera publisher need to be active.
+
+### Prerequisites
+
+**On the robot machine** (`IITICB001DW001`):
+```bash
+conda activate lerobot_ben
+cd ~/users/sben/panda_live_camera
+python3 panda_camera_publisher.py
+```
+
+**On the GPU server** (`iitbmp014srv002`):
+```bash
+conda activate ros2_jazzy
+source /opt/ros/jazzy/setup.bash
+cd ~/panda_live_viewer
+python3 panda_vlm_live.py
+```
+
+Wait until you see `"Ready. Listening on ..."`.
+
+### Run the test
+
+**On the robot machine**, in another terminal:
+```bash
+conda activate lerobot_ben
+cd ~/users/sben/lerobot
+source install/setup.bash
+python3 scripts/simulate_vlm_test.py
+```
+
+### Expected output
+
+```
+==================================================
+  TEST COMUNICAZIONE BT → VLM (simulato)
+==================================================
+  → INVIO richiesta: skill=place_first_toast, attempt=42, task='Pick the toast...'
+  ← RISPOSTA: skill=place_first_toast, attempt=42, status=RUNNING
+  ← RISPOSTA: skill=place_first_toast, attempt=42, status=SUCCESS
+✓ TEST PASSATO
+```
+
+On the server VLM terminal you should see:
+```
+[INFO] [lerobot_bt_vlm_server]: Received VLM request for place_first_toast (attempt 42)
+[INFO] [lerobot_bt_vlm_server]: RUNNING: VLM processing (skill=place_first_toast, attempt=42)
+```
+
+### What the test validates
+
+| Check | Expected |
+|-------|----------|
+| `skill_name` preserved in response | `"place_first_toast"` |
+| `attempt_id` preserved in response | `42` |
+| `status` is valid VLM status | `RUNNING`, `SUCCESS`, `FAILURE`, etc. |
+| Intermediate `RUNNING` published | Yes (good practice) |
+| Terminal status (`SUCCESS`/`FAILURE`) | Published within timeout |
+| `task` field reaches VLM prompt | Task description from executor YAML |
+
+### Troubleshooting
+
+If the test times out (60 s) with no response:
+
+```bash
+# On BOTH machines, verify topics are visible:
+ros2 topic list | grep -E "lerobot_bt|panda"
+
+# On the robot machine, verify the VLM topics have publishers/subscribers:
+ros2 topic info /lerobot_bt/vlm_request
+# Should show: Publisher count: 1, Subscription count: 1
+
+# On the GPU server, test locally:
+python3 -c "
+import json, rclpy, time
+from std_msgs.msg import String
+rclpy.init()
+n = rclpy.create_node('test')
+p = n.create_publisher(String, '/lerobot_bt/vlm_request', 10)
+m = String()
+m.data = json.dumps({'event':'vlm_check_requested','skill_name':'test_skill','attempt_id':1,'status':'PENDING','message':'hello','task':'test task','allowed_statuses':['PENDING','RUNNING','SUCCESS','FAILURE'],'allowed_next_actions':['CONTINUE','RETRY_SKILL']})
+for _ in range(3):
+    p.publish(m)
+    time.sleep(0.5)
+    rclpy.spin_once(n, timeout_sec=0.1)
+print('PUBLISHED')
+time.sleep(2)
+n.destroy_node()
+rclpy.shutdown()
+"
+# The VLM terminal should show: "Received VLM request for test_skill"
+```
+
+### Automated test with validation
+
+For a more thorough protocol check:
+```bash
+python3 scripts/test_vlm_protocol.py --test skill
+python3 scripts/test_vlm_protocol.py --test gate
+```
+
+This publishes a request, collects all responses, and automatically validates:
+- `skill_name` / `attempt_id` match
+- Status vocabulary correctness
+- Intermediate `RUNNING` presence
+- Terminal status arrival
+
+## VLM Server Requirements
+
+For implementing a custom VLM verifier node, see the detailed specification:
+[`src/lerobot_bt_python/VLM_SERVER_REQUIREMENTS.md`](lerobot_bt_python/VLM_SERVER_REQUIREMENTS.md)
+
+Key protocol points:
+- Subscribe to `/lerobot_bt/vlm_request` (`std_msgs/String`, JSON payload)
+- Publish on `/lerobot_bt/vlm_result` (`std_msgs/String`, JSON payload)
+- Preserve `skill_name` and `attempt_id` from request to response
+- Use exact status vocabulary: `PENDING`, `RUNNING`, `WAIT_HUMAN`,
+  `MANUAL_INTERVENTION_REQUIRED`, `SUCCESS`, `FAILURE`
+- The `task` field in requests contains the human-readable task description
+  (e.g. `"Pick the toast upon the table."`). Include it in the VLM prompt.
+- Publish `RUNNING` immediately after receiving a request while inference is
+  in progress
 
 ## Active Flow
 
@@ -128,99 +336,89 @@ gate or by a completed robot skill.
 
 ## Real Robot Complete Test
 
-Use the commands below to run the current two-real-skill sandwich test with the
-real Panda/Robotiq/camera stack and a manual terminal acting as the VLM.
+Full setup with the real Panda/Robotiq/camera stack and the live VLM verifier.
+All terminals on the **robot machine** (`IITICB001DW001`) unless marked with
+☁️ (GPU server).
 
-Run this setup in every ROS2 terminal:
+### ⚠️ Before first launch — rebuild!
+
+Every time you change an interface (`.srv`), a launch file, or a BT tree XML,
+you must rebuild the ROS2 workspace. If you skip this, launch files and service
+bindings will be missing at runtime:
 
 ```bash
-conda activate lerobot
+conda activate lerobot_ben
 cd /home/panda-admin/users/sben/lerobot
-source /opt/ros/jazzy/setup.bash
-source install/setup.bash
-```
-
-If the ROS2 packages have not been built after changing interfaces or trees,
-build once and source again:
-
-```bash
 colcon build --base-paths src --packages-up-to lerobot_bt_runtime_cpp
 source install/setup.bash
 ```
 
-### Terminale 1: real skill server
+### Common setup (every terminal on the robot machine)
+
+```bash
+conda activate lerobot_ben
+cd /home/panda-admin/users/sben/lerobot
+source install/setup.bash
+```
+
+### Terminal 1 ☁️ (GPU server): VLM verifier
+
+```bash
+conda activate ros2_jazzy
+source /opt/ros/jazzy/setup.bash
+cd ~/panda_live_viewer
+python3 panda_vlm_live.py
+```
+
+Wait for `"Ready. Listening on ..."`.
+
+### Terminal 2 (robot machine): camera publisher
+
+**Not needed when `camera_publish_map` is configured in the executor YAML.**
+The BT skill server now publishes camera frames directly on ROS topics for
+the VLM (see `camera_publish_map` in the executor YAML). If you need the
+standalone publisher for debugging without the BT stack, run:
+
+```bash
+conda activate lerobot_ben
+cd ~/users/sben/panda_live_camera
+python3 panda_camera_publisher.py
+```
+
+Publishes compressed images to `/panda/camera/front/image_compressed` and
+`/panda/camera/wrist/image_compressed`. The VLM on the GPU server subscribes
+to these topics over ROS 2.
+
+### Terminal 3 (robot machine): skill server
 
 Start the Python execution layer. This connects the real robot and executes the
 learned skills configured in `make_sandwich_executor.yaml`.
 
 ```bash
-lerobot-bt-skill-server \
-  --config_path "$(pwd)/src/lerobot_bt_python/make_sandwich_executor.yaml"
+conda activate lerobot_ben
+cd /home/panda-admin/users/sben/lerobot
+source install/setup.bash
+python3 -m lerobot_bt_python.server \
+  --config_path src/lerobot_bt_python/make_sandwich_executor.yaml
 ```
 
-### Terminale 2: BehaviorTree runner
+Wait for `"ROS2 skill command service node is ready."`
 
-Start the C++ BT runner with the active real-robot tree and its task parameter
-profile. Start this after the skill server is ready.
+### Terminal 4 (robot machine): BehaviorTree runner
 
-Preferred launch command:
+Start the C++ BT runner **after** the skill server is ready.
 
 ```bash
+conda activate lerobot_ben
+cd /home/panda-admin/users/sben/lerobot
+source install/setup.bash
 ros2 launch lerobot_bt_runtime_cpp make_sandwich.launch.py
 ```
 
-Equivalent direct runner command:
+### Terminal 5 (optional, robot machine): manual VLM override
 
-```bash
-ros2 run lerobot_bt_runtime_cpp lerobot_bt_runner --ros-args \
-  --params-file "$(pwd)/src/lerobot_bt_runtime_cpp/config/make_sandwich_bt.yaml" \
-  -p tree_xml_path:="$(pwd)/src/lerobot_bt_runtime_cpp/trees/make_sandwich.xml"
-```
-
-The XML keeps the order/retry structure. The YAML profile keeps the names and
-timeouts that are expected to change between BTs:
-
-```text
-initial_scene_ready
-place_first_toast
-pour_ingredient
-second_toast_ready
-place_second_toast
-make_sandwich.task_complete
-```
-
-For a new BT, make a new XML if the order changes. If only checkpoint names,
-skill names, or timeouts change, make a new `config/*.yaml` profile and pass it
-with `--params-file`.
-
-### Optional Groot2 monitor
-
-Open Groot2 already configured for the BT.CPP monitor endpoint:
-
-```bash
-lerobot-bt-groot2
-```
-
-This writes Groot2's local settings to `Mode=Monitor`, `Host=localhost`, and
-`Port=1667` before launching the GUI. If Groot2 is installed somewhere custom,
-pass its path explicitly:
-
-```bash
-lerobot-bt-groot2 --app ~/Applications/Groot2-v1.9.0-x86_64.AppImage
-```
-
-### Terminale 3: manual VLM
-
-Watch the verifier requests emitted by the skill server:
-
-```bash
-ros2 topic echo /lerobot_bt/vlm_request
-```
-
-For each request, publish a verdict on the same topic a real VLM will use. You
-can stop the echo with `Ctrl+C`, publish one of the commands below, then start
-the echo again. `attempt_id: 0` means "apply this verdict to the latest pending
-attempt for that `skill_name`".
+You can manually publish verdicts to override or supplement the live VLM.
+`attempt_id: 0` means "apply this verdict to the latest pending attempt".
 
 For the two real BC skills, you do not have to wait for `/lerobot_bt/vlm_request`
 if the robot has already achieved the visible goal. Publishing the `SUCCESS` or
