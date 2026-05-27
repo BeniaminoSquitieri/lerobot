@@ -70,17 +70,24 @@ camera_publish_map:
 camera_publish_fps: 10.0
 camera_publish_jpeg_quality: 80
 
+# VLM gate descriptions (for AwaitScene nodes that have no policy config).
+vlm_gate_tasks:
+  breakfast_table.tablecloth_ready: "A tablecloth has been spread on the table."
+  breakfast_table.tea_box_ready: "A tea box has been placed on the table."
+  breakfast_table.spoon_ready: "A spoon has been placed on the table."
+  breakfast_table.task_complete: "The breakfast table is fully set with all items: tablecloth, cereal box, tea box, bottle, cup, spoon, and bowl."
+
 skills:
   - name: place_cereal_box
-    dataset_repo_id: "Squitieri/breakfast_pick_cereal_act_chunk16_exec16_20k"
+    dataset_repo_id: "Squitieri/cereal_act16_100k"
     metadata_source: robot
-    task: "Pick the cereal box from the left side of the table and place it on the tablecloth."
+    task: "The cereal box is on the tablecloth."
     policy_variant: act
     policy_variants:
       act:
         type: act
         device: cuda
-        pretrained_path: "Squitieri/breakfast_pick_cereal_act_chunk16_exec16_20k"
+        pretrained_path: "Squitieri/cereal_act16_100k"
         n_action_steps: 16
         chunk_size: 16
       smolvla:
@@ -170,15 +177,15 @@ skills:
     settle_time_s: 0.0
 
   - name: place_bottle
-    dataset_repo_id: "Squitieri/breakfast_pick_bottle_clean_act_chunk16_exec16_20k"
+    dataset_repo_id: "Squitieri/bottleclean_act16_100k"
     metadata_source: robot
-    task: "Pick the bottle from the left side of the table and place it on the tablecloth."
+    task: "The bottle is on the tablecloth."
     policy_variant: act
     policy_variants:
       act:
         type: act
         device: cuda
-        pretrained_path: "Squitieri/breakfast_pick_bottle_clean_act_chunk16_exec16_20k"
+        pretrained_path: "Squitieri/bottleclean_act16_100k"
         n_action_steps: 16
         chunk_size: 16
       smolvla:
@@ -270,7 +277,7 @@ skills:
   - name: place_cup
     dataset_repo_id: "Squitieri/breakfast_pick_cup_new_act_chunk16_exec16_100k"
     metadata_source: robot
-    task: "Pick the cup from the left side of the table and place it on the tablecloth."
+    task: "The cup is on the tablecloth."
     policy_variant: act
     policy_variants:
       act:
@@ -366,15 +373,15 @@ skills:
     settle_time_s: 0.0
 
   - name: place_bowl
-    dataset_repo_id: "Squitieri/breakfast_pick_bowl_act_chunk16_exec16_20k"
+    dataset_repo_id: "Squitieri/bowl_act16_100k"
     metadata_source: robot
-    task: "Pick the bowl from the left side of the table and place it on the tablecloth."
+    task: "The bowl is on the tablecloth."
     policy_variant: act
     policy_variants:
       act:
         type: act
         device: cuda
-        pretrained_path: "Squitieri/breakfast_pick_bowl_act_chunk16_exec16_20k"
+        pretrained_path: "Squitieri/bowl_act16_100k"
         n_action_steps: 16
         chunk_size: 16
       smolvla:
