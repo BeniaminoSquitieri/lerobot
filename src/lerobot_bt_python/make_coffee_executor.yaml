@@ -13,7 +13,7 @@ vlm_result_topic: "/lerobot_bt/vlm_result"
 vlm_timeout_s: 0.0
 
 # Default variant. Per-skill policy_variant can mix any registered LeRobot
-# policy type, e.g. act, smolvla, diffusion, groot, xvla, pi0, vqbet, tdmpc.
+# policy type, e.g. act.
 policy_variant: act
 
 expected_skill_names:
@@ -71,6 +71,10 @@ vlm_gate_tasks:
   make_coffee.cup_under_dispenser: "Check if an empty cup or mug has been placed under the coffee dispenser nozzle."
   make_coffee.human_press_start_button: "Check if the coffee machine is running and extraction has started (button pressed, water flowing)."
 
+# Minimum wait time (seconds) before VLM checks human gates.
+# Gives the operator time to place objects before the VLM verifies.
+vlm_gate_min_wait_s: 5.0
+
 skills:
   - name: pick_and_insert_capsule
     dataset_repo_id: "scene-transition/pick_and_insert_capsule"
@@ -84,87 +88,6 @@ skills:
         pretrained_path: "HSP-IIT/act_put_coffee"
         n_action_steps: 16
         chunk_size: 16
-      smolvla:
-        type: smolvla
-        device: cuda
-        pretrained_path: "TODO_SMOLVLA_PICK_AND_INSERT_CAPSULE"
-        n_action_steps: 50
-        chunk_size: 50
-        num_steps: 10
-      diffusion:
-        type: diffusion
-        device: cuda
-        pretrained_path: "TODO_DIFFUSION_PICK_AND_INSERT_CAPSULE"
-        n_action_steps: 8
-        horizon: 16
-      multi_task_dit:
-        type: multi_task_dit
-        device: cuda
-        pretrained_path: "TODO_MULTI_TASK_DIT_PICK_AND_INSERT_CAPSULE"
-        n_action_steps: 24
-        horizon: 32
-      vqbet:
-        type: vqbet
-        device: cuda
-        pretrained_path: "TODO_VQBET_PICK_AND_INSERT_CAPSULE"
-        n_obs_steps: 5
-        n_action_pred_token: 3
-        action_chunk_size: 5
-      pi0:
-        type: pi0
-        device: cuda
-        pretrained_path: "TODO_PI0_PICK_AND_INSERT_CAPSULE"
-        n_action_steps: 50
-        chunk_size: 50
-      pi0_fast:
-        type: pi0_fast
-        device: cuda
-        pretrained_path: "TODO_PI0_FAST_PICK_AND_INSERT_CAPSULE"
-        n_action_steps: 50
-        chunk_size: 50
-      pi05:
-        type: pi05
-        device: cuda
-        pretrained_path: "TODO_PI05_PICK_AND_INSERT_CAPSULE"
-        n_action_steps: 50
-        chunk_size: 50
-      groot:
-        type: groot
-        device: cuda
-        pretrained_path: "TODO_GROOT_PICK_AND_INSERT_CAPSULE"
-        n_action_steps: 50
-        chunk_size: 50
-      xvla:
-        type: xvla
-        device: cuda
-        pretrained_path: "TODO_XVLA_PICK_AND_INSERT_CAPSULE"
-        n_action_steps: 32
-        chunk_size: 32
-      wall_x:
-        type: wall_x
-        device: cuda
-        pretrained_path: "TODO_WALL_X_PICK_AND_INSERT_CAPSULE"
-        n_action_steps: 32
-        chunk_size: 32
-      tdmpc:
-        type: tdmpc
-        device: cuda
-        pretrained_path: "TODO_TDMPC_PICK_AND_INSERT_CAPSULE"
-        n_action_steps: 1
-        horizon: 5
-        n_action_repeats: 2
-      sac:
-        type: sac
-        device: cuda
-        pretrained_path: "TODO_SAC_PICK_AND_INSERT_CAPSULE"
-      reward_classifier:
-        type: reward_classifier
-        device: cuda
-        pretrained_path: "TODO_REWARD_CLASSIFIER_PICK_AND_INSERT_CAPSULE"
-      sarm:
-        type: sarm
-        device: cuda
-        pretrained_path: "TODO_SARM_PICK_AND_INSERT_CAPSULE"
     transition:
       mode: timeout
       max_duration_s: 60.0
@@ -182,87 +105,6 @@ skills:
         pretrained_path: "Squitieri/act_close_machine"
         n_action_steps: 16
         chunk_size: 16
-      smolvla:
-        type: smolvla
-        device: cuda
-        pretrained_path: "Squitieri/close_machine_smolvla_bs8_5k"
-        n_action_steps: 50
-        chunk_size: 50
-        num_steps: 10
-      diffusion:
-        type: diffusion
-        device: cuda
-        pretrained_path: "TODO_DIFFUSION_CLOSE_COFFEE_MACHINE"
-        n_action_steps: 8
-        horizon: 16
-      multi_task_dit:
-        type: multi_task_dit
-        device: cuda
-        pretrained_path: "TODO_MULTI_TASK_DIT_CLOSE_COFFEE_MACHINE"
-        n_action_steps: 24
-        horizon: 32
-      vqbet:
-        type: vqbet
-        device: cuda
-        pretrained_path: "TODO_VQBET_CLOSE_COFFEE_MACHINE"
-        n_obs_steps: 5
-        n_action_pred_token: 3
-        action_chunk_size: 5
-      pi0:
-        type: pi0
-        device: cuda
-        pretrained_path: "TODO_PI0_CLOSE_COFFEE_MACHINE"
-        n_action_steps: 50
-        chunk_size: 50
-      pi0_fast:
-        type: pi0_fast
-        device: cuda
-        pretrained_path: "TODO_PI0_FAST_CLOSE_COFFEE_MACHINE"
-        n_action_steps: 50
-        chunk_size: 50
-      pi05:
-        type: pi05
-        device: cuda
-        pretrained_path: "TODO_PI05_CLOSE_COFFEE_MACHINE"
-        n_action_steps: 50
-        chunk_size: 50
-      groot:
-        type: groot
-        device: cuda
-        pretrained_path: "TODO_GROOT_CLOSE_COFFEE_MACHINE"
-        n_action_steps: 50
-        chunk_size: 50
-      xvla:
-        type: xvla
-        device: cuda
-        pretrained_path: "TODO_XVLA_CLOSE_COFFEE_MACHINE"
-        n_action_steps: 32
-        chunk_size: 32
-      wall_x:
-        type: wall_x
-        device: cuda
-        pretrained_path: "TODO_WALL_X_CLOSE_COFFEE_MACHINE"
-        n_action_steps: 32
-        chunk_size: 32
-      tdmpc:
-        type: tdmpc
-        device: cuda
-        pretrained_path: "TODO_TDMPC_CLOSE_COFFEE_MACHINE"
-        n_action_steps: 1
-        horizon: 5
-        n_action_repeats: 2
-      sac:
-        type: sac
-        device: cuda
-        pretrained_path: "TODO_SAC_CLOSE_COFFEE_MACHINE"
-      reward_classifier:
-        type: reward_classifier
-        device: cuda
-        pretrained_path: "TODO_REWARD_CLASSIFIER_CLOSE_COFFEE_MACHINE"
-      sarm:
-        type: sarm
-        device: cuda
-        pretrained_path: "TODO_SARM_CLOSE_COFFEE_MACHINE"
     transition:
       mode: timeout
       max_duration_s: 30.0

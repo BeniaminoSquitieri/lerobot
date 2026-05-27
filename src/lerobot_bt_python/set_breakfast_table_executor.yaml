@@ -13,7 +13,7 @@ vlm_result_topic: "/lerobot_bt/vlm_result"
 vlm_timeout_s: 0.0
 
 # Default variant. Per-skill policy_variant can mix any registered LeRobot
-# policy type, e.g. act, smolvla, diffusion, groot, xvla, pi0, vqbet, tdmpc.
+# policy type, e.g. act.
 policy_variant: act
 
 expected_skill_names:
@@ -52,7 +52,7 @@ fps: 10
 display_data: true
 play_sounds: true
 reset_robot_on_startup: true
-reset_robot_before_skill: true
+reset_robot_before_skill: false
 rename_map: {}
 
 robot_action_processor:
@@ -72,16 +72,20 @@ camera_publish_jpeg_quality: 80
 
 # VLM gate descriptions (for AwaitScene nodes that have no policy config).
 vlm_gate_tasks:
-  breakfast_table.tablecloth_ready: "A tablecloth has been spread on the table."
+  breakfast_table.tablecloth_ready: "A white tablecloth is spread on the table."
   breakfast_table.tea_box_ready: "A tea box has been placed on the table."
   breakfast_table.spoon_ready: "A spoon has been placed on the table."
   breakfast_table.task_complete: "The breakfast table is fully set with all items: tablecloth, cereal box, tea box, bottle, cup, spoon, and bowl."
+
+# Minimum wait time (seconds) before VLM checks human gates.
+# Gives the operator time to place objects before the VLM verifies.
+vlm_gate_min_wait_s: 5.0
 
 skills:
   - name: place_cereal_box
     dataset_repo_id: "Squitieri/cereal_act16_100k"
     metadata_source: robot
-    task: "The cereal box is on the tablecloth."
+    task: "The brown cereal box has been moved onto the white tablecloth."
     policy_variant: act
     policy_variants:
       act:
@@ -90,96 +94,15 @@ skills:
         pretrained_path: "Squitieri/cereal_act16_100k"
         n_action_steps: 16
         chunk_size: 16
-      smolvla:
-        type: smolvla
-        device: cuda
-        pretrained_path: "TODO_SMOLVLA_PLACE_CEREAL_BOX"
-        n_action_steps: 50
-        chunk_size: 50
-        num_steps: 10
-      diffusion:
-        type: diffusion
-        device: cuda
-        pretrained_path: "TODO_DIFFUSION_PLACE_CEREAL_BOX"
-        n_action_steps: 8
-        horizon: 16
-      multi_task_dit:
-        type: multi_task_dit
-        device: cuda
-        pretrained_path: "TODO_MULTI_TASK_DIT_PLACE_CEREAL_BOX"
-        n_action_steps: 24
-        horizon: 32
-      vqbet:
-        type: vqbet
-        device: cuda
-        pretrained_path: "TODO_VQBET_PLACE_CEREAL_BOX"
-        n_obs_steps: 5
-        n_action_pred_token: 3
-        action_chunk_size: 5
-      pi0:
-        type: pi0
-        device: cuda
-        pretrained_path: "TODO_PI0_PLACE_CEREAL_BOX"
-        n_action_steps: 50
-        chunk_size: 50
-      pi0_fast:
-        type: pi0_fast
-        device: cuda
-        pretrained_path: "TODO_PI0_FAST_PLACE_CEREAL_BOX"
-        n_action_steps: 50
-        chunk_size: 50
-      pi05:
-        type: pi05
-        device: cuda
-        pretrained_path: "TODO_PI05_PLACE_CEREAL_BOX"
-        n_action_steps: 50
-        chunk_size: 50
-      groot:
-        type: groot
-        device: cuda
-        pretrained_path: "TODO_GROOT_PLACE_CEREAL_BOX"
-        n_action_steps: 50
-        chunk_size: 50
-      xvla:
-        type: xvla
-        device: cuda
-        pretrained_path: "TODO_XVLA_PLACE_CEREAL_BOX"
-        n_action_steps: 32
-        chunk_size: 32
-      wall_x:
-        type: wall_x
-        device: cuda
-        pretrained_path: "TODO_WALL_X_PLACE_CEREAL_BOX"
-        n_action_steps: 32
-        chunk_size: 32
-      tdmpc:
-        type: tdmpc
-        device: cuda
-        pretrained_path: "TODO_TDMPC_PLACE_CEREAL_BOX"
-        n_action_steps: 1
-        horizon: 5
-        n_action_repeats: 2
-      sac:
-        type: sac
-        device: cuda
-        pretrained_path: "TODO_SAC_PLACE_CEREAL_BOX"
-      reward_classifier:
-        type: reward_classifier
-        device: cuda
-        pretrained_path: "TODO_REWARD_CLASSIFIER_PLACE_CEREAL_BOX"
-      sarm:
-        type: sarm
-        device: cuda
-        pretrained_path: "TODO_SARM_PLACE_CEREAL_BOX"
     transition:
       mode: timeout
-      max_duration_s: 120.0
-    settle_time_s: 0.0
+      max_duration_s: 60.0
+    settle_time_s: 3.0
 
   - name: place_bottle
     dataset_repo_id: "Squitieri/bottleclean_act16_100k"
     metadata_source: robot
-    task: "The bottle is on the tablecloth."
+    task: "The green bottle is now on the white tablecloth."
     policy_variant: act
     policy_variants:
       act:
@@ -188,96 +111,15 @@ skills:
         pretrained_path: "Squitieri/bottleclean_act16_100k"
         n_action_steps: 16
         chunk_size: 16
-      smolvla:
-        type: smolvla
-        device: cuda
-        pretrained_path: "TODO_SMOLVLA_PLACE_BOTTLE"
-        n_action_steps: 50
-        chunk_size: 50
-        num_steps: 10
-      diffusion:
-        type: diffusion
-        device: cuda
-        pretrained_path: "TODO_DIFFUSION_PLACE_BOTTLE"
-        n_action_steps: 8
-        horizon: 16
-      multi_task_dit:
-        type: multi_task_dit
-        device: cuda
-        pretrained_path: "TODO_MULTI_TASK_DIT_PLACE_BOTTLE"
-        n_action_steps: 24
-        horizon: 32
-      vqbet:
-        type: vqbet
-        device: cuda
-        pretrained_path: "TODO_VQBET_PLACE_BOTTLE"
-        n_obs_steps: 5
-        n_action_pred_token: 3
-        action_chunk_size: 5
-      pi0:
-        type: pi0
-        device: cuda
-        pretrained_path: "TODO_PI0_PLACE_BOTTLE"
-        n_action_steps: 50
-        chunk_size: 50
-      pi0_fast:
-        type: pi0_fast
-        device: cuda
-        pretrained_path: "TODO_PI0_FAST_PLACE_BOTTLE"
-        n_action_steps: 50
-        chunk_size: 50
-      pi05:
-        type: pi05
-        device: cuda
-        pretrained_path: "TODO_PI05_PLACE_BOTTLE"
-        n_action_steps: 50
-        chunk_size: 50
-      groot:
-        type: groot
-        device: cuda
-        pretrained_path: "TODO_GROOT_PLACE_BOTTLE"
-        n_action_steps: 50
-        chunk_size: 50
-      xvla:
-        type: xvla
-        device: cuda
-        pretrained_path: "TODO_XVLA_PLACE_BOTTLE"
-        n_action_steps: 32
-        chunk_size: 32
-      wall_x:
-        type: wall_x
-        device: cuda
-        pretrained_path: "TODO_WALL_X_PLACE_BOTTLE"
-        n_action_steps: 32
-        chunk_size: 32
-      tdmpc:
-        type: tdmpc
-        device: cuda
-        pretrained_path: "TODO_TDMPC_PLACE_BOTTLE"
-        n_action_steps: 1
-        horizon: 5
-        n_action_repeats: 2
-      sac:
-        type: sac
-        device: cuda
-        pretrained_path: "TODO_SAC_PLACE_BOTTLE"
-      reward_classifier:
-        type: reward_classifier
-        device: cuda
-        pretrained_path: "TODO_REWARD_CLASSIFIER_PLACE_BOTTLE"
-      sarm:
-        type: sarm
-        device: cuda
-        pretrained_path: "TODO_SARM_PLACE_BOTTLE"
     transition:
       mode: timeout
-      max_duration_s: 120.0
-    settle_time_s: 0.0
+      max_duration_s: 60.0
+    settle_time_s: 3.0
 
   - name: place_cup
     dataset_repo_id: "Squitieri/breakfast_pick_cup_new_act_chunk16_exec16_100k"
     metadata_source: robot
-    task: "The cup is on the tablecloth."
+    task: "The red cup is now on the white tablecloth."
     policy_variant: act
     policy_variants:
       act:
@@ -286,96 +128,15 @@ skills:
         pretrained_path: "Squitieri/breakfast_pick_cup_new_act_chunk16_exec16_100k"
         n_action_steps: 16
         chunk_size: 16
-      smolvla:
-        type: smolvla
-        device: cuda
-        pretrained_path: "TODO_SMOLVLA_PLACE_CUP"
-        n_action_steps: 50
-        chunk_size: 50
-        num_steps: 10
-      diffusion:
-        type: diffusion
-        device: cuda
-        pretrained_path: "TODO_DIFFUSION_PLACE_CUP"
-        n_action_steps: 8
-        horizon: 16
-      multi_task_dit:
-        type: multi_task_dit
-        device: cuda
-        pretrained_path: "TODO_MULTI_TASK_DIT_PLACE_CUP"
-        n_action_steps: 24
-        horizon: 32
-      vqbet:
-        type: vqbet
-        device: cuda
-        pretrained_path: "TODO_VQBET_PLACE_CUP"
-        n_obs_steps: 5
-        n_action_pred_token: 3
-        action_chunk_size: 5
-      pi0:
-        type: pi0
-        device: cuda
-        pretrained_path: "TODO_PI0_PLACE_CUP"
-        n_action_steps: 50
-        chunk_size: 50
-      pi0_fast:
-        type: pi0_fast
-        device: cuda
-        pretrained_path: "TODO_PI0_FAST_PLACE_CUP"
-        n_action_steps: 50
-        chunk_size: 50
-      pi05:
-        type: pi05
-        device: cuda
-        pretrained_path: "TODO_PI05_PLACE_CUP"
-        n_action_steps: 50
-        chunk_size: 50
-      groot:
-        type: groot
-        device: cuda
-        pretrained_path: "TODO_GROOT_PLACE_CUP"
-        n_action_steps: 50
-        chunk_size: 50
-      xvla:
-        type: xvla
-        device: cuda
-        pretrained_path: "TODO_XVLA_PLACE_CUP"
-        n_action_steps: 32
-        chunk_size: 32
-      wall_x:
-        type: wall_x
-        device: cuda
-        pretrained_path: "TODO_WALL_X_PLACE_CUP"
-        n_action_steps: 32
-        chunk_size: 32
-      tdmpc:
-        type: tdmpc
-        device: cuda
-        pretrained_path: "TODO_TDMPC_PLACE_CUP"
-        n_action_steps: 1
-        horizon: 5
-        n_action_repeats: 2
-      sac:
-        type: sac
-        device: cuda
-        pretrained_path: "TODO_SAC_PLACE_CUP"
-      reward_classifier:
-        type: reward_classifier
-        device: cuda
-        pretrained_path: "TODO_REWARD_CLASSIFIER_PLACE_CUP"
-      sarm:
-        type: sarm
-        device: cuda
-        pretrained_path: "TODO_SARM_PLACE_CUP"
     transition:
       mode: timeout
-      max_duration_s: 120.0
-    settle_time_s: 0.0
+      max_duration_s: 60.0
+    settle_time_s: 3.0
 
   - name: place_bowl
     dataset_repo_id: "Squitieri/bowl_act16_100k"
     metadata_source: robot
-    task: "The bowl is on the tablecloth."
+    task: "The red bowl is now on the white tablecloth."
     policy_variant: act
     policy_variants:
       act:
@@ -384,88 +145,7 @@ skills:
         pretrained_path: "Squitieri/bowl_act16_100k"
         n_action_steps: 16
         chunk_size: 16
-      smolvla:
-        type: smolvla
-        device: cuda
-        pretrained_path: "TODO_SMOLVLA_PLACE_BOWL"
-        n_action_steps: 50
-        chunk_size: 50
-        num_steps: 10
-      diffusion:
-        type: diffusion
-        device: cuda
-        pretrained_path: "TODO_DIFFUSION_PLACE_BOWL"
-        n_action_steps: 8
-        horizon: 16
-      multi_task_dit:
-        type: multi_task_dit
-        device: cuda
-        pretrained_path: "TODO_MULTI_TASK_DIT_PLACE_BOWL"
-        n_action_steps: 24
-        horizon: 32
-      vqbet:
-        type: vqbet
-        device: cuda
-        pretrained_path: "TODO_VQBET_PLACE_BOWL"
-        n_obs_steps: 5
-        n_action_pred_token: 3
-        action_chunk_size: 5
-      pi0:
-        type: pi0
-        device: cuda
-        pretrained_path: "TODO_PI0_PLACE_BOWL"
-        n_action_steps: 50
-        chunk_size: 50
-      pi0_fast:
-        type: pi0_fast
-        device: cuda
-        pretrained_path: "TODO_PI0_FAST_PLACE_BOWL"
-        n_action_steps: 50
-        chunk_size: 50
-      pi05:
-        type: pi05
-        device: cuda
-        pretrained_path: "TODO_PI05_PLACE_BOWL"
-        n_action_steps: 50
-        chunk_size: 50
-      groot:
-        type: groot
-        device: cuda
-        pretrained_path: "TODO_GROOT_PLACE_BOWL"
-        n_action_steps: 50
-        chunk_size: 50
-      xvla:
-        type: xvla
-        device: cuda
-        pretrained_path: "TODO_XVLA_PLACE_BOWL"
-        n_action_steps: 32
-        chunk_size: 32
-      wall_x:
-        type: wall_x
-        device: cuda
-        pretrained_path: "TODO_WALL_X_PLACE_BOWL"
-        n_action_steps: 32
-        chunk_size: 32
-      tdmpc:
-        type: tdmpc
-        device: cuda
-        pretrained_path: "TODO_TDMPC_PLACE_BOWL"
-        n_action_steps: 1
-        horizon: 5
-        n_action_repeats: 2
-      sac:
-        type: sac
-        device: cuda
-        pretrained_path: "TODO_SAC_PLACE_BOWL"
-      reward_classifier:
-        type: reward_classifier
-        device: cuda
-        pretrained_path: "TODO_REWARD_CLASSIFIER_PLACE_BOWL"
-      sarm:
-        type: sarm
-        device: cuda
-        pretrained_path: "TODO_SARM_PLACE_BOWL"
     transition:
       mode: timeout
-      max_duration_s: 120.0
-    settle_time_s: 0.0
+      max_duration_s: 60.0
+    settle_time_s: 3.0

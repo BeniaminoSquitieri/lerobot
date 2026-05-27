@@ -28,6 +28,8 @@ import os
 # Comment: imports dependencies or symbols required by the module.
 import sys
 # Comment: imports dependencies or symbols required by the module.
+import time
+# Comment: imports dependencies or symbols required by the module.
 from dataclasses import asdict
 # Comment: imports dependencies or symbols required by the module.
 from pathlib import Path
@@ -673,7 +675,18 @@ class SkillCommandServer(Node):
         try:
             # Comment: evaluates a condition and chooses the branch to run.
             if request.kind == "skill":
+                # Open a VLM check BEFORE executing the skill so the VLM can
+                # monitor the scene in real-time and return SUCCESS as soon as
+                # the goal is achieved, cutting the skill execution short.
+                self.vlm_check_registry.register_skill_name(request.name)
+                vlm_pre_attempt = self.vlm_check_registry.begin_attempt(request.name)
+                self._publish_vlm_request(vlm_pre_attempt)
+                self.get_logger().info(
+                    f"Pre-skill VLM check opened for '{request.name}' attempt {vlm_pre_attempt.attempt_id}."
+                )
                 # Real learned primitive: delegate to the robot/policy executor.
+                # The executor checks _active_vlm_result and stops early if the
+                # VLM reports a terminal status during execution.
                 # Comment: assigns or prepares a value used by later statements.
                 result = self.executor_backend.execute_skill(
                     # Comment: assigns or prepares a value used by later statements.
@@ -739,13 +752,30 @@ class SkillCommandServer(Node):
         if request.kind in {"skill", VLM_GATE_PENDING_KIND} and result.success:
             # Comment: opens a protected block to catch possible errors.
             try:
-                # Comment: evaluates a condition and chooses the branch to run.
+                # For skills, the VLM check was already opened before execution
+                # (see pre-skill block above). Only open a new attempt for gates.
                 if request.kind == VLM_GATE_PENDING_KIND:
                     # Gate names do not need to exist in the real skill config.
                     # Comment: closes a call, data structure, or multiline block.
                     self.vlm_check_registry.register_skill_name(request.name)
-                # Comment: assigns or prepares a value used by later statements.
-                vlm_check_attempt = self.vlm_check_registry.begin_attempt(request.name)
+                    # Comment: assigns or prepares a value used by later statements.
+                    vlm_check_attempt = self.vlm_check_registry.begin_attempt(request.name)
+                    # Give the human operator time to place/adjust objects
+                    # before the VLM starts checking the scene. The BT polls
+                    # and sees PENDING during this wait.
+                    gate_wait_s = float(getattr(self.cfg, "vlm_gate_min_wait_s", 5.0))
+                    if gate_wait_s > 0:
+                        self.get_logger().info(
+                            f"Gate '{request.name}': waiting {gate_wait_s:.1f}s for human operator..."
+                        )
+                        time.sleep(gate_wait_s)
+                    self._publish_vlm_request(vlm_check_attempt)
+                # For skills, the pre-skill VLM check was a warm-up. After the
+                # skill finishes, open a fresh attempt so the VLM sees the
+                # final scene, not stale pre-skill frames.
+                elif request.kind == "skill":
+                    vlm_check_attempt = self.vlm_check_registry.begin_attempt(request.name)
+                    self._publish_vlm_request(vlm_check_attempt)
                 # Comment: assigns or prepares a value used by later statements.
                 live_vlm_status = getattr(result, "vlm_status", None)
                 # Comment: evaluates a condition and chooses the branch to run.

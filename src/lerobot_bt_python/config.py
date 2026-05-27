@@ -377,6 +377,11 @@ class SkillCommandServerConfig:
     #   {"make_coffee.scene_0_ready": "Check if the coffee machine area is clear and ready."}
     # Comment: assigns or prepares a value used by later statements.
     vlm_gate_tasks: dict[str, str] = field(default_factory=dict)
+    # Minimum seconds to wait before sending the first VLM request for a
+    # human gate (AwaitScene). This gives the operator time to place or
+    # adjust objects before the VLM starts checking the scene.
+    # Comment: assigns or prepares a value used by later statements.
+    vlm_gate_min_wait_s: float = 5.0
 
     # Comment: defines the function or method __post_init__.
     def __post_init__(self) -> None:
