@@ -32,8 +32,76 @@ ROS 2:
 └─────────────────────────────────────┘    └──────────────────────────────────┘
 ```
 
-Both machines must be on the same ROS 2 domain (default: 0). No special
-configuration is needed if they can reach each other over the network.
+Both machines must be on the same ROS 2 domain (default: 0).
+
+### ⚠️ CRITICAL: CycloneDDS Configuration
+
+**Panda hardware requires CycloneDDS.** Without proper configuration, the two
+machines **will not discover each other** and ROS2 topics/services won't be
+visible across the network.
+
+#### Step 1: Create `~/.ros/cyclonedds.xml` on BOTH machines
+
+```bash
+mkdir -p ~/.ros
+cat > ~/.ros/cyclonedds.xml << 'EOF'
+<?xml version="1.0" encoding="UTF-8" ?>
+<CycloneDDS xmlns="https://cdds.io/config">
+  <Domain>
+    <General>
+      <AllowMulticast>true</AllowMulticast>
+    </General>
+  </Domain>
+</CycloneDDS>
+EOF
+```
+
+#### Step 2: Export env vars on EVERY terminal (robot + GPU server)
+
+```bash
+export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
+export CYCLONEDDS_URI=file://$HOME/.ros/cyclonedds.xml
+```
+
+**❌ Common mistake:** forgetting to set these on one terminal — cross-machine
+discovery will silently fail.
+
+#### Step 3: Launch Panda control with CycloneDDS
+
+```bash
+CYCLONEDDS_URI=file://$HOME/.ros/cyclonedds.xml panda_control_launch
+```
+
+#### Step 4: Verify cross-machine discovery
+
+On the **robot machine**, after launching the server:
+```bash
+ros2 topic list | grep -E "lerobot_bt|panda"
+```
+
+On the **GPU server**, these same topics must be visible:
+```bash
+ros2 topic list | grep -E "lerobot_bt|panda"
+```
+
+If topics are missing on one machine, re-check Step 2 on ALL terminals.
+
+#### Step 5: Verify communication
+
+```bash
+# Robot machine
+ros2 topic pub /lerobot_bt/vlm_request std_msgs/msg/String '{"data":"{\"skill_name\":\"ping\"}"}' -1
+
+# GPU server — should see the message
+ros2 topic echo /lerobot_bt/vlm_request
+```
+
+### Network addresses (reference)
+
+| Machine | Hostname | IP | Interface |
+|---------|----------|----|-----------|
+| Robot | IITICB001DW001 | 192.168.100.171 | eno1 |
+| GPU server | iitbmp014srv002 | 192.168.100.180 | enp1s0f1 |
 
 ## Packages
 
