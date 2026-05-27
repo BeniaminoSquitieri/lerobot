@@ -81,6 +81,10 @@ vlm_gate_tasks:
 # Gives the operator time to place objects before the VLM verifies.
 vlm_gate_min_wait_s: 5.0
 
+# Force re-download of policy checkpoints on every server startup.
+# Set to false only if you're offline and want to use cached models.
+force_download_policy: true
+
 skills:
   - name: place_cereal_box
     dataset_repo_id: "Squitieri/cereal_act16_100k"

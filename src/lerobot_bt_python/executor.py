@@ -26,7 +26,12 @@ import time
 # Comment: imports dependencies or symbols required by the module.
 from dataclasses import dataclass
 # Comment: imports dependencies or symbols required by the module.
+from pathlib import Path
+# Comment: imports dependencies or symbols required by the module.
 from typing import TYPE_CHECKING, Any
+
+# Comment: imports dependencies or symbols required by the module.
+from huggingface_hub import snapshot_download
 
 # Comment: imports dependencies or symbols required by the module.
 from lerobot.common.control_utils import predict_action
@@ -221,6 +226,8 @@ def _build_skill_runtime(
     robot_action_processor: RobotProcessorPipeline,
     # Comment: executes this BT logic statement.
     robot_observation_processor: RobotProcessorPipeline,
+    # Comment: assigns or prepares a value used by later statements.
+    force_download: bool = False,
 # Comment: executes this BT logic statement.
 ) -> SkillRuntime:
     # Comment: executes this BT logic statement.
@@ -231,6 +238,7 @@ def _build_skill_runtime(
     @param robot Robot instance used to infer live feature schemas when needed.
     @param robot_action_processor Runtime action processor pipeline.
     @param robot_observation_processor Runtime observation processor pipeline.
+    @param force_download If True, force re-download from HuggingFace Hub.
     @return A fully loaded `SkillRuntime`.
 
     This is where a skill name becomes dataset metadata, a policy checkpoint, and
@@ -240,6 +248,27 @@ def _build_skill_runtime(
     if skill_cfg.policy is None:
         # Comment: raises an explicit error for the caller.
         raise ValueError(f"Skill '{skill_cfg.name}' has no active policy selected.")
+
+    # Force re-download policy checkpoint from HuggingFace Hub before loading,
+    # so updated model weights are picked up even if a cached copy exists.
+    if force_download and skill_cfg.policy.pretrained_path:
+        pretrained_path_str = str(skill_cfg.policy.pretrained_path)
+        if not Path(pretrained_path_str).is_dir():
+            logging.info(
+                "Force-downloading policy '%s' from HuggingFace Hub (force_download=True).",
+                pretrained_path_str,
+            )
+            try:
+                snapshot_download(
+                    repo_id=pretrained_path_str,
+                    force_download=True,
+                    resume_download=True,
+                )
+            except Exception as exc:
+                logging.warning(
+                    "Force-download of '%s' failed (%s). Falling back to cached copy.",
+                    pretrained_path_str, exc,
+                )
 
     # Comment: evaluates a condition and chooses the branch to run.
     if skill_cfg.metadata_source == "robot":
@@ -540,6 +569,8 @@ class SkillCommandExecutor:
                 robot_action_processor,
                 # Comment: executes this BT logic statement.
                 robot_observation_processor,
+                # Comment: assigns or prepares a value used by later statements.
+                force_download=self.cfg.force_download_policy,
             # Comment: closes a call, data structure, or multiline block.
             )
         # Comment: returns the computed value to the caller.

@@ -382,6 +382,11 @@ class SkillCommandServerConfig:
     # adjust objects before the VLM starts checking the scene.
     # Comment: assigns or prepares a value used by later statements.
     vlm_gate_min_wait_s: float = 5.0
+    # If True, force re-download of policy checkpoints from HuggingFace Hub
+    # on every server startup, bypassing the local cache. Set to True when
+    # you've pushed updated model weights and need the latest version.
+    # Comment: assigns or prepares a value used by later statements.
+    force_download_policy: bool = True
 
     # Comment: defines the function or method __post_init__.
     def __post_init__(self) -> None:
