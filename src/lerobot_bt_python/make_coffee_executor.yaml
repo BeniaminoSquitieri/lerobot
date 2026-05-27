@@ -58,17 +58,30 @@ robot_action_processor:
 robot_observation_processor:
   steps: []
 
+camera_publish_map:
+  wrist: "/panda/camera/front/image_compressed"
+  left: "/panda/camera/wrist/image_compressed"
+camera_publish_fps: 10.0
+camera_publish_jpeg_quality: 80
+
+# VLM gate descriptions (for AwaitScene nodes that have no policy config).
+# These are used as the `task` field in VLM requests so the VLM knows what to check.
+vlm_gate_tasks:
+  make_coffee.scene_0_ready: "Verify that all required objects for the coffee task are present on the scene: coffee machine, a coffee capsule in a white circular plate, and an empty cup."
+  make_coffee.cup_under_dispenser: "Check if an empty cup or mug has been placed under the coffee dispenser nozzle."
+  make_coffee.human_press_start_button: "Check if the coffee machine is running and extraction has started (button pressed, water flowing)."
+
 skills:
   - name: pick_and_insert_capsule
     dataset_repo_id: "scene-transition/pick_and_insert_capsule"
     metadata_source: robot
-    task: "Pick the coffee capsule and insert it into the capsule slot."
+    task: "The red coffee capsule is no longer visible on the table."
     policy_variant: act
     policy_variants:
       act:
         type: act
         device: cuda
-        pretrained_path: "Squitieri/act_put_coffee"
+        pretrained_path: "HSP-IIT/act_put_coffee"
         n_action_steps: 16
         chunk_size: 16
       smolvla:
@@ -158,15 +171,15 @@ skills:
     settle_time_s: 0.0
 
   - name: close_coffee_machine
-    dataset_repo_id: "Squitieri/close_machine"
+    dataset_repo_id: "Squitieri/act_close_machine"
     metadata_source: robot
-    task: "close the coffee machine."
-    policy_variant: smolvla
+    task: "Verify that the coffee machine lid is fully closed after the capsule was inserted."
+    policy_variant: act
     policy_variants:
       act:
         type: act
         device: cuda
-        pretrained_path: "TODO_ACT_CLOSE_COFFEE_MACHINE"
+        pretrained_path: "Squitieri/act_close_machine"
         n_action_steps: 16
         chunk_size: 16
       smolvla:
