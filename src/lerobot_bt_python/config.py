@@ -358,6 +358,25 @@ class SkillCommandServerConfig:
     # to mix ACT, SmolVLA, Diffusion, GROOT, XVLA, or any registered policy.
     # Comment: assigns or prepares a value used by later statements.
     policy_variant: str = "act"
+    # Optional mapping from BT camera names to ROS2 CompressedImage topic names.
+    # When set, the server publishes live camera frames on these topics so an
+    # external VLM verifier can subscribe without opening the RealSense devices
+    # directly (which would conflict with the BT server's own camera usage).
+    # Example: {"wrist": "/panda/camera/wrist/image_compressed", "left": "/panda/camera/front/image_compressed"}
+    # Comment: assigns or prepares a value used by later statements.
+    camera_publish_map: dict[str, str] = field(default_factory=dict)
+    # Frame rate (Hz) for the camera publishing thread. 0 disables publishing.
+    # Comment: assigns or prepares a value used by later statements.
+    camera_publish_fps: float = 10.0
+    # JPEG quality (0-100) for published camera frames.
+    # Comment: assigns or prepares a value used by later statements.
+    camera_publish_jpeg_quality: int = 80
+    # Human-readable task descriptions for VLM gates (AwaitScene nodes).
+    # Gates have no policy config, so their `task` field would be empty.
+    # This map lets you provide a VLM prompt per gate, e.g.:
+    #   {"make_coffee.scene_0_ready": "Check if the coffee machine area is clear and ready."}
+    # Comment: assigns or prepares a value used by later statements.
+    vlm_gate_tasks: dict[str, str] = field(default_factory=dict)
 
     # Comment: defines the function or method __post_init__.
     def __post_init__(self) -> None:

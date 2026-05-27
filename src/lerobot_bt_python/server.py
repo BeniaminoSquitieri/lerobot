@@ -34,7 +34,7 @@ from pathlib import Path
 # Comment: imports dependencies or symbols required by the module.
 from pprint import pformat
 # Comment: imports dependencies or symbols required by the module.
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, Callable
 
 # Comment: imports dependencies or symbols required by the module.
 import rclpy
@@ -318,7 +318,80 @@ def _instantiate_processor_step(step_spec: Any):
     raise TypeError(f"Unsupported processor step spec: {step_spec!r}")
 
 
-# Comment: defines the function or method _build_robot_processor_pipeline.
+# Comment: defines the function or method _start_camera_publisher.
+def _start_camera_publisher(
+    *,
+    robot: "CustomManipulator",
+    topic_map: dict[str, str],
+    fps: float,
+    jpeg_quality: int,
+    node: Node,
+) -> Callable[[], None]:
+    """Start a background thread that publishes camera frames as ROS2 CompressedImage.
+
+    This lets the external VLM verifier subscribe to live camera feeds without
+    opening the RealSense devices directly (which would conflict with the BT
+    server's own usage).
+
+    @param robot Connected CustomManipulator with cameras already open.
+    @param topic_map Mapping from BT camera name to ROS topic name.
+    @param fps Publishing rate in Hz.
+    @param jpeg_quality JPEG quality 0-100.
+    @param node ROS2 node used to create publishers.
+    @return A stop function that signals the thread to exit.
+    """
+    import cv2
+    import threading
+    from sensor_msgs.msg import CompressedImage
+
+    stop_event = threading.Event()
+    publishers: dict[str, Any] = {}
+
+    # Create one publisher per mapped camera
+    for bt_cam_name, ros_topic in topic_map.items():
+        if bt_cam_name not in robot.cameras:
+            logging.warning(
+                "Camera publish map references '%s' but robot has no such camera. Available: %s",
+                bt_cam_name,
+                sorted(robot.cameras),
+            )
+            continue
+        pub = node.create_publisher(CompressedImage, ros_topic, 10)
+        publishers[bt_cam_name] = pub
+        logging.info("Publishing camera '%s' → %s", bt_cam_name, ros_topic)
+
+    if not publishers:
+        logging.warning("No valid camera→topic mappings; camera publisher idle.")
+        return stop_event.set  # Return a no-op stop function
+
+    period_s = 1.0 / max(fps, 0.1)
+    encode_params = [int(cv2.IMWRITE_JPEG_QUALITY), int(jpeg_quality)]
+
+    def _publish_loop() -> None:
+        while not stop_event.is_set():
+            for bt_cam_name, pub in publishers.items():
+                try:
+                    camera = robot.cameras[bt_cam_name]
+                    # Use a short timeout so the publisher never blocks the
+                    # policy control loop that also reads from the same camera.
+                    frame = camera.async_read(timeout_ms=50)
+                    if frame is None:
+                        continue
+                    # frame is a numpy array (H, W, 3) in RGB; cv2 needs BGR
+                    _, jpeg_bytes = cv2.imencode(".jpg", cv2.cvtColor(frame, cv2.COLOR_RGB2BGR), encode_params)
+                    msg = CompressedImage()
+                    msg.header.stamp = node.get_clock().now().to_msg()
+                    msg.header.frame_id = bt_cam_name
+                    msg.format = "jpeg"
+                    msg.data = jpeg_bytes.tobytes()
+                    pub.publish(msg)
+                except Exception:
+                    pass  # Silently skip if camera is busy or no frame available
+            stop_event.wait(timeout=period_s)
+
+    thread = threading.Thread(target=_publish_loop, daemon=True, name="camera-publisher")
+    thread.start()
+    return stop_event.set
 def _build_robot_processor_pipeline(
     # Comment: executes this BT logic statement.
     processor_cfg: dict[str, Any],
@@ -962,6 +1035,17 @@ class SkillCommandServer(Node):
         # Comment: imports dependencies or symbols required by the module.
         from std_msgs.msg import String  # type: ignore
 
+        # Resolve the optional human-readable task description for this skill so
+        # the VLM prompt can include semantic context about what to verify.
+        # Check two sources: PrimitiveSkillConfig.task for BC skills, and
+        # vlm_gate_tasks for VLM-only gates (AwaitScene nodes).
+        skill_cfg = self.executor_backend.skill_configs.get(snapshot.skill_name)
+        task_desc = ""
+        if skill_cfg is not None and getattr(skill_cfg, "task", None):
+            task_desc = skill_cfg.task.strip()
+        if not task_desc:
+            task_desc = self.cfg.vlm_gate_tasks.get(snapshot.skill_name, "")
+
         # Comment: assigns or prepares a value used by later statements.
         payload = {
             # Comment: executes this BT logic statement.
@@ -974,6 +1058,8 @@ class SkillCommandServer(Node):
             "status": VLM_PENDING,
             # Comment: executes this BT logic statement.
             "message": snapshot.message,
+            # Comment: executes this BT logic statement.
+            "task": task_desc,
             # Comment: executes this BT logic statement.
             "allowed_statuses": [
                 # Comment: executes this BT logic statement.
@@ -1013,9 +1099,12 @@ class SkillCommandServer(Node):
         # Comment: executes this BT logic statement.
         self.get_logger().info(
             # Comment: executes this BT logic statement.
-            f"Published VLM request for skill '{snapshot.skill_name}' attempt {snapshot.attempt_id}."
+            f"VLM REQUEST → skill='{snapshot.skill_name}' attempt={snapshot.attempt_id} "
+            f"task='{task_desc}'"
         # Comment: closes a call, data structure, or multiline block.
         )
+        # Also log the full payload for debugging.
+        self.get_logger().info(f"VLM PAYLOAD: {msg.data}")
 
     # Comment: defines the function or method _handle_vlm_result_topic.
     def _handle_vlm_result_topic(self, msg) -> None:
@@ -1223,7 +1312,29 @@ def run(cfg: SkillCommandServerConfig) -> None:
         # Comment: closes a call, data structure, or multiline block.
         logging.info("Spinning skill command server.")
         # Comment: closes a call, data structure, or multiline block.
-        ros_executor.spin()
+
+        # Start background camera publisher so the VLM can subscribe to live
+        # frames without opening the RealSense devices a second time.
+        _camera_pub_stop = None
+        if cfg.camera_publish_map and cfg.camera_publish_fps > 0:
+            _camera_pub_stop = _start_camera_publisher(
+                robot=robot,
+                topic_map=cfg.camera_publish_map,
+                fps=cfg.camera_publish_fps,
+                jpeg_quality=cfg.camera_publish_jpeg_quality,
+                node=server_node,
+            )
+            logging.info(
+                "Camera publisher started: %s at %.1f FPS.",
+                sorted(cfg.camera_publish_map.values()),
+                cfg.camera_publish_fps,
+            )
+
+        try:
+            ros_executor.spin()
+        finally:
+            if _camera_pub_stop is not None:
+                _camera_pub_stop()
     # Comment: always runs the final cleanup for the protected block.
     finally:
         # Comment: opens a protected block to catch possible errors.
