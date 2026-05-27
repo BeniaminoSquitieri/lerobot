@@ -1133,8 +1133,12 @@ class SkillCommandServer(Node):
             f"task='{task_desc}'"
         # Comment: closes a call, data structure, or multiline block.
         )
-        # Also log the full payload for debugging.
-        self.get_logger().info(f"VLM PAYLOAD: {msg.data}")
+        # Visible terminal output for the operator.
+        print(f"\n{'═'*60}")
+        print(f"🔍 VLM CHECK → {snapshot.skill_name} (attempt {snapshot.attempt_id})")
+        if task_desc:
+            print(f"   Task: {task_desc}")
+        print(f"{'═'*60}\n")
 
     # Comment: defines the function or method _handle_vlm_result_topic.
     def _handle_vlm_result_topic(self, msg) -> None:
@@ -1204,6 +1208,13 @@ class SkillCommandServer(Node):
         log_fn = self.get_logger().info if update.accepted else self.get_logger().warning
         # Comment: closes a call, data structure, or multiline block.
         log_fn(update.message)
+
+        # Visible terminal output for the operator.
+        emoji = {"SUCCESS": "✅", "FAILURE": "❌", "RUNNING": "🔄", "PENDING": "⏳"}.get(status, "📢")
+        print(f"\n{'═'*60}")
+        print(f"{emoji} VLM RESULT → {skill_name}: {status}")
+        print(f"   Message: {message}")
+        print(f"{'═'*60}\n")
 
 
 # Comment: applies a decorator to the following definition.

@@ -67,7 +67,7 @@ camera_publish_jpeg_quality: 80
 # VLM gate descriptions (for AwaitScene nodes that have no policy config).
 # These are used as the `task` field in VLM requests so the VLM knows what to check.
 vlm_gate_tasks:
-  make_coffee.scene_0_ready: "Verify that all required objects for the coffee task are present on the scene: coffee machine, a coffee capsule in a white circular plate, and an empty cup."
+  make_coffee.scene_0_ready: "Verify that all required objects for the coffee task are present on the scene: coffee machine, a coffee capsule in a plate, and an empty cup."
   make_coffee.cup_under_dispenser: "Check if an empty cup or mug has been placed under the coffee dispenser nozzle."
   make_coffee.human_press_start_button: "Check if the coffee machine is running and extraction has started (button pressed, water flowing)."
 
@@ -83,7 +83,7 @@ skills:
   - name: pick_and_insert_capsule
     dataset_repo_id: "scene-transition/pick_and_insert_capsule"
     metadata_source: robot
-    task: "The red coffee capsule is no longer visible on the table."
+    task: "The coffee capsule has been picked and inserted into the machine."
     policy_variant: act
     policy_variants:
       act:
