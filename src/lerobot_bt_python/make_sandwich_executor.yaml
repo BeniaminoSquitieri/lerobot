@@ -77,6 +77,16 @@ robot_action_processor:
 robot_observation_processor:
   steps: []
 
+# Camera publishing for the external VLM verifier.
+# The BT server opens the RealSense devices for policy inference and
+# simultaneously publishes frames on these ROS topics so the VLM can
+# subscribe without conflicting with the server.
+camera_publish_map:
+  wrist: "/panda/camera/front/image_compressed"
+  left: "/panda/camera/wrist/image_compressed"
+camera_publish_fps: 10.0
+camera_publish_jpeg_quality: 80
+
 # Learned primitives.
 # Each entry points to policy metadata and exposes mixed inference variants.
 skills:
