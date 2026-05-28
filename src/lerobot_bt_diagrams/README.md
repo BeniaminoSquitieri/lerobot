@@ -297,3 +297,33 @@ python generate_diagrams.py
 ```
 
 Richiede: `matplotlib`, Python 3.10+.
+
+---
+
+## 📊 Presentazione (Slide Deck)
+
+13 slide professionali per presentazioni al PI, generate come immagini PNG.
+
+| # | Slide | Contenuto |
+|---|-------|-----------|
+| 1 | **Title** | LeRobot Behavior Tree Stack — titolo e overview |
+| 2 | **Problem & Motivation** | Perché BT + VLM? Sfide della robot manipulation |
+| 3 | **System Architecture** | Panoramica 5-layer con flusso di comunicazione |
+| 4 | **BT C++ Runtime** | Nodi custom, BehaviorTree.CPP, Groot2 monitoring |
+| 5 | **BT Python Execution** | Policy loading, robot control, execution flow a 7 step |
+| 6 | **VLM Verification** | Pipeline di verifica, traduzione status, telecamere |
+| 7 | **BT-VLM Bridge** | Traduzione protocolli, mapping skill→prompt NL |
+| 8 | **5 Implemented Tasks** | Sandwich, coffee, drawer, picnic, breakfast table |
+| 9 | **Supported Policies** | 13+ architetture policy (ACT, SmolVLA, GROOT, π0...) |
+| 10 | **Camera & Hardware** | RealSense D415+D405, Panda arm, 3 gripper options |
+| 11 | **Key Innovations** | 6 innovazioni tecniche chiave del framework |
+| 12 | **Results & Impact** | Metriche quantitative e impatto qualitativo |
+| 13 | **Thank You** | Next steps e ringraziamenti |
+
+Le slide si trovano in [`slides/`](slides/). Per rigenerarle:
+
+```bash
+python generate_slides.py
+```
+
+Richiede: `matplotlib`, Python 3.10+.
