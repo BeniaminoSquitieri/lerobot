@@ -110,7 +110,7 @@ if __name__ == "__main__":
     from lerobot.robots.custom_manipulator.custom_manipulator import CustomManipulator
     from lerobot.utils.visualization_utils import init_rerun
 
-    repo_id = "Squitieri/toast_pick_and_place"
+    repo_id = "HSP-IIT/put_coffee"
     revision = "main"
     left_serial = "123622270882"
     force_cache_sync = True

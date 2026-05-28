@@ -21,7 +21,7 @@ vlm_result_topic: "/lerobot_bt/vlm_result"
 vlm_timeout_s: 0.0
 
 # Default variant. Per-skill policy_variant can mix any registered LeRobot
-# policy type, e.g. act, smolvla, diffusion, groot, xvla, pi0, vqbet, tdmpc.
+# policy type, e.g. act.
 policy_variant: act
 
 # Startup validation: these BT-requested skill names must exist below.
@@ -104,87 +104,6 @@ skills:
         pretrained_path: "HSP-IIT/act_toast_pick_and_place"
         n_action_steps: 16
         chunk_size: 16
-      smolvla:
-        type: smolvla
-        device: cuda
-        pretrained_path: "TODO_SMOLVLA_PLACE_FIRST_TOAST"
-        n_action_steps: 50
-        chunk_size: 50
-        num_steps: 10
-      diffusion:
-        type: diffusion
-        device: cuda
-        pretrained_path: "TODO_DIFFUSION_PLACE_FIRST_TOAST"
-        n_action_steps: 8
-        horizon: 16
-      multi_task_dit:
-        type: multi_task_dit
-        device: cuda
-        pretrained_path: "TODO_MULTI_TASK_DIT_PLACE_FIRST_TOAST"
-        n_action_steps: 24
-        horizon: 32
-      vqbet:
-        type: vqbet
-        device: cuda
-        pretrained_path: "TODO_VQBET_PLACE_FIRST_TOAST"
-        n_obs_steps: 5
-        n_action_pred_token: 3
-        action_chunk_size: 5
-      pi0:
-        type: pi0
-        device: cuda
-        pretrained_path: "TODO_PI0_PLACE_FIRST_TOAST"
-        n_action_steps: 50
-        chunk_size: 50
-      pi0_fast:
-        type: pi0_fast
-        device: cuda
-        pretrained_path: "TODO_PI0_FAST_PLACE_FIRST_TOAST"
-        n_action_steps: 50
-        chunk_size: 50
-      pi05:
-        type: pi05
-        device: cuda
-        pretrained_path: "TODO_PI05_PLACE_FIRST_TOAST"
-        n_action_steps: 50
-        chunk_size: 50
-      groot:
-        type: groot
-        device: cuda
-        pretrained_path: "TODO_GROOT_PLACE_FIRST_TOAST"
-        n_action_steps: 50
-        chunk_size: 50
-      xvla:
-        type: xvla
-        device: cuda
-        pretrained_path: "TODO_XVLA_PLACE_FIRST_TOAST"
-        n_action_steps: 32
-        chunk_size: 32
-      wall_x:
-        type: wall_x
-        device: cuda
-        pretrained_path: "TODO_WALL_X_PLACE_FIRST_TOAST"
-        n_action_steps: 32
-        chunk_size: 32
-      tdmpc:
-        type: tdmpc
-        device: cuda
-        pretrained_path: "TODO_TDMPC_PLACE_FIRST_TOAST"
-        n_action_steps: 1
-        horizon: 5
-        n_action_repeats: 2
-      sac:
-        type: sac
-        device: cuda
-        pretrained_path: "TODO_SAC_PLACE_FIRST_TOAST"
-      reward_classifier:
-        type: reward_classifier
-        device: cuda
-        pretrained_path: "TODO_REWARD_CLASSIFIER_PLACE_FIRST_TOAST"
-      sarm:
-        type: sarm
-        device: cuda
-        pretrained_path: "TODO_SARM_PLACE_FIRST_TOAST"
     transition:
       mode: timeout
       max_duration_s: 12000.0
@@ -204,87 +123,6 @@ skills:
         pretrained_path: "HSP-IIT/act_pick_place_2nd"
         n_action_steps: 16
         chunk_size: 16
-      smolvla:
-        type: smolvla
-        device: cuda
-        pretrained_path: "TODO_SMOLVLA_PLACE_SECOND_TOAST"
-        n_action_steps: 50
-        chunk_size: 50
-        num_steps: 10
-      diffusion:
-        type: diffusion
-        device: cuda
-        pretrained_path: "TODO_DIFFUSION_PLACE_SECOND_TOAST"
-        n_action_steps: 8
-        horizon: 16
-      multi_task_dit:
-        type: multi_task_dit
-        device: cuda
-        pretrained_path: "TODO_MULTI_TASK_DIT_PLACE_SECOND_TOAST"
-        n_action_steps: 24
-        horizon: 32
-      vqbet:
-        type: vqbet
-        device: cuda
-        pretrained_path: "TODO_VQBET_PLACE_SECOND_TOAST"
-        n_obs_steps: 5
-        n_action_pred_token: 3
-        action_chunk_size: 5
-      pi0:
-        type: pi0
-        device: cuda
-        pretrained_path: "TODO_PI0_PLACE_SECOND_TOAST"
-        n_action_steps: 50
-        chunk_size: 50
-      pi0_fast:
-        type: pi0_fast
-        device: cuda
-        pretrained_path: "TODO_PI0_FAST_PLACE_SECOND_TOAST"
-        n_action_steps: 50
-        chunk_size: 50
-      pi05:
-        type: pi05
-        device: cuda
-        pretrained_path: "TODO_PI05_PLACE_SECOND_TOAST"
-        n_action_steps: 50
-        chunk_size: 50
-      groot:
-        type: groot
-        device: cuda
-        pretrained_path: "TODO_GROOT_PLACE_SECOND_TOAST"
-        n_action_steps: 50
-        chunk_size: 50
-      xvla:
-        type: xvla
-        device: cuda
-        pretrained_path: "TODO_XVLA_PLACE_SECOND_TOAST"
-        n_action_steps: 32
-        chunk_size: 32
-      wall_x:
-        type: wall_x
-        device: cuda
-        pretrained_path: "TODO_WALL_X_PLACE_SECOND_TOAST"
-        n_action_steps: 32
-        chunk_size: 32
-      tdmpc:
-        type: tdmpc
-        device: cuda
-        pretrained_path: "TODO_TDMPC_PLACE_SECOND_TOAST"
-        n_action_steps: 1
-        horizon: 5
-        n_action_repeats: 2
-      sac:
-        type: sac
-        device: cuda
-        pretrained_path: "TODO_SAC_PLACE_SECOND_TOAST"
-      reward_classifier:
-        type: reward_classifier
-        device: cuda
-        pretrained_path: "TODO_REWARD_CLASSIFIER_PLACE_SECOND_TOAST"
-      sarm:
-        type: sarm
-        device: cuda
-        pretrained_path: "TODO_SARM_PLACE_SECOND_TOAST"
     transition:
       mode: timeout
       max_duration_s: 12000.0

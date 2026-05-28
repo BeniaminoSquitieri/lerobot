@@ -13,7 +13,7 @@ vlm_result_topic: "/lerobot_bt/vlm_result"
 vlm_timeout_s: 0.0
 
 # Default variant. Per-skill policy_variant can mix any registered LeRobot
-# policy type, e.g. act, smolvla, diffusion, groot, xvla, pi0, vqbet, tdmpc.
+# policy type, e.g. act.
 policy_variant: smolvla
 
 expected_skill_names:
@@ -71,87 +71,6 @@ skills:
         pretrained_path: "TODO_ACT_BAG_BREAD"
         n_action_steps: 16
         chunk_size: 16
-      smolvla:
-        type: smolvla
-        device: cuda
-        pretrained_path: "Squitieri/picnic_bread_smolvla_10k"
-        n_action_steps: 50
-        chunk_size: 50
-        num_steps: 10
-      diffusion:
-        type: diffusion
-        device: cuda
-        pretrained_path: "TODO_DIFFUSION_BAG_BREAD"
-        n_action_steps: 8
-        horizon: 16
-      multi_task_dit:
-        type: multi_task_dit
-        device: cuda
-        pretrained_path: "TODO_MULTI_TASK_DIT_BAG_BREAD"
-        n_action_steps: 24
-        horizon: 32
-      vqbet:
-        type: vqbet
-        device: cuda
-        pretrained_path: "TODO_VQBET_BAG_BREAD"
-        n_obs_steps: 5
-        n_action_pred_token: 3
-        action_chunk_size: 5
-      pi0:
-        type: pi0
-        device: cuda
-        pretrained_path: "TODO_PI0_BAG_BREAD"
-        n_action_steps: 50
-        chunk_size: 50
-      pi0_fast:
-        type: pi0_fast
-        device: cuda
-        pretrained_path: "TODO_PI0_FAST_BAG_BREAD"
-        n_action_steps: 50
-        chunk_size: 50
-      pi05:
-        type: pi05
-        device: cuda
-        pretrained_path: "TODO_PI05_BAG_BREAD"
-        n_action_steps: 50
-        chunk_size: 50
-      groot:
-        type: groot
-        device: cuda
-        pretrained_path: "TODO_GROOT_BAG_BREAD"
-        n_action_steps: 50
-        chunk_size: 50
-      xvla:
-        type: xvla
-        device: cuda
-        pretrained_path: "TODO_XVLA_BAG_BREAD"
-        n_action_steps: 32
-        chunk_size: 32
-      wall_x:
-        type: wall_x
-        device: cuda
-        pretrained_path: "TODO_WALL_X_BAG_BREAD"
-        n_action_steps: 32
-        chunk_size: 32
-      tdmpc:
-        type: tdmpc
-        device: cuda
-        pretrained_path: "TODO_TDMPC_BAG_BREAD"
-        n_action_steps: 1
-        horizon: 5
-        n_action_repeats: 2
-      sac:
-        type: sac
-        device: cuda
-        pretrained_path: "TODO_SAC_BAG_BREAD"
-      reward_classifier:
-        type: reward_classifier
-        device: cuda
-        pretrained_path: "TODO_REWARD_CLASSIFIER_BAG_BREAD"
-      sarm:
-        type: sarm
-        device: cuda
-        pretrained_path: "TODO_SARM_BAG_BREAD"
     transition:
       mode: timeout
       max_duration_s: 120.0
@@ -169,87 +88,6 @@ skills:
         pretrained_path: "TODO_ACT_BAG_PEAR"
         n_action_steps: 16
         chunk_size: 16
-      smolvla:
-        type: smolvla
-        device: cuda
-        pretrained_path: "Squitieri/pear_bread_smolvla_10k"
-        n_action_steps: 50
-        chunk_size: 50
-        num_steps: 10
-      diffusion:
-        type: diffusion
-        device: cuda
-        pretrained_path: "TODO_DIFFUSION_BAG_PEAR"
-        n_action_steps: 8
-        horizon: 16
-      multi_task_dit:
-        type: multi_task_dit
-        device: cuda
-        pretrained_path: "TODO_MULTI_TASK_DIT_BAG_PEAR"
-        n_action_steps: 24
-        horizon: 32
-      vqbet:
-        type: vqbet
-        device: cuda
-        pretrained_path: "TODO_VQBET_BAG_PEAR"
-        n_obs_steps: 5
-        n_action_pred_token: 3
-        action_chunk_size: 5
-      pi0:
-        type: pi0
-        device: cuda
-        pretrained_path: "TODO_PI0_BAG_PEAR"
-        n_action_steps: 50
-        chunk_size: 50
-      pi0_fast:
-        type: pi0_fast
-        device: cuda
-        pretrained_path: "TODO_PI0_FAST_BAG_PEAR"
-        n_action_steps: 50
-        chunk_size: 50
-      pi05:
-        type: pi05
-        device: cuda
-        pretrained_path: "TODO_PI05_BAG_PEAR"
-        n_action_steps: 50
-        chunk_size: 50
-      groot:
-        type: groot
-        device: cuda
-        pretrained_path: "TODO_GROOT_BAG_PEAR"
-        n_action_steps: 50
-        chunk_size: 50
-      xvla:
-        type: xvla
-        device: cuda
-        pretrained_path: "TODO_XVLA_BAG_PEAR"
-        n_action_steps: 32
-        chunk_size: 32
-      wall_x:
-        type: wall_x
-        device: cuda
-        pretrained_path: "TODO_WALL_X_BAG_PEAR"
-        n_action_steps: 32
-        chunk_size: 32
-      tdmpc:
-        type: tdmpc
-        device: cuda
-        pretrained_path: "TODO_TDMPC_BAG_PEAR"
-        n_action_steps: 1
-        horizon: 5
-        n_action_repeats: 2
-      sac:
-        type: sac
-        device: cuda
-        pretrained_path: "TODO_SAC_BAG_PEAR"
-      reward_classifier:
-        type: reward_classifier
-        device: cuda
-        pretrained_path: "TODO_REWARD_CLASSIFIER_BAG_PEAR"
-      sarm:
-        type: sarm
-        device: cuda
-        pretrained_path: "TODO_SARM_BAG_PEAR"
     transition:
       mode: timeout
       max_duration_s: 120.0

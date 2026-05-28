@@ -27,12 +27,13 @@ robot:
       # ros_topic: /topic
 
 dataset:
-  repo_id: Squitieri/breakfast_pick_bowl
-  single_task: Pick the bowl on the table 
+  repo_id: Squitieri/eval_act_put_coffee
+    # repo_id: Squitieri/eval_breakfast_pick_cereal_act_chunk16_exec16_20k
+  single_task: Pick the bottle on the table 
   fps: 10
   episode_time_s: 2000
   reset_time_s: 0
-  num_episodes: 10
+  num_episodes: 16
   video: true
   push_to_hub: true
   private: true
@@ -42,11 +43,11 @@ dataset:
   rename_map: {}
   force_cache_sync: true
 
-# DECOMMENT TO USE DAGGER
-teleop:
-  type: metaquest_rail
-teleop_action_processor:
-  steps: [clutch_processor]  #, arm_absolute_to_delta]
+# # DECOMMENT TO USE DAGGER
+# teleop:
+#   type: metaquest_rail
+# teleop_action_processor:
+#   steps: [clutch_processor]  #, arm_absolute_to_delta]
 
 robot_action_processor:
   steps: []
@@ -54,11 +55,11 @@ robot_action_processor:
 robot_observation_processor:
   steps: []
 
-teleop_recording_mode: corrections_only
+# teleop_recording_mode: corrections_only
 
 display_data: true
 play_sounds: true
-resume: true
+resume: false
 
 # policy:
 #   type: smolvla
@@ -71,12 +72,14 @@ resume: true
 #   use_amp: false
   
 
-# policy:
-#   type: act
-#   pretrained_path: act_toast_pick_and_place
-#   device: cuda
-#   n_action_steps: 16
-#   chunk_size: 16
+policy:
+  type: act
+  pretrained_path: Squitieri/act_put_coffee
+  device: cuda
+  
+  # Must match the pretrained ACT checkpoint architecture.
+  n_action_steps: 16
+  chunk_size: 16
 
 # policy_server:
 #   server_address: 192.168.100.174:8080
