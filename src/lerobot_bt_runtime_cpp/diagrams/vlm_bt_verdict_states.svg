@@ -1,0 +1,102 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1400" height="860" viewBox="0 0 1400 860" font-family="'Segoe UI', Helvetica, Arial, sans-serif">
+  <defs>
+    <marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="10" markerHeight="10" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#0f172a"/>
+    </marker>
+    <style>
+      .title { font-size: 30px; font-weight: 700; fill: #0f172a; }
+      .sub   { font-size: 16px; fill: #475569; }
+      .state { stroke: #0f172a; stroke-width: 2.5; rx: 14; }
+      .stTitle { font-size: 20px; font-weight: 700; fill: #0f172a; text-anchor: middle; }
+      .stSub   { font-size: 14px; fill: #1f2937; text-anchor: middle; }
+      .pending { fill: #e2e8f0; }
+      .running { fill: #fde68a; }
+      .success { fill: #bbf7d0; }
+      .failure { fill: #fecaca; }
+      .wait    { fill: #ddd6fe; }
+      .manual  { fill: #fbcfe8; }
+      .lbl     { font-size: 13px; fill: #0f172a; font-weight: 600; }
+      .action  { font-size: 14px; fill: #1d4ed8; font-weight: 700; text-anchor: middle; }
+      .panel   { fill: #ffffff; stroke: #cbd5e1; stroke-width: 1.5; rx: 12; }
+      .h2      { font-size: 18px; font-weight: 700; fill: #0f172a; }
+      .mono    { font-family: 'Consolas', monospace; font-size: 14px; fill: #0f172a; }
+    </style>
+  </defs>
+
+  <rect width="1400" height="860" fill="#f8fafc"/>
+  <text x="700" y="50" text-anchor="middle" class="title">Stati del verdetto VLM e reazione del BT</text>
+  <text x="700" y="78" text-anchor="middle" class="sub">Vocabolario fisso pubblicato su /lerobot_bt/vlm_result · ogni stato decide cosa fa il Behavior Tree</text>
+
+  <!-- Start node -->
+  <rect x="600" y="120" width="200" height="70" class="state pending"/>
+  <text x="700" y="148" class="stTitle">PENDING</text>
+  <text x="700" y="172" class="stSub">attempt aperto, niente da fare</text>
+
+  <!-- RUNNING -->
+  <rect x="600" y="240" width="200" height="70" class="state running"/>
+  <text x="700" y="268" class="stTitle">RUNNING</text>
+  <text x="700" y="292" class="stSub">VLM sta elaborando</text>
+
+  <!-- arrow PENDING -> RUNNING -->
+  <line x1="700" y1="190" x2="700" y2="240" stroke="#0f172a" stroke-width="2.5" marker-end="url(#a)"/>
+
+  <!-- Branch: SUCCESS, FAILURE, WAIT_HUMAN, MANUAL -->
+  <!-- SUCCESS -->
+  <rect x="120" y="400" width="260" height="90" class="state success"/>
+  <text x="250" y="432" class="stTitle">SUCCESS</text>
+  <text x="250" y="456" class="stSub">scena attesa raggiunta</text>
+  <text x="250" y="478" class="stSub">token: scene_i_ready, task_complete</text>
+
+  <!-- FAILURE -->
+  <rect x="420" y="400" width="260" height="90" class="state failure"/>
+  <text x="550" y="432" class="stTitle">FAILURE</text>
+  <text x="550" y="456" class="stSub">scena attesa NON raggiunta</text>
+  <text x="550" y="478" class="stSub">token: anomaly_detected</text>
+
+  <!-- WAIT_HUMAN -->
+  <rect x="720" y="400" width="260" height="90" class="state wait"/>
+  <text x="850" y="432" class="stTitle">WAIT_HUMAN</text>
+  <text x="850" y="456" class="stSub">azione umana in corso</text>
+  <text x="850" y="478" class="stSub">il BT rimane bloccato</text>
+
+  <!-- MANUAL_INTERVENTION_REQUIRED -->
+  <rect x="1020" y="400" width="320" height="90" class="state manual"/>
+  <text x="1180" y="432" class="stTitle">MANUAL_INTERVENTION_REQUIRED</text>
+  <text x="1180" y="456" class="stSub">serve un umano per sistemare la scena</text>
+  <text x="1180" y="478" class="stSub">token: human_help_required</text>
+
+  <!-- arrows from RUNNING down to 4 states -->
+  <line x1="660" y1="310" x2="250" y2="400" stroke="#15803d" stroke-width="2.5" marker-end="url(#a)"/>
+  <line x1="690" y1="310" x2="550" y2="400" stroke="#b91c1c" stroke-width="2.5" marker-end="url(#a)"/>
+  <line x1="720" y1="310" x2="850" y2="400" stroke="#7c3aed" stroke-width="2.5" marker-end="url(#a)"/>
+  <line x1="760" y1="310" x2="1180" y2="400" stroke="#db2777" stroke-width="2.5" marker-end="url(#a)"/>
+
+  <!-- Reaction labels under each -->
+  <text x="250"  y="520" class="action">→ BT avanza al nodo successivo</text>
+  <text x="550"  y="520" class="action" fill="#b91c1c">→ RetryUntilSuccessful rilancia la skill</text>
+  <text x="850"  y="520" class="action" fill="#7c3aed">→ BT resta in attesa, riemette il check</text>
+  <text x="1180" y="520" class="action" fill="#db2777">→ BT mette in pausa, avvisa operatore</text>
+
+  <!-- next_action mapping panel -->
+  <rect x="80" y="580" width="600" height="240" class="panel"/>
+  <text x="100" y="610" class="h2">Mapping next_action → status</text>
+  <text x="100" y="640" class="mono">CONTINUE                        → SUCCESS</text>
+  <text x="100" y="664" class="mono">RETRY_SKILL                     → FAILURE</text>
+  <text x="100" y="688" class="mono">WAIT_HUMAN                      → WAIT_HUMAN</text>
+  <text x="100" y="712" class="mono">REQUEST_MANUAL_INTERVENTION     → MANUAL_INTERVENTION_REQUIRED</text>
+  <text x="100" y="752" class="sub" fill="#475569">Il verifier può usare "status" oppure "next_action": il server</text>
+  <text x="100" y="772" class="sub" fill="#475569">converte automaticamente next_action nello status equivalente.</text>
+  <text x="100" y="800" class="sub" fill="#b91c1c">Status non riconosciuti vengono scartati: nessun fallback silenzioso.</text>
+
+  <!-- Required JSON fields panel -->
+  <rect x="720" y="580" width="620" height="240" class="panel"/>
+  <text x="740" y="610" class="h2">Payload JSON minimo su /lerobot_bt/vlm_result</text>
+  <text x="740" y="642" class="mono">{</text>
+  <text x="740" y="664" class="mono">  "skill_name":  "scene_1_ready",   // OBBLIGATORIO</text>
+  <text x="740" y="686" class="mono">  "attempt_id":  42,                // OBBLIGATORIO (0 = ultimo)</text>
+  <text x="740" y="708" class="mono">  "status":      "SUCCESS",         // OBBLIGATORIO</text>
+  <text x="740" y="730" class="mono">  "message":     "scene ok",        // opzionale</text>
+  <text x="740" y="752" class="mono">  "scene_id":    1,                 // opzionale</text>
+  <text x="740" y="774" class="mono">  "failure_reason": "...",          // opzionale</text>
+  <text x="740" y="796" class="mono">}</text>
+</svg>
