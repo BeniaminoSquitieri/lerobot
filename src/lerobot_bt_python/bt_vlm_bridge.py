@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 
 # Comment: executes this BT logic statement.
-"""ROS2 bridge between LeRobot BT VLM checks and the Panda live VLM verifier.
+"""Legacy compatibility ROS2 bridge between BT VLM checks and Panda live VLM.
 
 The BT stack uses JSON messages with `skill_name` and `attempt_id`, while the
 Panda verifier uses plain `std_msgs/String` commands and statuses. This node
@@ -13,6 +13,8 @@ from __future__ import annotations
 
 # Comment: imports dependencies or symbols required by the module.
 import json
+# Comment: imports dependencies or symbols required by the module.
+import logging
 # Comment: imports dependencies or symbols required by the module.
 from string import Formatter
 # Comment: imports dependencies or symbols required by the module.
@@ -51,6 +53,9 @@ PANDA_TO_BT_STATUS = {
     "PENDING": "PENDING",
 # Comment: closes a call, data structure, or multiline block.
 }
+
+# Comment: assigns or prepares a value used by later statements.
+_legacy_bridge_warned = False
 
 # Comment: assigns or prepares a value used by later statements.
 DEFAULT_COMMAND_TEMPLATE = (
@@ -292,6 +297,10 @@ class BtPandaVlmBridge(Node):
 def main() -> None:
     # Comment: executes this BT logic statement.
     """Run the BT/Panda VLM bridge node."""
+    global _legacy_bridge_warned
+    if not _legacy_bridge_warned:
+        logging.getLogger(__name__).warning("bt_vlm_bridge is a legacy compatibility path and is deprecated.")
+        _legacy_bridge_warned = True
     # Comment: closes a call, data structure, or multiline block.
     rclpy.init()
     # Comment: assigns or prepares a value used by later statements.
