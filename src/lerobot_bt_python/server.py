@@ -472,7 +472,10 @@ class SkillCommandServer(Node):
             response.success = False
             response.status = "ERROR"
             response.elapsed_s = 0.0
-            response.message = f"Unsupported command kind '{request.kind}'."
+            response.message = (
+                f"Unsupported command kind '{request.kind}'. "
+                f"Expected one of ('skill', '{VLM_GATE_PENDING_KIND}')."
+            )
             self.get_logger().error(response.message)
             return response
 
@@ -697,8 +700,9 @@ class SkillCommandServer(Node):
         msg.data = json.dumps(payload, sort_keys=True)
         self._vlm_request_publisher.publish(msg)
         self.get_logger().info(
-            f"VLM REQUEST → skill='{snapshot.skill_name}' attempt={snapshot.attempt_id} "
-            f"task='{task_desc}'"
+            f"event=vlm_request_published skill={snapshot.skill_name!r} "
+            f"attempt={snapshot.attempt_id} status={VLM_PENDING} "
+            f"topic={self.cfg.vlm_request_topic!r} task={task_desc!r}"
         )
         # Visible terminal output for the operator.
         print(f"\n{'═'*60}")
@@ -712,10 +716,16 @@ class SkillCommandServer(Node):
         try:
             payload = json.loads(msg.data)
         except Exception as exc:  # noqa: BLE001
-            self.get_logger().error(f"Invalid VLM result JSON: {exc}: '{msg.data}'")
+            self.get_logger().error(
+                f"event=vlm_result_received status=invalid_json "
+                f"topic={self.cfg.vlm_result_topic!r} error={exc}: '{msg.data}'"
+            )
             return
         if not isinstance(payload, dict):
-            self.get_logger().error("Rejected VLM result topic message: payload must be a JSON object.")
+            self.get_logger().error(
+                f"event=vlm_result_received status=invalid_payload "
+                f"topic={self.cfg.vlm_result_topic!r} error=payload must be a JSON object"
+            )
             return
 
         try:
@@ -737,7 +747,10 @@ class SkillCommandServer(Node):
                 message=message,
             )
         except (TypeError, ValueError) as exc:
-            self.get_logger().error(f"Rejected VLM result topic message: {exc}")
+            self.get_logger().error(
+                f"event=vlm_result_received status=rejected "
+                f"topic={self.cfg.vlm_result_topic!r} error={exc}"
+            )
             return
 
         log_fn = self.get_logger().info if update.accepted else self.get_logger().warning
