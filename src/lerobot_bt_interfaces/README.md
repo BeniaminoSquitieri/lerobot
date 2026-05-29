@@ -1,0 +1,89 @@
+# lerobot_bt_interfaces
+
+This ROS 2 package defines the typed service boundary between the C++
+BehaviorTree.CPP runner and the Python LeRobot skill server.
+
+It contains only interface definitions. It should not contain policy loading,
+robot execution, BT XML, VLM business logic, or task-specific configuration.
+
+## Who Uses This Package
+
+| Consumer | How it uses the interfaces |
+| --- | --- |
+| `../lerobot_bt_runtime_cpp` | Calls `RunNamedCommand` from BT leaves and polls `GetSkillVerification` while waiting for scene verdicts. |
+| `../lerobot_bt_python` | Implements the services in `server.py` and accepts legacy verifier reports through `ReportSkillVerification`. |
+| External verifier tools | May publish topic JSON directly, or use the legacy report service when compatibility is needed. |
+
+## Services
+
+### `RunNamedCommand.srv`
+
+C++ BT -> Python server command request.
+
+Request:
+
+- `kind`: command path. Current values are `skill` and `vlm_gate_pending`.
+- `name`: configured skill or gate name.
+- `timeout_s`: optional timeout override. `0` lets the Python config decide.
+
+Response:
+
+- `success`: boolean outcome consumed by the BT leaf.
+- `status`: detailed result such as `SUCCESS`, `FAILURE`, `TIMEOUT`, or `ERROR`.
+- `elapsed_s`: command duration measured by Python.
+- `message`: human-readable diagnostics.
+
+### `GetSkillVerification.srv`
+
+C++ BT -> Python server polling request for the latest VLM/gate state.
+
+Request:
+
+- `skill_name`: skill or gate whose latest attempt should be inspected.
+
+Response:
+
+- `has_attempt`: whether Python has seen this skill/gate.
+- `attempt_id`: monotonic attempt id assigned by Python.
+- `status`: `UNKNOWN`, `PENDING`, `RUNNING`, `WAIT_HUMAN`,
+  `MANUAL_INTERVENTION_REQUIRED`, `SUCCESS`, or `FAILURE`.
+- `message`: current status detail.
+
+### `ReportSkillVerification.srv`
+
+Legacy external verifier -> Python server update path.
+
+Prefer publishing JSON to `/lerobot_bt/vlm_result` for new integrations. Keep
+this service compatible while legacy clients exist.
+
+## Build
+
+From the repository root:
+
+```bash
+source /opt/ros/jazzy/setup.bash
+rosdep install --from-paths src --ignore-src -r -y
+colcon build --base-paths src --packages-up-to lerobot_bt_interfaces --symlink-install
+source install/setup.bash
+```
+
+For Humble, source `/opt/ros/humble/setup.bash` instead.
+
+## Inspect The Generated Interfaces
+
+After building and sourcing `install/setup.bash`:
+
+```bash
+ros2 interface show lerobot_bt_interfaces/srv/RunNamedCommand
+ros2 interface show lerobot_bt_interfaces/srv/GetSkillVerification
+ros2 interface show lerobot_bt_interfaces/srv/ReportSkillVerification
+```
+
+## Compatibility Rules
+
+- Do not rename fields casually. Both the C++ BT runner and Python server use
+  these generated types.
+- Additive fields still require coordinated C++ and Python changes.
+- Keep `kind` string values stable: `skill` and `vlm_gate_pending` are part of
+  the runtime contract.
+- New task names belong in BT/Python YAML, not in `.srv` files.
