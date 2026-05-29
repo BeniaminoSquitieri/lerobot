@@ -130,3 +130,7 @@ Scope: active BT/VLM/LeRobot flow inventory before any cleanup refactor.
   - `uv run pytest tests -svv --maxfail=10` (uv not installed).
   - `colcon build` package checks (colcon not available in this shell).
   - Entry-point smoke checks not run because ROS2 runtime tooling is unavailable here.
+
+## Deferred to Pass 3
+
+- Offline VLM result replay / diagnose CLI (former Pass 2 Batches D and E). Considered and explicitly blocked for Pass 2 to avoid new public APIs, copied validator logic, and `pyproject.toml` edits. Revisit when an offline reproduction story is needed.
