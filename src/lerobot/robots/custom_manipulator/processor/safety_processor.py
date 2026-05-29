@@ -4,13 +4,17 @@ import logging
 from dataclasses import dataclass
 
 import numpy as np
-from scipy.spatial.transform import Rotation as R
 
 from lerobot.configs.types import PipelineFeatureType, PolicyFeature
 from lerobot.processor import ProcessorStep, ProcessorStepRegistry
 from lerobot.types import EnvTransition, TransitionKey
 
 logger = logging.getLogger(__name__)
+
+try:
+    from scipy.spatial.transform import Rotation as R
+except ModuleNotFoundError:
+    R = None
 
 
 @ProcessorStepRegistry.register("cartesian_action_safety_processor")
@@ -50,13 +54,21 @@ class CartesianActionSafetyProcessor(ProcessorStep):
             "orientation.y",
             "orientation.z",
         )
-        if not all(key in action for key in required_keys) or not all(key in observation for key in required_keys):
+        if not all(key in action for key in required_keys) or not all(
+            key in observation for key in required_keys
+        ):
             return transition
 
         target_pos = np.array([float(action[f"position.{axis}"]) for axis in "xyz"], dtype=float)
         current_pos = np.array([float(observation[f"position.{axis}"]) for axis in "xyz"], dtype=float)
         pos_delta = target_pos - current_pos
         pos_delta_norm = float(np.linalg.norm(pos_delta))
+
+        if R is None:
+            raise ModuleNotFoundError(
+                "CartesianActionSafetyProcessor requires scipy. Install the `scipy-dep` extra before using "
+                "cartesian_action_safety_processor."
+            )
 
         target_rot = R.from_rotvec([float(action[f"orientation.{axis}"]) for axis in "xyz"])
         current_rot = R.from_rotvec([float(observation[f"orientation.{axis}"]) for axis in "xyz"])

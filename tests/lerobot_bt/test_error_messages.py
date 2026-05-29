@@ -3,19 +3,19 @@
 """Pin disambiguating context in select VLM error messages.
 
 Tests do not pin exact wording; they assert that critical context appears as
-substrings inside ``ValueError`` text raised by ``VlmCheckRegistry.report``.
+substrings inside ``ValueError`` text raised by ``SceneVerdictStore.report``.
 """
 
 from __future__ import annotations
 
 import pytest
 
-from lerobot_bt_python.verification import VlmCheckRegistry
+from lerobot_bt_python.verification import SceneVerdictStore
 
 
 def test_report_with_invalid_status_mentions_token_and_expected_set() -> None:
     """An unknown status must surface both the offending token and the allowed set."""
-    registry = VlmCheckRegistry(known_skill_names={"pick_apple"})
+    registry = SceneVerdictStore(known_skill_names={"pick_apple"})
     registry.begin_attempt("pick_apple")
     bad_token = "DEFINITELY_NOT_A_STATUS"
 
@@ -33,7 +33,7 @@ def test_report_with_invalid_status_mentions_token_and_expected_set() -> None:
 
 def test_report_with_invalid_status_lists_known_statuses() -> None:
     """The expected vocabulary should enumerate at least SUCCESS and FAILURE."""
-    registry = VlmCheckRegistry(known_skill_names={"pick_apple"})
+    registry = SceneVerdictStore(known_skill_names={"pick_apple"})
     registry.begin_attempt("pick_apple")
 
     with pytest.raises(ValueError) as excinfo:

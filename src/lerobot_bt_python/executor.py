@@ -19,29 +19,33 @@ import logging
 import threading
 import time
 from dataclasses import dataclass
-from pathlib import Path
-from typing import TYPE_CHECKING, Any
-
-from huggingface_hub import snapshot_download
+from typing import TYPE_CHECKING
 
 from lerobot.common.control_utils import predict_action
-from lerobot.policies.factory import make_policy, make_pre_post_processors
-from lerobot.policies.pretrained import PreTrainedPolicy
 from lerobot.policies.utils import make_robot_action
-from lerobot.processor import PolicyAction, PolicyProcessorPipeline, RobotProcessorPipeline
-from lerobot.processor.rename_processor import rename_stats
+from lerobot.processor import RobotProcessorPipeline
 from lerobot.utils.constants import OBS_STR
 from lerobot.utils.device_utils import get_safe_torch_device
-from lerobot.utils.feature_utils import build_dataset_frame, combine_feature_dicts
+from lerobot.utils.feature_utils import build_dataset_frame
 from lerobot.utils.robot_utils import precise_sleep
 from lerobot.utils.visualization_utils import log_rerun_data
 
 from .conditions import evaluate_all, evaluate_any
-from .config import PrimitiveSkillConfig, SkillCommandServerConfig
+from .config import SkillCommandServerConfig
+from .skill_runtime_loader import LiveRobotDatasetMetadata, SkillRuntime, build_skill_runtime
 from .verification import VLM_FAILURE, VLM_NEEDS_MANUAL_HELP, VLM_SUCCESS, VLM_WAIT_HUMAN
 
 if TYPE_CHECKING:
     from lerobot.robots.custom_manipulator.custom_manipulator import CustomManipulator
+
+
+__all__ = [
+    "ActiveSkillVlmResult",
+    "CommandResult",
+    "LiveRobotDatasetMetadata",
+    "SkillRunner",
+    "SkillRuntime",
+]
 
 
 _ACTIVE_SKILL_STOP_STATUSES = {
@@ -51,56 +55,6 @@ _ACTIVE_SKILL_STOP_STATUSES = {
     VLM_NEEDS_MANUAL_HELP,
 }
 """VLM/manual statuses that should stop a live policy rollout immediately."""
-
-
-@dataclass
-class SkillRuntime:
-    """@brief Runtime bundle for one configured learned primitive.
-
-    The bundle is cached per skill name so repeated BT retries do not reload the
-    checkpoint. `reset()` still clears policy and processor state before every
-    execution attempt.
-    """
-
-    cfg: PrimitiveSkillConfig
-    """Skill YAML entry that owns names, policy config, task text, and transitions."""
-
-    ds_meta: Any
-    """Dataset metadata or live robot metadata used to build policy features."""
-
-    policy: PreTrainedPolicy
-    """Loaded LeRobot policy object used for inference."""
-
-    preprocessor: PolicyProcessorPipeline[dict, dict]
-    """Policy observation preprocessor applied before inference."""
-
-    postprocessor: PolicyProcessorPipeline[PolicyAction, PolicyAction]
-    """Policy action postprocessor applied after inference."""
-
-    def reset(self) -> None:
-        """@brief Reset stateful policy/preprocessor/postprocessor queues."""
-        self.policy.reset()
-        self.preprocessor.reset()
-        self.postprocessor.reset()
-
-
-@dataclass
-class LiveRobotDatasetMetadata:
-    """@brief Minimal metadata object for live robot rollouts.
-
-    `make_policy` expects dataset-like metadata. When `metadata_source="robot"`,
-    this small object provides the required attributes without creating a
-    `LeRobotDataset` on disk.
-    """
-
-    repo_id: str
-    """Logical dataset repository id used by policy loading code."""
-
-    features: dict[str, dict]
-    """Feature schema assembled from robot action and observation pipelines."""
-
-    stats: dict | None = None
-    """Optional dataset statistics; live metadata leaves this absent by default."""
 
 
 @dataclass
@@ -137,104 +91,66 @@ class ActiveSkillVlmResult:
     """Human-readable verifier message."""
 
 
-def _build_skill_runtime(
-    skill_cfg: PrimitiveSkillConfig,
-    rename_map: dict[str, str],
-    robot: CustomManipulator,
-    robot_action_processor: RobotProcessorPipeline,
-    robot_observation_processor: RobotProcessorPipeline,
-    force_download: bool = False,
-) -> SkillRuntime:
-    """@brief Create the cached runtime bundle for one skill.
+def _build_skill_runtime(*args, **kwargs) -> SkillRuntime:
+    """@brief Backwards-compatible wrapper around `skill_runtime_loader.build_skill_runtime`."""
+    return build_skill_runtime(*args, **kwargs)
 
-    @param skill_cfg YAML config for the primitive.
-    @param rename_map Feature-name mapping between dataset and live robot.
-    @param robot Robot instance used to infer live feature schemas when needed.
-    @param robot_action_processor Runtime action processor pipeline.
-    @param robot_observation_processor Runtime observation processor pipeline.
-    @param force_download If True, force re-download from HuggingFace Hub.
-    @return A fully loaded `SkillRuntime`.
 
-    This is where a skill name becomes dataset metadata, a policy checkpoint, and
-    processor pipelines that can run inside the control loop.
+class _ActiveSkillTracker:
+    """@brief Owner of the live-stop state for the currently running skill.
+
+    Centralizes the lock, the active skill name, and the optional external
+    verifier verdict so the rollout loop and the ROS2 server share a single,
+    serialized view of "is something running, and has the VLM stopped it?".
     """
-    if skill_cfg.policy is None:
-        raise ValueError(f"Skill '{skill_cfg.name}' has no active policy selected.")
 
-    # Force re-download policy checkpoint from HuggingFace Hub before loading,
-    # so updated model weights are picked up even if a cached copy exists.
-    if force_download and skill_cfg.policy.pretrained_path:
-        pretrained_path_str = str(skill_cfg.policy.pretrained_path)
-        if not Path(pretrained_path_str).is_dir():
-            logging.info(
-                "Force-downloading policy '%s' from HuggingFace Hub (force_download=True).",
-                pretrained_path_str,
-            )
-            try:
-                snapshot_download(
-                    repo_id=pretrained_path_str,
-                    force_download=True,
-                    resume_download=True,
-                )
-            except Exception as exc:
-                logging.warning(
-                    "Force-download of '%s' failed (%s). Falling back to cached copy.",
-                    pretrained_path_str, exc,
-                )
+    def __init__(self) -> None:
+        self._lock = threading.Lock()
+        self._skill_name: str | None = None
+        self._vlm_result: ActiveSkillVlmResult | None = None
 
-    if skill_cfg.metadata_source == "robot":
-        from lerobot.datasets.pipeline_features import (
-            aggregate_pipeline_dataset_features,
-            create_initial_features,
-        )
+    def begin(self, skill_name: str) -> None:
+        """@brief Mark `skill_name` as the externally-stoppable active skill."""
+        with self._lock:
+            self._skill_name = skill_name
+            self._vlm_result = None
 
-        features = combine_feature_dicts(
-            aggregate_pipeline_dataset_features(
-                pipeline=robot_action_processor,
-                initial_features=create_initial_features(action=robot.action_features),
-                use_videos=True,
-            ),
-            aggregate_pipeline_dataset_features(
-                pipeline=robot_observation_processor,
-                initial_features=create_initial_features(observation=robot.observation_features),
-                use_videos=True,
-            ),
-        )
-        ds_meta = LiveRobotDatasetMetadata(repo_id=skill_cfg.dataset_repo_id, features=features)
-        logging.info(
-            "Skill '%s' using live robot rollout metadata with features=%s.",
-            skill_cfg.name,
-            sorted(features),
-        )
-    else:
-        from lerobot.datasets.lerobot_dataset import LeRobotDatasetMetadata
+    def clear(self, skill_name: str) -> None:
+        """@brief Clear active state if it still belongs to `skill_name`."""
+        with self._lock:
+            if self._skill_name == skill_name:
+                self._skill_name = None
+                self._vlm_result = None
 
-        ds_meta = LeRobotDatasetMetadata(
-            skill_cfg.dataset_repo_id,
-            root=skill_cfg.dataset_root,
-            revision=skill_cfg.dataset_revision,
-        )
+    def get(self, skill_name: str) -> ActiveSkillVlmResult | None:
+        """@brief Return the live verifier verdict for `skill_name`, if any."""
+        with self._lock:
+            if self._skill_name != skill_name:
+                return None
+            return self._vlm_result
 
-    policy = make_policy(skill_cfg.policy, ds_meta=ds_meta, rename_map=rename_map)
-    preprocessor, postprocessor = make_pre_post_processors(
-        policy_cfg=skill_cfg.policy,
-        pretrained_path=skill_cfg.policy.pretrained_path,
-        dataset_stats=rename_stats(ds_meta.stats, rename_map),
-        preprocessor_overrides={
-            "device_processor": {"device": skill_cfg.policy.device},
-            "rename_observations_processor": {"rename_map": rename_map},
-        },
-    )
-    return SkillRuntime(
-        cfg=skill_cfg,
-        ds_meta=ds_meta,
-        policy=policy,
-        preprocessor=preprocessor,
-        postprocessor=postprocessor,
-    )
+    def report(self, *, skill_name: str, status: str, message: str, attempt_id: int) -> bool:
+        """@brief Try to register a live verifier verdict for the active skill.
+
+        Only `attempt_id == 0` and statuses in `_ACTIVE_SKILL_STOP_STATUSES`
+        can target a still-running skill; everything else falls through to the
+        normal registry path.
+        """
+        if attempt_id != 0 or status not in _ACTIVE_SKILL_STOP_STATUSES:
+            return False
+        with self._lock:
+            if self._skill_name != skill_name:
+                return False
+            if self._vlm_result is not None:
+                return False
+            self._vlm_result = ActiveSkillVlmResult(status=status, message=message)
+            return True
 
 
-class SkillCommandExecutor:
+
+
+
+class SkillRunner:
     """@brief Serialized executor for real learned skills.
 
     The executor owns the robot-side critical section. Every skill goes through
@@ -255,9 +171,7 @@ class SkillCommandExecutor:
         self.skills: dict[str, SkillRuntime] = {}
         # Only one command at a time should touch the real robot.
         self._command_lock = threading.Lock()
-        self._active_lock = threading.Lock()
-        self._active_skill_name: str | None = None
-        self._active_vlm_result: ActiveSkillVlmResult | None = None
+        self._active_skill_tracker = _ActiveSkillTracker()
 
     def report_active_vlm_result(
         self,
@@ -275,36 +189,24 @@ class SkillCommandExecutor:
         In that case there is no attempt id yet, so only `attempt_id=0` can
         target the active command.
         """
-        if attempt_id != 0 or status not in _ACTIVE_SKILL_STOP_STATUSES:
-            return False
-
-        with self._active_lock:
-            if self._active_skill_name != skill_name:
-                return False
-            if self._active_vlm_result is not None:
-                return False
-            self._active_vlm_result = ActiveSkillVlmResult(status=status, message=message)
-            return True
+        return self._active_skill_tracker.report(
+            skill_name=skill_name,
+            status=status,
+            message=message,
+            attempt_id=attempt_id,
+        )
 
     def _begin_active_skill(self, skill_name: str) -> None:
         """@brief Mark a skill as externally stoppable."""
-        with self._active_lock:
-            self._active_skill_name = skill_name
-            self._active_vlm_result = None
+        self._active_skill_tracker.begin(skill_name)
 
     def _clear_active_skill(self, skill_name: str) -> None:
         """@brief Clear active skill state after the rollout returns."""
-        with self._active_lock:
-            if self._active_skill_name == skill_name:
-                self._active_skill_name = None
-                self._active_vlm_result = None
+        self._active_skill_tracker.clear(skill_name)
 
     def _get_active_vlm_result(self, skill_name: str) -> ActiveSkillVlmResult | None:
         """@brief Return the live verifier result for this skill, if one arrived."""
-        with self._active_lock:
-            if self._active_skill_name != skill_name:
-                return None
-            return self._active_vlm_result
+        return self._active_skill_tracker.get(skill_name)
 
     def _command_result_from_active_vlm(
         self,
@@ -344,7 +246,7 @@ class SkillCommandExecutor:
         @return Cached `SkillRuntime` for `skill_name`.
         """
         if skill_name not in self.skills:
-            self.skills[skill_name] = _build_skill_runtime(
+            self.skills[skill_name] = build_skill_runtime(
                 self.skill_configs[skill_name],
                 self.cfg.rename_map,
                 self.robot,

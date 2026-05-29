@@ -18,7 +18,7 @@ from lerobot_bt_python.verification import (
     VLM_RUNNING,
     VLM_SUCCESS,
     VLM_WAIT_HUMAN,
-    VlmCheckRegistry,
+    SceneVerdictStore,
 )
 
 
@@ -206,7 +206,7 @@ def test_legacy_srv_type_importable():
 
 def test_pending_status_on_timeout():
     time_now = [100.0]
-    registry = VlmCheckRegistry(
+    registry = SceneVerdictStore(
         known_skill_names={"test_skill"},
         vlm_timeout_s=30.0,
         clock=lambda: time_now[0],

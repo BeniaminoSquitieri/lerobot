@@ -74,7 +74,7 @@ class VlmCheckUpdate:
     """Updated or current snapshot; absent when no attempt exists."""
 
 
-class VlmCheckRegistry:
+class SceneVerdictStore:
     """@brief In-memory VLM check state keyed by BT skill name."""
 
     def __init__(

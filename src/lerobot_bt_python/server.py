@@ -16,16 +16,13 @@ Flow role:
 3. Return the result to the BT so the tree can continue or retry.
 """
 
-import importlib
 import json
 import logging
-import os
-import sys
 import time
 from dataclasses import asdict
 from pathlib import Path
 from pprint import pformat
-from typing import TYPE_CHECKING, Any, Callable
+from typing import TYPE_CHECKING, Any
 
 import rclpy
 from rclpy.callback_groups import MutuallyExclusiveCallbackGroup, ReentrantCallbackGroup
@@ -34,7 +31,6 @@ from rclpy.node import Node
 
 from lerobot.common.control_utils import is_headless
 from lerobot.configs import parser
-from lerobot.processor import ProcessorStepRegistry, RobotProcessorPipeline
 from lerobot.processor.converters import (
     observation_to_transition,
     robot_action_observation_to_transition,
@@ -44,19 +40,19 @@ from lerobot.processor.converters import (
 from lerobot.utils.utils import init_logging, log_say
 from lerobot.utils.visualization_utils import init_rerun as init_rerun_viz
 
+from .bt_interface_paths import load_bt_services
+from .camera_publisher import start_camera_publisher
 from .config import SkillCommandServerConfig
-from .executor import CommandResult, SkillCommandExecutor
+from .executor import CommandResult, SkillRunner
+from .operator_console import print_vlm_request_banner, print_vlm_result_banner
+from .processor_factory import build_robot_processor_pipeline
 from .verification import (
-    VLM_FAILURE,
-    VLM_NEEDS_MANUAL_HELP,
     VLM_PENDING,
-    VLM_RUNNING,
-    VLM_SUCCESS,
     VLM_UNKNOWN,
-    VLM_WAIT_HUMAN,
     VLM_WAITING_STATUSES,
-    VlmCheckRegistry,
+    SceneVerdictStore,
 )
+from .vlm_protocol import vlm_message_from_payload, vlm_status_from_payload
 
 DEFAULT_CONFIG_PATH = Path(__file__).resolve().parent / "make_sandwich_executor.yaml"
 """Default draccus YAML loaded when the entry point is started without flags."""
@@ -67,124 +63,7 @@ if TYPE_CHECKING:
 VLM_GATE_PENDING_KIND = "vlm_gate_pending"
 """Command kind that acknowledges a gate but leaves the VLM check pending."""
 
-_NEXT_ACTION_TO_STATUS = {
-    "CONTINUE": VLM_SUCCESS,
-    "PROCEED": VLM_SUCCESS,
-    "RETRY": VLM_FAILURE,
-    "RETRY_SKILL": VLM_FAILURE,
-    "WAIT": VLM_RUNNING,
-    "WAIT_HUMAN": VLM_WAIT_HUMAN,
-    "REQUEST_MANUAL_INTERVENTION": VLM_NEEDS_MANUAL_HELP,
-    "MANUAL_INTERVENTION": VLM_NEEDS_MANUAL_HELP,
-}
-
 _legacy_vlm_service_warned = False
-
-
-def _truthy_payload_value(value: Any) -> bool:
-    """@brief Return true for boolean-like values coming from simple VLM topics."""
-    if isinstance(value, bool):
-        return value
-    if isinstance(value, str):
-        return value.strip().lower() in {"1", "true", "yes", "y"}
-    return False
-
-
-def _normalize_vlm_status_token(token: str) -> str:
-    """@brief Map scene-gate tokens onto the registry status vocabulary."""
-    normalized = token.upper()
-    if not normalized:
-        return ""
-    if normalized.startswith("SCENE_") and normalized.endswith("_READY"):
-        return VLM_SUCCESS
-    if normalized == "TASK_COMPLETE":
-        return VLM_SUCCESS
-    if normalized == "ANOMALY_DETECTED":
-        return VLM_FAILURE
-    if normalized == "HUMAN_HELP_REQUIRED":
-        return VLM_NEEDS_MANUAL_HELP
-    return normalized
-
-
-def _vlm_status_from_payload(payload: dict[str, Any]) -> str:
-    """@brief Resolve VLM status/next_action fields into the BT-facing status."""
-    if _truthy_payload_value(payload.get("human_help_required", False)):
-        return VLM_NEEDS_MANUAL_HELP
-    if _truthy_payload_value(payload.get("anomaly_detected", False)):
-        return VLM_FAILURE
-    if _truthy_payload_value(payload.get("scene_ready", False)):
-        return VLM_SUCCESS
-
-    status = _normalize_vlm_status_token(str(payload.get("status", "")))
-    if status:
-        return status
-    scene_id = _normalize_vlm_status_token(str(payload.get("scene_id", "")))
-    if scene_id:
-        return scene_id
-    next_action = str(payload.get("next_action", "")).upper()
-    if next_action in _NEXT_ACTION_TO_STATUS:
-        return _NEXT_ACTION_TO_STATUS[next_action]
-    return ""
-
-
-def _vlm_message_from_payload(payload: dict[str, Any], *, status: str) -> str:
-    """@brief Build a compact operator message from richer VLM topic fields."""
-    message_parts = []
-    message = str(payload.get("message", ""))
-    if message:
-        message_parts.append(message)
-    for key in (
-        "scene_id",
-        "scene_ready",
-        "anomaly_detected",
-        "human_help_required",
-        "failure_reason",
-        "scene_state",
-        "required_human_action",
-        "next_action",
-    ):
-        value = payload.get(key)
-        if value not in (None, ""):
-            message_parts.append(f"{key}={value}")
-    if not message_parts:
-        message_parts.append(f"External verifier reported {status}.")
-    return " | ".join(message_parts)
-
-
-def _instantiate_processor_step(step_spec: Any):
-    """@brief Build one configured robot/policy processor step.
-
-    @param step_spec Either a registry name, or a mapping containing
-        `registry_name`/`class` and an optional `config` dictionary.
-    @return A configured processor step instance.
-
-    The server allows processor steps to be configured without importing every
-    possible class at module import time. A string uses LeRobot's processor
-    registry; a mapping can either name a registry entry or import a class by
-    dotted Python path.
-    """
-    if isinstance(step_spec, str):
-        # Registry form: the YAML only stores a stable processor name.
-        step_class = ProcessorStepRegistry.get(step_spec)
-        return step_class()
-
-    if isinstance(step_spec, dict):
-        if "registry_name" in step_spec:
-            # Explicit registry mapping, useful when a config block is needed.
-            step_class = ProcessorStepRegistry.get(step_spec["registry_name"])
-        elif "class" in step_spec:
-            # Dynamic class path for processors that are not registered globally.
-            module_path, class_name = step_spec["class"].rsplit(".", 1)
-            module = importlib.import_module(module_path)
-            step_class = getattr(module, class_name)
-        else:
-            raise ValueError(
-                f"Invalid processor step config {step_spec!r}. Expected a string, or a dict with "
-                f"'registry_name' or 'class'."
-            )
-        return step_class(**step_spec.get("config", {}))
-
-    raise TypeError(f"Unsupported processor step spec: {step_spec!r}")
 
 
 def _start_camera_publisher(
@@ -194,144 +73,18 @@ def _start_camera_publisher(
     fps: float,
     jpeg_quality: int,
     node: Node,
-) -> Callable[[], None]:
-    """Start a background thread that publishes camera frames as ROS2 CompressedImage.
-
-    This lets the external VLM verifier subscribe to live camera feeds without
-    opening the RealSense devices directly (which would conflict with the BT
-    server's own usage).
-
-    @param robot Connected CustomManipulator with cameras already open.
-    @param topic_map Mapping from BT camera name to ROS topic name.
-    @param fps Publishing rate in Hz.
-    @param jpeg_quality JPEG quality 0-100.
-    @param node ROS2 node used to create publishers.
-    @return A stop function that signals the thread to exit.
-    """
-    import cv2
-    import threading
-    from sensor_msgs.msg import CompressedImage
-
-    stop_event = threading.Event()
-    publishers: dict[str, Any] = {}
-
-    # Create one publisher per mapped camera
-    for bt_cam_name, ros_topic in topic_map.items():
-        if bt_cam_name not in robot.cameras:
-            logging.warning(
-                "Camera publish map references '%s' but robot has no such camera. Available: %s",
-                bt_cam_name,
-                sorted(robot.cameras),
-            )
-            continue
-        pub = node.create_publisher(CompressedImage, ros_topic, 10)
-        publishers[bt_cam_name] = pub
-        logging.info("Publishing camera '%s' → %s", bt_cam_name, ros_topic)
-
-    if not publishers:
-        logging.warning("No valid camera→topic mappings; camera publisher idle.")
-        return stop_event.set  # Return a no-op stop function
-
-    period_s = 1.0 / max(fps, 0.1)
-    encode_params = [int(cv2.IMWRITE_JPEG_QUALITY), int(jpeg_quality)]
-
-    def _publish_loop() -> None:
-        while not stop_event.is_set():
-            for bt_cam_name, pub in publishers.items():
-                try:
-                    camera = robot.cameras[bt_cam_name]
-                    # Use a short timeout so the publisher never blocks the
-                    # policy control loop that also reads from the same camera.
-                    frame = camera.async_read(timeout_ms=50)
-                    if frame is None:
-                        continue
-                    # frame is a numpy array (H, W, 3) in RGB; cv2 needs BGR
-                    _, jpeg_bytes = cv2.imencode(".jpg", cv2.cvtColor(frame, cv2.COLOR_RGB2BGR), encode_params)
-                    msg = CompressedImage()
-                    msg.header.stamp = node.get_clock().now().to_msg()
-                    msg.header.frame_id = bt_cam_name
-                    msg.format = "jpeg"
-                    msg.data = jpeg_bytes.tobytes()
-                    pub.publish(msg)
-                except Exception:
-                    pass  # Silently skip if camera is busy or no frame available
-            stop_event.wait(timeout=period_s)
-
-    thread = threading.Thread(target=_publish_loop, daemon=True, name="camera-publisher")
-    thread.start()
-    return stop_event.set
-def _build_robot_processor_pipeline(
-    processor_cfg: dict[str, Any],
-    *,
-    to_transition,
-    to_output,
-) -> RobotProcessorPipeline:
-    """@brief Convert a YAML processor list into a LeRobot pipeline.
-
-    @param processor_cfg Mapping with a `steps` list.
-    @param to_transition Converter from robot-native objects to transition data.
-    @param to_output Converter from transition data back to robot-native output.
-    @return A `RobotProcessorPipeline` that wraps every configured step.
-    """
-    steps = [_instantiate_processor_step(step_spec) for step_spec in processor_cfg.get("steps", [])]
-    return RobotProcessorPipeline(
-        steps=steps,
-        to_transition=to_transition,
-        to_output=to_output,
+):
+    """@brief Backwards-compatible wrapper around `camera_publisher.start_camera_publisher`."""
+    return start_camera_publisher(
+        robot=robot,
+        topic_map=topic_map,
+        fps=fps,
+        jpeg_quality=jpeg_quality,
+        node=node,
     )
 
 
-def _prepend_generated_interface_paths() -> None:
-    """@brief Put generated ROS2 interface packages before source packages.
 
-    The repository contains `src/lerobot_bt_interfaces`, while ROS2 generation
-    creates importable Python bindings under `install/.../site-packages`. When
-    the editable repo has already placed `src/` on `sys.path`, Python may see the
-    source package first and miss the generated `.srv` modules. This helper adds
-    the generated package directories at the front of `sys.path`.
-    """
-    python_dir = f"python{sys.version_info.major}.{sys.version_info.minor}"
-    repo_root = Path(__file__).resolve().parents[2]
-    prefixes = [Path(path) for path in os.environ.get("COLCON_PREFIX_PATH", "").split(os.pathsep) if path]
-    prefixes.extend(
-        [
-            repo_root / "install" / "lerobot_bt_interfaces",
-            repo_root / "install",
-        ]
-    )
-
-    for prefix in prefixes:
-        site_packages = prefix / "lib" / python_dir / "site-packages"
-        if (site_packages / "lerobot_bt_interfaces" / "srv").exists():
-            site_packages_str = str(site_packages)
-            if site_packages_str not in sys.path:
-                sys.path.insert(0, site_packages_str)
-
-
-def _load_bt_services():
-    """@brief Import generated LeRobot BT ROS2 service classes.
-
-    @return `(RunNamedCommand, GetSkillVerification, ReportSkillVerification)`.
-    @throws ImportError if the workspace has not been built or sourced.
-
-    The editable repo adds `src/` to `sys.path`, which makes Python see the
-    source-only ROS package as a namespace package before the generated
-    interface package under `install/.../site-packages`.
-    """
-    _prepend_generated_interface_paths()
-    for module_name in list(sys.modules):
-        if module_name == "lerobot_bt_interfaces" or module_name.startswith("lerobot_bt_interfaces."):
-            del sys.modules[module_name]
-
-    try:
-        from lerobot_bt_interfaces.srv import GetSkillVerification, ReportSkillVerification, RunNamedCommand
-
-        return RunNamedCommand, GetSkillVerification, ReportSkillVerification
-    except ImportError as import_error:
-        raise ImportError(
-            "Could not import the lerobot_bt_interfaces service bindings. "
-            "Source install/local_setup.bash or rebuild lerobot_bt_interfaces."
-        ) from import_error
 
 
 class SkillCommandServer(Node):
@@ -349,32 +102,32 @@ class SkillCommandServer(Node):
         self,
         cfg: SkillCommandServerConfig,
         robot: "CustomManipulator",
-        executor_backend: SkillCommandExecutor,
+        skill_runner: SkillRunner,
         robot_action_processor: RobotProcessorPipeline,
         robot_observation_processor: RobotProcessorPipeline,
-        vlm_check_registry: VlmCheckRegistry,
+        scene_verdict_store: SceneVerdictStore,
     ) -> None:
         """@brief Construct the service node and register every ROS2 service.
 
         @param cfg Runtime configuration loaded from YAML.
         @param robot Connected robot object used by the executor backend.
-        @param executor_backend Object that actually runs learned skills.
+        @param skill_runner Object that actually runs learned skills.
         @param robot_action_processor Pipeline that converts policy actions.
         @param robot_observation_processor Pipeline that converts observations.
-        @param vlm_check_registry In-memory state machine for skill attempts.
+        @param scene_verdict_store In-memory state machine for skill attempts.
         """
         super().__init__("lerobot_bt_skill_server")
         self.cfg = cfg
         self.robot = robot
-        self.executor_backend = executor_backend
+        self.skill_runner = skill_runner
         self.robot_action_processor = robot_action_processor
         self.robot_observation_processor = robot_observation_processor
-        self.vlm_check_registry = vlm_check_registry
+        self.scene_verdict_store = scene_verdict_store
         self._command_callback_group = MutuallyExclusiveCallbackGroup()
         self._vlm_callback_group = ReentrantCallbackGroup()
 
         # ROS2 entrypoints used by the BT runtime and verifier-facing topics.
-        bt_command_service_type, vlm_state_service_type, legacy_vlm_result_service_type = _load_bt_services()
+        bt_command_service_type, vlm_state_service_type, legacy_vlm_result_service_type = load_bt_services()
         from std_msgs.msg import String  # type: ignore
 
         self._bt_command_server = self.create_service(
@@ -435,8 +188,8 @@ class SkillCommandServer(Node):
                 # Open a VLM check BEFORE executing the skill so the VLM can
                 # monitor the scene in real-time and return SUCCESS as soon as
                 # the goal is achieved, cutting the skill execution short.
-                self.vlm_check_registry.register_skill_name(request.name)
-                vlm_pre_attempt = self.vlm_check_registry.begin_attempt(request.name)
+                self.scene_verdict_store.register_skill_name(request.name)
+                vlm_pre_attempt = self.scene_verdict_store.begin_attempt(request.name)
                 self._publish_vlm_request(vlm_pre_attempt)
                 self.get_logger().info(
                     f"Pre-skill VLM check opened for '{request.name}' attempt {vlm_pre_attempt.attempt_id}."
@@ -444,7 +197,7 @@ class SkillCommandServer(Node):
                 # Real learned primitive: delegate to the robot/policy executor.
                 # The executor checks _active_vlm_result and stops early if the
                 # VLM reports a terminal status during execution.
-                result = self.executor_backend.execute_skill(
+                result = self.skill_runner.execute_skill(
                     skill_name=request.name,
                     robot_action_processor=self.robot_action_processor,
                     robot_observation_processor=self.robot_observation_processor,
@@ -485,8 +238,8 @@ class SkillCommandServer(Node):
                 # (see pre-skill block above). Only open a new attempt for gates.
                 if request.kind == VLM_GATE_PENDING_KIND:
                     # Gate names do not need to exist in the real skill config.
-                    self.vlm_check_registry.register_skill_name(request.name)
-                    vlm_check_attempt = self.vlm_check_registry.begin_attempt(request.name)
+                    self.scene_verdict_store.register_skill_name(request.name)
+                    vlm_check_attempt = self.scene_verdict_store.begin_attempt(request.name)
                     # Give the human operator time to place/adjust objects
                     # before the VLM starts checking the scene. The BT polls
                     # and sees PENDING during this wait.
@@ -501,11 +254,11 @@ class SkillCommandServer(Node):
                 # skill finishes, open a fresh attempt so the VLM sees the
                 # final scene, not stale pre-skill frames.
                 elif request.kind == "skill":
-                    vlm_check_attempt = self.vlm_check_registry.begin_attempt(request.name)
+                    vlm_check_attempt = self.scene_verdict_store.begin_attempt(request.name)
                     self._publish_vlm_request(vlm_check_attempt)
                 live_vlm_status = getattr(result, "vlm_status", None)
                 if live_vlm_status:
-                    self.vlm_check_registry.report(
+                    self.scene_verdict_store.report(
                         skill_name=request.name,
                         attempt_id=vlm_check_attempt.attempt_id,
                         status=live_vlm_status,
@@ -556,7 +309,7 @@ class SkillCommandServer(Node):
         @return The filled ROS2 response object.
         """
         try:
-            snapshot = self.vlm_check_registry.get_latest(request.skill_name)
+            snapshot = self.scene_verdict_store.get_latest(request.skill_name)
         except ValueError as exc:
             response.has_attempt = False
             response.attempt_id = 0
@@ -612,7 +365,7 @@ class SkillCommandServer(Node):
             return response
 
         try:
-            update = self.vlm_check_registry.report(
+            update = self.scene_verdict_store.report(
                 skill_name=request.skill_name,
                 attempt_id=int(request.attempt_id),
                 status=request.status,
@@ -641,7 +394,7 @@ class SkillCommandServer(Node):
         message: str,
     ) -> bool:
         """@brief Offer a verifier result to the currently running skill first."""
-        report_active = getattr(self.executor_backend, "report_active_vlm_result", None)
+        report_active = getattr(self.skill_runner, "report_active_vlm_result", None)
         if report_active is None:
             return False
 
@@ -667,7 +420,7 @@ class SkillCommandServer(Node):
         # the VLM prompt can include semantic context about what to verify.
         # Check two sources: PrimitiveSkillConfig.task for BC skills, and
         # vlm_gate_tasks for VLM-only gates (AwaitScene nodes).
-        skill_cfg = self.executor_backend.skill_configs.get(snapshot.skill_name)
+        skill_cfg = self.skill_runner.skill_configs.get(snapshot.skill_name)
         task_desc = ""
         if skill_cfg is not None and getattr(skill_cfg, "task", None):
             task_desc = skill_cfg.task.strip()
@@ -704,12 +457,11 @@ class SkillCommandServer(Node):
             f"attempt={snapshot.attempt_id} status={VLM_PENDING} "
             f"topic={self.cfg.vlm_request_topic!r} task={task_desc!r}"
         )
-        # Visible terminal output for the operator.
-        print(f"\n{'═'*60}")
-        print(f"🔍 VLM CHECK → {snapshot.skill_name} (attempt {snapshot.attempt_id})")
-        if task_desc:
-            print(f"   Task: {task_desc}")
-        print(f"{'═'*60}\n")
+        print_vlm_request_banner(
+            skill_name=snapshot.skill_name,
+            attempt_id=int(snapshot.attempt_id),
+            task_desc=task_desc,
+        )
 
     def _handle_vlm_result_topic(self, msg) -> None:
         """@brief Apply one JSON verifier verdict received from a ROS2 topic."""
@@ -730,9 +482,9 @@ class SkillCommandServer(Node):
 
         try:
             skill_name = str(payload.get("skill_name", ""))
-            status = _vlm_status_from_payload(payload)
+            status = vlm_status_from_payload(payload)
             attempt_id = int(payload.get("attempt_id", 0))
-            message = _vlm_message_from_payload(payload, status=status)
+            message = vlm_message_from_payload(payload, status=status)
             if self._try_report_active_skill_vlm_result(
                 skill_name=skill_name,
                 attempt_id=attempt_id,
@@ -740,7 +492,7 @@ class SkillCommandServer(Node):
                 message=message,
             ):
                 return
-            update = self.vlm_check_registry.report(
+            update = self.scene_verdict_store.report(
                 skill_name=skill_name,
                 attempt_id=attempt_id,
                 status=status,
@@ -756,12 +508,7 @@ class SkillCommandServer(Node):
         log_fn = self.get_logger().info if update.accepted else self.get_logger().warning
         log_fn(update.message)
 
-        # Visible terminal output for the operator.
-        emoji = {"SUCCESS": "✅", "FAILURE": "❌", "RUNNING": "🔄", "PENDING": "⏳"}.get(status, "📢")
-        print(f"\n{'═'*60}")
-        print(f"{emoji} VLM RESULT → {skill_name}: {status}")
-        print(f"   Message: {message}")
-        print(f"{'═'*60}\n")
+        print_vlm_result_banner(skill_name=skill_name, status=status, message=message)
 
 
 @parser.wrap(config_path=DEFAULT_CONFIG_PATH)
@@ -793,7 +540,7 @@ def run(cfg: SkillCommandServerConfig) -> None:
     logging.info("CustomManipulator constructed.")
 
     logging.info("Building robot action processor.")
-    robot_action_processor = _build_robot_processor_pipeline(
+    robot_action_processor = build_robot_processor_pipeline(
         cfg.robot_action_processor,
         to_transition=robot_action_observation_to_transition,
         to_output=transition_to_robot_action,
@@ -801,7 +548,7 @@ def run(cfg: SkillCommandServerConfig) -> None:
     logging.info("Robot action processor ready.")
 
     logging.info("Building robot observation processor.")
-    robot_observation_processor = _build_robot_processor_pipeline(
+    robot_observation_processor = build_robot_processor_pipeline(
         cfg.robot_observation_processor,
         to_transition=observation_to_transition,
         to_output=transition_to_observation,
@@ -809,10 +556,10 @@ def run(cfg: SkillCommandServerConfig) -> None:
     logging.info("Robot observation processor ready.")
 
     logging.info("Constructing skill command executor.")
-    executor_backend = SkillCommandExecutor(cfg=cfg, robot=robot)
+    skill_runner = SkillRunner(cfg=cfg, robot=robot)
     logging.info("Skill command executor ready.")
-    vlm_check_registry = VlmCheckRegistry(
-        known_skill_names=set(executor_backend.skill_configs),
+    scene_verdict_store = SceneVerdictStore(
+        known_skill_names=set(skill_runner.skill_configs),
         vlm_timeout_s=cfg.vlm_timeout_s,
     )
     logging.info("VLM check registry ready.")
@@ -821,10 +568,10 @@ def run(cfg: SkillCommandServerConfig) -> None:
     server_node = SkillCommandServer(
         cfg=cfg,
         robot=robot,
-        executor_backend=executor_backend,
+        skill_runner=skill_runner,
         robot_action_processor=robot_action_processor,
         robot_observation_processor=robot_observation_processor,
-        vlm_check_registry=vlm_check_registry,
+        scene_verdict_store=scene_verdict_store,
     )
     logging.info("ROS2 skill command service node is ready.")
 

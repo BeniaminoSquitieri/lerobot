@@ -75,13 +75,6 @@ set(LEROBOT_BT_CONFIG_FILES
   config/make_sandwich_bt.yaml
   config/prepare_picnic_bag_bt.yaml
 )
-set(LEROBOT_BT_DIAGRAM_FILES
-  diagrams/items_in_drawer_bt.png
-  diagrams/set_breakfast_table_bt.png
-  diagrams/make_coffee_bt.png
-  diagrams/make_sandwich_bt.png
-  diagrams/prepare_picnic_bag_bt.png
-)
 
 # Install only the curated tree/subtree XML files into the package share path.
 install(FILES ${LEROBOT_BT_TREE_FILES}
@@ -91,11 +84,6 @@ install(FILES ${LEROBOT_BT_TREE_FILES}
 # Install task-level BT parameter profiles.
 install(FILES ${LEROBOT_BT_CONFIG_FILES}
   DESTINATION share/${PROJECT_NAME}/config
-)
-
-# Install rendered BT diagrams for reports and quick inspection.
-install(FILES ${LEROBOT_BT_DIAGRAM_FILES}
-  DESTINATION share/${PROJECT_NAME}/diagrams
 )
 
 # Install launch files for one-command BT runner startup.

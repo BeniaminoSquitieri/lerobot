@@ -70,7 +70,7 @@ class SkillTransitionConfig:
     - `success_conditions`: list of predicates that, when all true, indicate success.
     - `failure_conditions`: list of predicates that, when any true, indicate failure.
     """
-    # Termination mode. See README for semantics.
+    # Termination mode for rollout completion.
     mode: str = "timeout"
     # Minimum execution time in seconds before considering termination.
     min_duration_s: float = 0.0
