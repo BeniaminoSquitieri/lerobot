@@ -72,9 +72,16 @@ camera_publish_jpeg_quality: 80
 
 # VLM gate descriptions (for AwaitScene nodes that have no policy config).
 vlm_gate_tasks:
+  place_tablecloth: "Ask the human to spread the white tablecloth on the table."
   breakfast_table.tablecloth_ready: "A white tablecloth is spread on the table."
+  breakfast_table.cereal_box_placed: "The cereal box has been placed on the tablecloth."
+  place_tea_box: "Ask the human to place the tea box on the table."
   breakfast_table.tea_box_ready: "A tea box has been placed on the table."
+  breakfast_table.bottle_placed: "The bottle has been placed on the tablecloth."
+  breakfast_table.cup_placed: "The cup has been placed on the tablecloth."
+  place_spoon: "Ask the human to place the spoon on the table."
   breakfast_table.spoon_ready: "A spoon has been placed on the table."
+  breakfast_table.bowl_placed: "The bowl has been placed on the tablecloth."
   breakfast_table.task_complete: "The breakfast table is fully set with all items: tablecloth, cereal box, tea box, bottle, cup, spoon, and bowl."
 
 # Minimum wait time (seconds) before VLM checks human gates.

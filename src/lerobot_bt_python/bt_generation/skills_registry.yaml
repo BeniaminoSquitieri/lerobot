@@ -1,0 +1,176 @@
+version: 1
+
+robot_skills:
+  - name: place_first_toast
+    kind: robot_skill
+    executor: robot
+    timeout_s: 120.0
+    max_attempts: 1
+    verify_after: first_toast_placed
+
+  - name: place_second_toast
+    kind: robot_skill
+    executor: robot
+    timeout_s: 30.0
+    max_attempts: 1
+    verify_after: second_toast_placed
+
+  - name: place_cereal_box
+    kind: robot_skill
+    executor: robot
+    timeout_s: 120.0
+    max_attempts: 1
+    verify_after: breakfast_table.cereal_box_placed
+
+  - name: place_bottle
+    kind: robot_skill
+    executor: robot
+    timeout_s: 120.0
+    max_attempts: 1
+    verify_after: breakfast_table.bottle_placed
+
+  - name: place_cup
+    kind: robot_skill
+    executor: robot
+    timeout_s: 120.0
+    max_attempts: 1
+    verify_after: breakfast_table.cup_placed
+
+  - name: place_bowl
+    kind: robot_skill
+    executor: robot
+    timeout_s: 120.0
+    max_attempts: 1
+    verify_after: breakfast_table.bowl_placed
+
+human_steps:
+  - name: pour_ingredient
+    kind: human_step
+    executor: human
+    instruction: "Please pour or place the ingredient for the sandwich."
+    timeout_s: 120.0
+    max_attempts: 1
+    verify_after: ingredient_poured
+
+  - name: place_tablecloth
+    kind: human_step
+    executor: human
+    instruction: "Please spread the white tablecloth on the table."
+    timeout_s: 120.0
+    max_attempts: 1
+    verify_after: breakfast_table.tablecloth_ready
+
+  - name: place_tea_box
+    kind: human_step
+    executor: human
+    instruction: "Please place the tea box on the table."
+    timeout_s: 120.0
+    max_attempts: 1
+    verify_after: breakfast_table.tea_box_ready
+
+  - name: place_spoon
+    kind: human_step
+    executor: human
+    instruction: "Please place the spoon on the table."
+    timeout_s: 120.0
+    max_attempts: 1
+    verify_after: breakfast_table.spoon_ready
+
+vlm_gates:
+  - name: initial_scene_ready
+    kind: vlm_gate
+    executor: vlm
+    timeout_s: 30.0
+    max_attempts: 1
+    task: "Check that the initial sandwich scene is ready."
+
+  - name: first_toast_placed
+    kind: vlm_gate
+    executor: vlm
+    timeout_s: 30.0
+    max_attempts: 1
+    task: "Check that the first toast is placed correctly."
+
+  - name: ingredient_poured
+    kind: vlm_gate
+    executor: vlm
+    timeout_s: 30.0
+    max_attempts: 1
+    task: "Check that the ingredient has been poured or placed correctly."
+
+  - name: second_toast_ready
+    kind: vlm_gate
+    executor: vlm
+    timeout_s: 30.0
+    max_attempts: 1
+    task: "Check that the second toast is ready for the robot to place."
+
+  - name: second_toast_placed
+    kind: vlm_gate
+    executor: vlm
+    timeout_s: 30.0
+    max_attempts: 1
+    task: "Check that the second toast is placed on top of the sandwich."
+
+  - name: make_sandwich.task_complete
+    kind: vlm_gate
+    executor: vlm
+    timeout_s: 30.0
+    max_attempts: 1
+    task: "Check that the sandwich is complete."
+
+  - name: breakfast_table.tablecloth_ready
+    kind: vlm_gate
+    executor: vlm
+    timeout_s: 30.0
+    max_attempts: 1
+    task: "Check that a white tablecloth is spread on the table."
+
+  - name: breakfast_table.cereal_box_placed
+    kind: vlm_gate
+    executor: vlm
+    timeout_s: 30.0
+    max_attempts: 1
+    task: "Check that the cereal box has been placed on the tablecloth."
+
+  - name: breakfast_table.tea_box_ready
+    kind: vlm_gate
+    executor: vlm
+    timeout_s: 30.0
+    max_attempts: 1
+    task: "Check that the tea box has been placed on the table."
+
+  - name: breakfast_table.bottle_placed
+    kind: vlm_gate
+    executor: vlm
+    timeout_s: 30.0
+    max_attempts: 1
+    task: "Check that the bottle has been placed on the tablecloth."
+
+  - name: breakfast_table.cup_placed
+    kind: vlm_gate
+    executor: vlm
+    timeout_s: 30.0
+    max_attempts: 1
+    task: "Check that the cup has been placed on the tablecloth."
+
+  - name: breakfast_table.spoon_ready
+    kind: vlm_gate
+    executor: vlm
+    timeout_s: 30.0
+    max_attempts: 1
+    task: "Check that the spoon has been placed on the table."
+
+  - name: breakfast_table.bowl_placed
+    kind: vlm_gate
+    executor: vlm
+    timeout_s: 30.0
+    max_attempts: 1
+    task: "Check that the bowl has been placed on the tablecloth."
+
+  - name: breakfast_table.task_complete
+    kind: vlm_gate
+    executor: vlm
+    timeout_s: 30.0
+    max_attempts: 1
+    task: "Check that the breakfast table is fully set with all items."

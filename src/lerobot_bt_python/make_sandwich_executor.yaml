@@ -92,6 +92,16 @@ camera_publish_map:
 camera_publish_fps: 10.0
 camera_publish_jpeg_quality: 80
 
+# VLM gate descriptions used by generated AwaitScene nodes and manual steps.
+vlm_gate_tasks:
+  initial_scene_ready: "Check that the initial sandwich scene is ready."
+  first_toast_placed: "Check that the first toast is placed correctly."
+  pour_ingredient: "Ask the human to pour or place the sandwich ingredient."
+  ingredient_poured: "Check that the ingredient has been poured or placed correctly."
+  second_toast_ready: "Check that the second toast is ready for the robot to place."
+  second_toast_placed: "Check that the second toast is placed on top of the sandwich."
+  make_sandwich.task_complete: "Check that the sandwich is complete."
+
 # Learned primitives.
 # Each entry points to policy metadata and exposes mixed inference variants.
 skills:
