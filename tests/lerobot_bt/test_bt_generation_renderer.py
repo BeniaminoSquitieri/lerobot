@@ -73,6 +73,9 @@ def test_renderer_preserves_infinite_retry_value() -> None:
     bt_params = cfg["lerobot_bt_runner"]["ros__parameters"]["bt"]
 
     assert bt_params["place_first_toast_max_attempts"] == INFINITE_RETRY_ATTEMPTS
+    assert bt_params["place_second_toast_max_attempts"] == INFINITE_RETRY_ATTEMPTS
+    assert bt_params["place_first_toast_timeout_s"] == 120.0
+    assert bt_params["place_second_toast_timeout_s"] == 120.0
 
 
 def test_generated_yaml_preserves_infinite_max_attempts() -> None:
@@ -83,6 +86,11 @@ def test_generated_yaml_preserves_infinite_max_attempts() -> None:
     assert (
         cfg["lerobot_bt_runner"]["ros__parameters"]["bt"]["place_first_toast_max_attempts"]
         == registry.robot_skills["place_first_toast"].max_attempts
+        == INFINITE_RETRY_ATTEMPTS
+    )
+    assert (
+        cfg["lerobot_bt_runner"]["ros__parameters"]["bt"]["place_second_toast_max_attempts"]
+        == registry.robot_skills["place_second_toast"].max_attempts
         == INFINITE_RETRY_ATTEMPTS
     )
 

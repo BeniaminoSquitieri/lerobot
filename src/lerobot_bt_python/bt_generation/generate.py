@@ -10,6 +10,7 @@ from pathlib import Path
 from .planner import build_linear_plan
 from .registry import load_registry, validate_registry
 from .renderer import render_bt_params_yaml, render_xml
+from .static_checks import validate_xml_yaml_blackboard_text
 from .validator import validate_linear_plan
 
 
@@ -54,8 +55,13 @@ def main(argv: list[str] | None = None) -> int:
     try:
         xml_text = render_xml(plan, registry)
         yaml_text = render_bt_params_yaml(plan, registry)
+        errors.extend(validate_xml_yaml_blackboard_text(xml_text, yaml_text))
     except Exception as exc:  # noqa: BLE001
         _print_errors([str(exc)])
+        return 1
+
+    if errors:
+        _print_errors(errors)
         return 1
 
     args.out_tree.parent.mkdir(parents=True, exist_ok=True)

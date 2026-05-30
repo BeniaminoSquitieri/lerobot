@@ -7,18 +7,50 @@ REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 TREE_PATH="/tmp/generated_make_sandwich.xml"
 CONFIG_PATH="/tmp/generated_make_sandwich_bt.yaml"
 PYTHON_BIN="${PYTHON_BIN:-python}"
+read -r -a PYTHON_CMD <<< "${PYTHON_BIN}"
 
 cd "${REPO_ROOT}"
 export PYTHONPATH="${REPO_ROOT}/src:${PYTHONPATH:-}"
 
-"${PYTHON_BIN}" -m lerobot_bt_python.bt_generation.generate \
+if ! command -v "${PYTHON_CMD[0]}" >/dev/null 2>&1; then
+  if [[ "${PYTHON_BIN}" == "python" ]] && command -v conda >/dev/null 2>&1; then
+    PYTHON_CMD=(conda run -n lerobot python)
+  elif [[ "${PYTHON_BIN}" == "python" ]] && command -v python3 >/dev/null 2>&1; then
+    PYTHON_CMD=(python3)
+  else
+    echo "ERROR: PYTHON_BIN command not found: ${PYTHON_BIN}" >&2
+    exit 2
+  fi
+fi
+
+command -v ros2 >/dev/null 2>&1 || {
+  echo "ERROR: ROS2 not found. Source ROS2 before running C++ integration test." >&2
+  echo "Example: source /opt/ros/<distro>/setup.bash" >&2
+  exit 2
+}
+
+"${PYTHON_CMD[@]}" -c "import rclpy" >/dev/null 2>&1 || {
+  echo "ERROR: rclpy not available in PYTHON_BIN environment: ${PYTHON_BIN}" >&2
+  echo "Use a ROS2 Python environment or source the ROS2 workspace." >&2
+  exit 2
+}
+
+ros2 pkg prefix lerobot_bt_runtime_cpp >/dev/null 2>&1 || {
+  echo "ERROR: lerobot_bt_runtime_cpp package not found." >&2
+  echo "Build and source the workspace:" >&2
+  echo "  colcon build --symlink-install" >&2
+  echo "  source install/setup.bash" >&2
+  exit 2
+}
+
+"${PYTHON_CMD[@]}" -m lerobot_bt_python.bt_generation.generate \
   --task make_sandwich \
   --registry src/lerobot_bt_python/bt_generation/skills_registry.yaml \
   --executor-yaml src/lerobot_bt_python/make_sandwich_executor.yaml \
   --out-tree "${TREE_PATH}" \
   --out-config "${CONFIG_PATH}"
 
-"${PYTHON_BIN}" -m lerobot_bt_python.fakes.fake_bt_executor_server \
+"${PYTHON_CMD[@]}" -m lerobot_bt_python.fakes.fake_bt_executor_server \
   --scenario "${SCENARIO}" \
   --running-polls-before-failure 3 &
 SERVER_PID="$!"

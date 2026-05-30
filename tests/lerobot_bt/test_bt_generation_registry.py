@@ -81,6 +81,15 @@ def test_registry_accepts_infinite_retries_for_robot_skills() -> None:
     assert validate_registry(registry) == []
 
 
+def test_make_sandwich_robot_skills_use_infinite_retries_and_positive_timeouts() -> None:
+    registry = load_registry(REGISTRY_PATH)
+
+    for name in ["place_first_toast", "place_second_toast"]:
+        entry = registry.robot_skills[name]
+        assert entry.max_attempts == INFINITE_RETRY_ATTEMPTS
+        assert entry.timeout_s > 0.0
+
+
 def test_infinite_retry_still_requires_positive_timeout() -> None:
     registry = load_registry(REGISTRY_PATH)
     bad_skill = replace(

@@ -160,12 +160,20 @@ python -m lerobot_bt_python.bt_generation.generate \
 
 The CLI writes no outputs if registry or plan validation fails.
 
-## Testing Without The Robot
+## Offline Validation Without ROS2
+
+The laptop workflow does not require ROS2, Panda, camera, VLM, or the C++
+runner. It validates Python generation, fake Linear IR execution, generated
+XML/YAML blackboard consistency, and safety checks:
+
+```bash
+conda run -n lerobot python -m pytest tests/lerobot_bt -svv
+```
 
 Generate a sandwich BT:
 
 ```bash
-PYTHONPATH=src python -m lerobot_bt_python.bt_generation.generate \
+PYTHONPATH=src conda run -n lerobot python -m lerobot_bt_python.bt_generation.generate \
   --task make_sandwich \
   --registry src/lerobot_bt_python/bt_generation/skills_registry.yaml \
   --executor-yaml src/lerobot_bt_python/make_sandwich_executor.yaml \
@@ -173,14 +181,48 @@ PYTHONPATH=src python -m lerobot_bt_python.bt_generation.generate \
   --out-config /tmp/generated_make_sandwich_bt.yaml
 ```
 
-Start the fake ROS2 server:
+Run the offline helper:
 
 ```bash
-PYTHONPATH=src python -m lerobot_bt_python.fakes.fake_bt_executor_server \
-  --scenario success_all
+PYTHONPATH=src PYTHON_BIN=python scripts/check_generated_bt_offline.sh
 ```
 
-Run the generated tree with the C++ runner in another sourced ROS2 shell:
+The generator performs a static blackboard check before writing output: every
+`{key}` referenced by generated XML must exist under
+`lerobot_bt_runner.ros__parameters.bt` in generated YAML. Extra YAML keys are
+allowed.
+
+## ROS2/C++ Integration Validation
+
+The C++ integration test requires a ROS2 environment. Before running it, make
+sure these are available:
+
+- `ros2`
+- `rclpy`
+- `colcon`
+- a built workspace containing `lerobot_bt_runtime_cpp`
+- sourced ROS2 and workspace setup files
+
+Setup and build:
+
+```bash
+source /opt/ros/<distro>/setup.bash
+colcon build --symlink-install
+source install/setup.bash
+```
+
+Run the generated tree with the fake server and C++ runner:
+
+```bash
+PYTHONPATH=src scripts/test_generated_bt_with_fake_server.sh success_all success
+PYTHONPATH=src scripts/test_generated_bt_with_fake_server.sh initial_scene_failed failure
+```
+
+If ROS2 is missing, `scripts/test_generated_bt_with_fake_server.sh` fails in
+preflight with exit code `2` and a clear message instead of starting the fake
+server or producing an `rclpy` traceback.
+
+The script runs the equivalent C++ command after preflight passes:
 
 ```bash
 ros2 run lerobot_bt_runtime_cpp lerobot_bt_runner \
@@ -188,13 +230,6 @@ ros2 run lerobot_bt_runtime_cpp lerobot_bt_runner \
   --params-file /tmp/generated_make_sandwich_bt.yaml \
   -p tree_xml_path:=/tmp/generated_make_sandwich.xml \
   -p enable_groot_publisher:=false
-```
-
-Or run the helper script:
-
-```bash
-PYTHON_BIN=python scripts/test_generated_bt_with_fake_server.sh success_all success
-PYTHON_BIN=python scripts/test_generated_bt_with_fake_server.sh initial_scene_failed failure
 ```
 
 Fake scenarios:

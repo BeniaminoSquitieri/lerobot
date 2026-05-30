@@ -29,7 +29,11 @@ def test_cli_generates_make_sandwich(tmp_path: Path) -> None:
     assert "human_step:" in result.stdout
     ET.parse(tree)
     cfg = yaml.safe_load(config.read_text(encoding="utf-8"))
-    assert cfg["lerobot_bt_runner"]["ros__parameters"]["bt"]["place_first_toast_max_attempts"] == -1
+    bt_params = cfg["lerobot_bt_runner"]["ros__parameters"]["bt"]
+    assert bt_params["place_first_toast_max_attempts"] == -1
+    assert bt_params["place_second_toast_max_attempts"] == -1
+    assert bt_params["place_first_toast_timeout_s"] == 120.0
+    assert bt_params["place_second_toast_timeout_s"] == 120.0
 
 
 def test_cli_generates_set_breakfast_table(tmp_path: Path) -> None:

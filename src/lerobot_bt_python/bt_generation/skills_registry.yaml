@@ -11,8 +11,8 @@ robot_skills:
   - name: place_second_toast
     kind: robot_skill
     executor: robot
-    timeout_s: 30.0
-    max_attempts: 1
+    timeout_s: 120.0
+    max_attempts: -1
     verify_after: second_toast_placed
 
   - name: place_cereal_box
