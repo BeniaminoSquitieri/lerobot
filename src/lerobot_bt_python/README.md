@@ -19,7 +19,6 @@ command and reports the result.
 | `verification.py` | In-memory state machine for VLM/gate attempts and statuses. |
 | `vlm_protocol.py` | JSON payload helpers for verifier request/result messages. |
 | `camera_publisher.py` | Publishes already-open robot camera frames to ROS topics for an external verifier. |
-| `bt_vlm_bridge.py` | Legacy bridge between BT JSON VLM topics and the Panda string VLM protocol. |
 | `operator_console.py` | Human-readable terminal banners for VLM request/result events. |
 | `*_executor.yaml` | Task-specific robot, camera, policy, skill, processor, and VLM config. |
 
@@ -61,22 +60,7 @@ For real robot rollout, keep safety processors enabled where configured. For
 example, `make_sandwich_executor.yaml` uses
 `cartesian_action_safety_processor` before Panda commands are sent.
 
-## VLM Bridge
-
-If your verifier already consumes `/lerobot_bt/vlm_request` and publishes
-`/lerobot_bt/vlm_result`, start that verifier directly.
-
-Use `bt_vlm_bridge.py` only for the legacy Panda VLM string protocol.
-
-Default bridge topics:
-
-- BT request in: `/lerobot_bt/vlm_request`
-- BT result out: `/lerobot_bt/vlm_result`
-- Panda request out: `/panda/vlm/request`
-- Panda status in: `/panda/vlm/status`
-
 ## Commands
 
-Commands for starting the skill server, running VLM bridge compatibility,
-publishing manual VLM verdicts, preflight, and tests are centralized in
-`../README.md`.
+Commands for starting the skill server, publishing manual VLM verdicts,
+preflight, and tests are centralized in `../README.md`.

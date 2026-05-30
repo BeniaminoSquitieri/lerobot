@@ -33,7 +33,7 @@ from lerobot.utils.visualization_utils import log_rerun_data
 from .conditions import evaluate_all, evaluate_any
 from .config import SkillCommandServerConfig
 from .skill_runtime_loader import LiveRobotDatasetMetadata, SkillRuntime, build_skill_runtime
-from .verification import VLM_FAILURE, VLM_NEEDS_MANUAL_HELP, VLM_SUCCESS, VLM_WAIT_HUMAN
+from .verification import VLM_FAILURE, VLM_SUCCESS
 
 if TYPE_CHECKING:
     from lerobot.robots.custom_manipulator.custom_manipulator import CustomManipulator
@@ -51,8 +51,6 @@ __all__ = [
 _ACTIVE_SKILL_STOP_STATUSES = {
     VLM_SUCCESS,
     VLM_FAILURE,
-    VLM_WAIT_HUMAN,
-    VLM_NEEDS_MANUAL_HELP,
 }
 """VLM/manual statuses that should stop a live policy rollout immediately."""
 

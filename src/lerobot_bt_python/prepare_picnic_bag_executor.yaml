@@ -58,6 +58,12 @@ robot_action_processor:
 robot_observation_processor:
   steps: []
 
+camera_publish_map:
+  wrist: "/panda/camera/front/image_compressed"
+  left: "/panda/camera/wrist/image_compressed"
+camera_publish_fps: 10.0
+camera_publish_jpeg_quality: 80
+
 skills:
   - name: bag_bread
     dataset_repo_id: "scene-transition/bag_bread"

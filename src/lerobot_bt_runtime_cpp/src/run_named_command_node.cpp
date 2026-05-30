@@ -138,7 +138,7 @@ OpenVLMGateNode::OpenVLMGateNode(
   // Comment: executes this BT logic statement in C++.
   const std::string& bt_command_service)
 // Comment: executes this BT logic statement in C++.
-: RunNamedCommandNode(name, config, ros_node, bt_command_service, "vlm_gate_pending", "gate_name", "")
+: RunNamedCommandNode(name, config, ros_node, bt_command_service, "vlm_gate", "gate_name", "")
 // Comment: opens a new C++ code block.
 {
 // Comment: closes the current C++ code block.

@@ -312,15 +312,9 @@ BT::NodeStatus MergedRunAndVerifyNode::handleVlmResponse(
   // Comment: closes the current C++ code block.
   }
 
-  // Waiting statuses: keep polling.
+  // RUNNING keeps polling.
   // Comment: executes this BT logic statement in C++.
-  const bool waiting = response->status == "PENDING" ||
-                       // Comment: executes this BT logic statement in C++.
-                       response->status == "RUNNING" ||
-                       // Comment: executes this BT logic statement in C++.
-                       response->status == "WAIT_HUMAN" ||
-                       // Comment: executes this BT logic statement in C++.
-                       response->status == "MANUAL_INTERVENTION_REQUIRED";
+  const bool waiting = response->status == "RUNNING";
   // Comment: evaluates a condition and chooses the branch to run.
   if (waiting) {
     // Comment: writes a diagnostic message to the ROS2 logger.
@@ -396,7 +390,7 @@ AwaitSceneNode::AwaitSceneNode(
   // Comment: executes this BT logic statement in C++.
   const std::string& vlm_service)
 // Comment: executes this BT logic statement in C++.
-: MergedRunAndVerifyNode(name, config, ros_node, command_service, vlm_service, "vlm_gate_pending")
+: MergedRunAndVerifyNode(name, config, ros_node, command_service, vlm_service, "vlm_gate")
 // Comment: opens a new C++ code block.
 {
 // Comment: closes the current C++ code block.

@@ -10,8 +10,7 @@ string skill_name
 bool has_attempt
 # attempt_id is the monotonic identifier assigned by the Python server.
 int32 attempt_id
-# status is one of UNKNOWN, PENDING, RUNNING, WAIT_HUMAN,
-# MANUAL_INTERVENTION_REQUIRED, SUCCESS, or FAILURE.
+# status is one of UNKNOWN, RUNNING, SUCCESS, or FAILURE.
 string status
 # message provides human-readable status detail.
 string message

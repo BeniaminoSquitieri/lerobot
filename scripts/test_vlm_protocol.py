@@ -45,15 +45,14 @@ SKILL_REQUEST = {
     "event": "vlm_check_requested",
     "skill_name": "place_first_toast",
     "attempt_id": 42,
-    "status": "PENDING",
+    "status": "RUNNING",
     "message": "Awaiting VLM result for skill 'place_first_toast'.",
     "task": "Pick the toast upon the table.",
     "allowed_statuses": [
-        "PENDING", "RUNNING", "WAIT_HUMAN",
-        "MANUAL_INTERVENTION_REQUIRED", "SUCCESS", "FAILURE",
+        "RUNNING", "SUCCESS", "FAILURE",
     ],
     "allowed_next_actions": [
-        "CONTINUE", "RETRY_SKILL", "WAIT_HUMAN", "REQUEST_MANUAL_INTERVENTION",
+        "CONTINUE", "RETRY_SKILL", "WAIT",
     ],
 }
 
@@ -61,21 +60,19 @@ GATE_REQUEST = {
     "event": "vlm_check_requested",
     "skill_name": "initial_scene_ready",
     "attempt_id": 1,
-    "status": "PENDING",
+    "status": "RUNNING",
     "message": "Awaiting VLM result for gate 'initial_scene_ready'.",
     "task": "",  # I gate non hanno descrizione task
     "allowed_statuses": [
-        "PENDING", "RUNNING", "WAIT_HUMAN",
-        "MANUAL_INTERVENTION_REQUIRED", "SUCCESS", "FAILURE",
+        "RUNNING", "SUCCESS", "FAILURE",
     ],
     "allowed_next_actions": [
-        "CONTINUE", "RETRY_SKILL", "WAIT_HUMAN", "REQUEST_MANUAL_INTERVENTION",
+        "CONTINUE", "RETRY_SKILL", "WAIT",
     ],
 }
 
 VALID_STATUSES = {
-    "PENDING", "RUNNING", "WAIT_HUMAN",
-    "MANUAL_INTERVENTION_REQUIRED", "SUCCESS", "FAILURE",
+    "RUNNING", "SUCCESS", "FAILURE",
 }
 
 TERMINAL_STATUSES = {"SUCCESS", "FAILURE"}
@@ -189,7 +186,7 @@ def validate_response(request: dict, responses: list[dict]) -> bool:
         else:
             print(f"  ✓ Risposta {i+1}: status valido ({status})")
 
-        # 4. Se RUNNING o PENDING, non deve essere l'unica risposta
+        # 4. Se RUNNING, non deve essere l'unica risposta
         #    (a meno che non abbiamo raggiunto il timeout)
         if i == len(responses) - 1 and status not in TERMINAL_STATUSES:
             print(f"  ⚠ Ultima risposta non terminale ({status}). "

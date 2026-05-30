@@ -4,10 +4,10 @@
 # Request fields:
 # skill_name identifies the primitive whose attempt is being judged.
 string skill_name
-# attempt_id selects a concrete attempt; 0 applies to the latest pending attempt.
+# attempt_id selects a concrete attempt; 0 applies to the latest active attempt.
 int32 attempt_id
 # status is the verifier update:
-#   PENDING/RUNNING/WAIT_HUMAN/MANUAL_INTERVENTION_REQUIRED keep the BT blocked
+#   RUNNING keeps the BT blocked
 #   SUCCESS advances the BT
 #   FAILURE triggers XML retry/failure logic
 string status

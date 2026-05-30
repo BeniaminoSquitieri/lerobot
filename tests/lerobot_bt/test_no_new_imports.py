@@ -21,7 +21,6 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 EDITED_FILES = (
     "src/lerobot_bt_python/server.py",
     "src/lerobot_bt_python/verification.py",
-    "src/lerobot_bt_python/bt_vlm_bridge.py",
     "src/lerobot_bt_python/conditions.py",
     "src/lerobot_bt_python/executor.py",
     "src/lerobot_bt_python/config.py",

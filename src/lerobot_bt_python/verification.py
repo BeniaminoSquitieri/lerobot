@@ -14,10 +14,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from threading import Lock
 
-VLM_PENDING = "PENDING"
 VLM_RUNNING = "RUNNING"
-VLM_WAIT_HUMAN = "WAIT_HUMAN"
-VLM_NEEDS_MANUAL_HELP = "MANUAL_INTERVENTION_REQUIRED"
 VLM_SUCCESS = "SUCCESS"
 VLM_FAILURE = "FAILURE"
 VLM_UNKNOWN = "UNKNOWN"
@@ -28,13 +25,10 @@ VLM_TERMINAL_STATUSES = {
 }
 
 VLM_WAITING_STATUSES = {
-    VLM_PENDING,
     VLM_RUNNING,
-    VLM_WAIT_HUMAN,
-    VLM_NEEDS_MANUAL_HELP,
 }
 
-_ALLOWED_VLM_STATUSES = VLM_TERMINAL_STATUSES | VLM_WAITING_STATUSES
+_ALLOWED_VLM_STATUSES = VLM_TERMINAL_STATUSES | {VLM_RUNNING}
 
 
 @dataclass(frozen=True)
@@ -65,7 +59,7 @@ class VlmCheckUpdate:
     """@brief Result returned after trying to apply a verifier report."""
 
     accepted: bool
-    """True when the report was applied to the active pending attempt."""
+    """True when the report was applied to the active attempt."""
 
     message: str
     """Explanation of why the report was accepted or rejected."""
@@ -102,7 +96,7 @@ class SceneVerdictStore:
             self._known_skill_names.add(skill_name)
 
     def begin_attempt(self, skill_name: str, *, message: str = "") -> VlmCheckSnapshot:
-        """@brief Create a fresh pending VLM check state for one skill attempt."""
+        """@brief Create a fresh running VLM check state for one skill attempt."""
         default_message = f"Awaiting VLM result for skill '{skill_name}'."
         with self._lock:
             self._validate_skill_name(skill_name)
@@ -111,7 +105,7 @@ class SceneVerdictStore:
             snapshot = VlmCheckSnapshot(
                 skill_name=skill_name,
                 attempt_id=attempt_id,
-                status=VLM_PENDING,
+                status=VLM_RUNNING,
                 message=message or default_message,
                 created_at_s=self._clock(),
                 timeout_s=self._vlm_timeout_s,

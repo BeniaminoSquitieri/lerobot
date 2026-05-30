@@ -70,7 +70,7 @@ enum class MergedPhase
 /**
  * @brief Base class for merged "do something then wait for VLM" leaves.
  *
- * Subclasses fix the ROS command kind ("vlm_gate_pending" or "skill") and
+ * Subclasses fix the ROS command kind ("vlm_gate" or "skill") and
  * declare XML ports.  The base class owns the two-phase state machine, both
  * ROS2 service clients, and the retry-safe halting logic.
  */

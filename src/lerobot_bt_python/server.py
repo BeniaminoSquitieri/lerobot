@@ -47,7 +47,7 @@ from .executor import CommandResult, SkillRunner
 from .operator_console import print_vlm_request_banner, print_vlm_result_banner
 from .processor_factory import build_robot_processor_pipeline
 from .verification import (
-    VLM_PENDING,
+    VLM_RUNNING,
     VLM_UNKNOWN,
     VLM_WAITING_STATUSES,
     SceneVerdictStore,
@@ -60,8 +60,8 @@ DEFAULT_CONFIG_PATH = Path(__file__).resolve().parent / "make_sandwich_executor.
 if TYPE_CHECKING:
     from lerobot.robots.custom_manipulator.custom_manipulator import CustomManipulator
 
-VLM_GATE_PENDING_KIND = "vlm_gate_pending"
-"""Command kind that acknowledges a gate but leaves the VLM check pending."""
+VLM_GATE_KIND = "vlm_gate"
+"""Command kind that acknowledges a gate but leaves the VLM check running."""
 
 _legacy_vlm_service_warned = False
 
@@ -203,7 +203,7 @@ class SkillCommandServer(Node):
                     robot_observation_processor=self.robot_observation_processor,
                     timeout_override_s=request.timeout_s,
                 )
-            elif request.kind == VLM_GATE_PENDING_KIND:
+            elif request.kind == VLM_GATE_KIND:
                 # Human/VLM gate: open an attempt but do not resolve it.
                 result = CommandResult(
                     True,
@@ -227,22 +227,22 @@ class SkillCommandServer(Node):
             response.elapsed_s = 0.0
             response.message = (
                 f"Unsupported command kind '{request.kind}'. "
-                f"Expected one of ('skill', '{VLM_GATE_PENDING_KIND}')."
+                f"Expected one of ('skill', '{VLM_GATE_KIND}')."
             )
             self.get_logger().error(response.message)
             return response
 
-        if request.kind in {"skill", VLM_GATE_PENDING_KIND} and result.success:
+        if request.kind in {"skill", VLM_GATE_KIND} and result.success:
             try:
                 # For skills, the VLM check was already opened before execution
                 # (see pre-skill block above). Only open a new attempt for gates.
-                if request.kind == VLM_GATE_PENDING_KIND:
+                if request.kind == VLM_GATE_KIND:
                     # Gate names do not need to exist in the real skill config.
                     self.scene_verdict_store.register_skill_name(request.name)
                     vlm_check_attempt = self.scene_verdict_store.begin_attempt(request.name)
                     # Give the human operator time to place/adjust objects
                     # before the VLM starts checking the scene. The BT polls
-                    # and sees PENDING during this wait.
+                    # and sees RUNNING during this wait.
                     gate_wait_s = float(getattr(self.cfg, "vlm_gate_min_wait_s", 5.0))
                     if gate_wait_s > 0:
                         self.get_logger().info(
@@ -270,9 +270,6 @@ class SkillCommandServer(Node):
                         f"{live_vlm_status} from the live verifier result."
                     )
                 else:
-                    publish_vlm_request = getattr(self, "_publish_vlm_request", None)
-                    if publish_vlm_request is not None:
-                        publish_vlm_request(vlm_check_attempt)
                     vlm_request_topic = getattr(
                         self.cfg,
                         "vlm_request_topic",
@@ -280,7 +277,7 @@ class SkillCommandServer(Node):
                     )
                     result.message = (
                         f"{result.message} "
-                        f"VLM check attempt {vlm_check_attempt.attempt_id} is now pending on "
+                        f"VLM check attempt {vlm_check_attempt.attempt_id} is now running on "
                         f"'{vlm_request_topic}'."
                     )
             except Exception as exc:  # noqa: BLE001
@@ -338,7 +335,7 @@ class SkillCommandServer(Node):
         return response
 
     def _handle_legacy_vlm_result(self, request, response):
-        """@brief Accept a verifier verdict for a pending skill attempt.
+        """@brief Accept a verifier verdict for an active skill attempt.
 
         @param request ROS2 request containing skill name, attempt id, status,
             and message.
@@ -431,22 +428,18 @@ class SkillCommandServer(Node):
             "event": "vlm_check_requested",
             "skill_name": snapshot.skill_name,
             "attempt_id": int(snapshot.attempt_id),
-            "status": VLM_PENDING,
+            "status": VLM_RUNNING,
             "message": snapshot.message,
             "task": task_desc,
             "allowed_statuses": [
-                "PENDING",
                 "RUNNING",
-                "WAIT_HUMAN",
-                "MANUAL_INTERVENTION_REQUIRED",
                 "SUCCESS",
                 "FAILURE",
             ],
             "allowed_next_actions": [
                 "CONTINUE",
                 "RETRY_SKILL",
-                "WAIT_HUMAN",
-                "REQUEST_MANUAL_INTERVENTION",
+                "WAIT",
             ],
         }
         msg = String()
@@ -454,7 +447,7 @@ class SkillCommandServer(Node):
         self._vlm_request_publisher.publish(msg)
         self.get_logger().info(
             f"event=vlm_request_published skill={snapshot.skill_name!r} "
-            f"attempt={snapshot.attempt_id} status={VLM_PENDING} "
+            f"attempt={snapshot.attempt_id} status={VLM_RUNNING} "
             f"topic={self.cfg.vlm_request_topic!r} task={task_desc!r}"
         )
         print_vlm_request_banner(

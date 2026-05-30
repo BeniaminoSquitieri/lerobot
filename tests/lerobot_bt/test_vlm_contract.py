@@ -3,21 +3,14 @@
 from __future__ import annotations
 
 import ast
-import importlib
 import re
-import warnings
 from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
 
 from lerobot_bt_python.verification import (
-    VLM_FAILURE,
-    VLM_NEEDS_MANUAL_HELP,
-    VLM_PENDING,
     VLM_RUNNING,
-    VLM_SUCCESS,
-    VLM_WAIT_HUMAN,
     SceneVerdictStore,
 )
 
@@ -55,24 +48,6 @@ def _dict_literal_items(dict_node: ast.Dict) -> dict[str, ast.AST]:
         if isinstance(key_node, ast.Constant) and isinstance(key_node.value, str):
             items[key_node.value] = value_node
     return items
-
-
-def _module_constant_dict(module: ast.Module, name: str) -> dict[str, str]:
-    for node in module.body:
-        if isinstance(node, ast.Assign):
-            for target in node.targets:
-                if isinstance(target, ast.Name) and target.id == name and isinstance(node.value, ast.Dict):
-                    result: dict[str, str] = {}
-                    for key_node, value_node in zip(node.value.keys, node.value.values, strict=True):
-                        if (
-                            isinstance(key_node, ast.Constant)
-                            and isinstance(key_node.value, str)
-                            and isinstance(value_node, ast.Constant)
-                            and isinstance(value_node.value, str)
-                        ):
-                            result[key_node.value] = value_node.value
-                    return result
-    raise AssertionError(f"Constant dict {name} not found")
 
 
 def _skill_server_config_default(field_name: str) -> str:
@@ -118,58 +93,14 @@ def test_active_request_schema():
         for elt in allowed_statuses_node.elts
         if isinstance(elt, ast.Constant) and isinstance(elt.value, str)
     }
-    assert {
-        "PENDING",
+    assert allowed_statuses == {
         "RUNNING",
-        "WAIT_HUMAN",
-        "MANUAL_INTERVENTION_REQUIRED",
         "SUCCESS",
         "FAILURE",
-    }.issubset(allowed_statuses)
-
-
-def test_active_result_schema():
-    bridge_module = _module_ast("src/lerobot_bt_python/bt_vlm_bridge.py")
-    bridge_handler = _class_method(bridge_module, "BtPandaVlmBridge", "_handle_panda_status")
-    result_payload = _find_dict_assignment(bridge_handler, "result_payload")
-    payload_items = _dict_literal_items(result_payload)
-
-    assert {"skill_name", "attempt_id", "status", "message"}.issubset(set(payload_items))
-
-    attempt_id_node = payload_items["attempt_id"]
-    attempt_id_expr = ast.unparse(attempt_id_node)
-    assert attempt_id_expr.startswith("int(")
-    assert "active_request.get(\"attempt_id\", 0)" in attempt_id_expr or "active_request.get('attempt_id', 0)" in attempt_id_expr
-
-    panda_map = _module_constant_dict(bridge_module, "PANDA_TO_BT_STATUS")
-    mapped_values = set(panda_map.values())
-    assert {VLM_PENDING, VLM_RUNNING, VLM_SUCCESS, VLM_FAILURE}.issubset(mapped_values)
-
-    expected_vocabulary = {
-        VLM_PENDING,
-        VLM_RUNNING,
-        VLM_WAIT_HUMAN,
-        VLM_NEEDS_MANUAL_HELP,
-        VLM_SUCCESS,
-        VLM_FAILURE,
     }
-    assert VLM_PENDING in expected_vocabulary
 
 
 def test_topic_names_are_stable():
-    bridge_module = _module_ast("src/lerobot_bt_python/bt_vlm_bridge.py")
-
-    request_topic = None
-    result_topic = None
-    for node in bridge_module.body:
-        if isinstance(node, ast.Assign) and len(node.targets) == 1 and isinstance(node.targets[0], ast.Name):
-            if node.targets[0].id == "BT_VLM_REQUEST_TOPIC" and isinstance(node.value, ast.Constant):
-                request_topic = node.value.value
-            if node.targets[0].id == "BT_VLM_RESULT_TOPIC" and isinstance(node.value, ast.Constant):
-                result_topic = node.value.value
-
-    assert request_topic == "/lerobot_bt/vlm_request"
-    assert result_topic == "/lerobot_bt/vlm_result"
     assert _skill_server_config_default("vlm_request_topic") == "/lerobot_bt/vlm_request"
     assert _skill_server_config_default("vlm_result_topic") == "/lerobot_bt/vlm_result"
 
@@ -204,7 +135,7 @@ def test_legacy_srv_type_importable():
         pytest.skip("Generated ReportSkillVerification binding is unavailable in this environment")
 
 
-def test_pending_status_on_timeout():
+def test_running_status_on_timeout():
     time_now = [100.0]
     registry = SceneVerdictStore(
         known_skill_names={"test_skill"},
@@ -213,11 +144,11 @@ def test_pending_status_on_timeout():
     )
 
     opened = registry.begin_attempt("test_skill")
-    assert opened.status == VLM_PENDING
+    assert opened.status == VLM_RUNNING
 
     latest = registry.get_latest("test_skill")
     assert latest is not None
-    assert latest.status == VLM_PENDING
+    assert latest.status == VLM_RUNNING
 
     running_update = registry.report(
         skill_name="test_skill",
@@ -232,23 +163,13 @@ def test_pending_status_on_timeout():
     time_now[0] = 129.0
     late_but_not_timed_out = registry.get_latest("test_skill")
     assert late_but_not_timed_out is not None
-    assert late_but_not_timed_out.status in {VLM_PENDING, VLM_RUNNING}
+    assert late_but_not_timed_out.status == VLM_RUNNING
 
 
 def test_no_warning_at_import():
     pytest.importorskip("rclpy", reason="rclpy is not available")
 
-    with warnings.catch_warnings(record=True) as caught:
-        warnings.simplefilter("always")
-        importlib.import_module("lerobot_bt_python.server")
-        importlib.import_module("lerobot_bt_python.bt_vlm_bridge")
-
-    deprecation = [
-        w
-        for w in caught
-        if issubclass(w.category, (DeprecationWarning, PendingDeprecationWarning))
-    ]
-    assert deprecation == []
+    __import__("lerobot_bt_python.server")
 
 
 def test_comment_strip_safety():

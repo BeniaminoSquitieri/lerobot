@@ -13,10 +13,8 @@ from typing import Any
 
 from .verification import (
     VLM_FAILURE,
-    VLM_NEEDS_MANUAL_HELP,
     VLM_RUNNING,
     VLM_SUCCESS,
-    VLM_WAIT_HUMAN,
 )
 
 NEXT_ACTION_TO_STATUS = {
@@ -25,9 +23,6 @@ NEXT_ACTION_TO_STATUS = {
     "RETRY": VLM_FAILURE,
     "RETRY_SKILL": VLM_FAILURE,
     "WAIT": VLM_RUNNING,
-    "WAIT_HUMAN": VLM_WAIT_HUMAN,
-    "REQUEST_MANUAL_INTERVENTION": VLM_NEEDS_MANUAL_HELP,
-    "MANUAL_INTERVENTION": VLM_NEEDS_MANUAL_HELP,
 }
 """Mapping from `next_action` topic tokens to the VLM status vocabulary."""
 
@@ -52,15 +47,11 @@ def normalize_vlm_status_token(token: str) -> str:
         return VLM_SUCCESS
     if normalized == "ANOMALY_DETECTED":
         return VLM_FAILURE
-    if normalized == "HUMAN_HELP_REQUIRED":
-        return VLM_NEEDS_MANUAL_HELP
     return normalized
 
 
 def vlm_status_from_payload(payload: dict[str, Any]) -> str:
     """@brief Resolve VLM status/next_action fields into the BT-facing status."""
-    if truthy_payload_value(payload.get("human_help_required", False)):
-        return VLM_NEEDS_MANUAL_HELP
     if truthy_payload_value(payload.get("anomaly_detected", False)):
         return VLM_FAILURE
     if truthy_payload_value(payload.get("scene_ready", False)):

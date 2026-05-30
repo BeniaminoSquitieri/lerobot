@@ -68,15 +68,14 @@ def main():
         "event": "vlm_check_requested",
         "skill_name": "place_first_toast",
         "attempt_id": 42,
-        "status": "PENDING",
+        "status": "RUNNING",
         "message": "Awaiting VLM result.",
         "task": "Pick the toast upon the table.",
         "allowed_statuses": [
-            "PENDING", "RUNNING", "WAIT_HUMAN",
-            "MANUAL_INTERVENTION_REQUIRED", "SUCCESS", "FAILURE",
+            "RUNNING", "SUCCESS", "FAILURE",
         ],
         "allowed_next_actions": [
-            "CONTINUE", "RETRY_SKILL", "WAIT_HUMAN", "REQUEST_MANUAL_INTERVENTION",
+            "CONTINUE", "RETRY_SKILL", "WAIT",
         ],
     }
 

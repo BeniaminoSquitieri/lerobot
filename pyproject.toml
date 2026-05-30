@@ -269,7 +269,6 @@ lerobot-find-joint-limits="lerobot.scripts.lerobot_find_joint_limits:main"
 lerobot-imgtransform-viz="lerobot.scripts.lerobot_imgtransform_viz:main"
 lerobot-edit-dataset="lerobot.scripts.lerobot_edit_dataset:main"
 lerobot-setup-can="lerobot.scripts.lerobot_setup_can:main"
-lerobot-bt-vlm-bridge="lerobot_bt_python.bt_vlm_bridge:main"
 lerobot-bt-skill-server="lerobot_bt_python.server:main"
 lerobot-bt-groot2="lerobot_bt_python.groot2_monitor:main"
 
