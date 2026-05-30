@@ -61,35 +61,12 @@ For real robot rollout, keep safety processors enabled where configured. For
 example, `make_sandwich_executor.yaml` uses
 `cartesian_action_safety_processor` before Panda commands are sent.
 
-## Start The Skill Server
-
-From the repository root, in a terminal with ROS 2 and the colcon workspace
-sourced:
-
-```bash
-cd /home/bsquitieri/lerobot
-source /opt/ros/jazzy/setup.bash
-source install/setup.bash
-uv run lerobot-bt-skill-server \
-  --config_path=src/lerobot_bt_python/make_sandwich_executor.yaml
-```
-
-For Humble, source `/opt/ros/humble/setup.bash` instead.
-
-The entrypoint defaults to `make_sandwich_executor.yaml` if no config is
-passed, but passing `--config_path` is preferred because it makes the active
-task explicit.
-
-## Start The VLM Bridge
+## VLM Bridge
 
 If your verifier already consumes `/lerobot_bt/vlm_request` and publishes
 `/lerobot_bt/vlm_result`, start that verifier directly.
 
-Use the compatibility bridge only for the legacy Panda VLM string protocol:
-
-```bash
-uv run lerobot-bt-vlm-bridge
-```
+Use `bt_vlm_bridge.py` only for the legacy Panda VLM string protocol.
 
 Default bridge topics:
 
@@ -98,57 +75,8 @@ Default bridge topics:
 - Panda request out: `/panda/vlm/request`
 - Panda status in: `/panda/vlm/status`
 
-## Manual VLM Result
+## Commands
 
-Use the `attempt_id` printed by the server banner.
-
-```bash
-ros2 topic pub --once /lerobot_bt/vlm_result std_msgs/msg/String \
-  "{data: '{\"skill_name\":\"place_first_toast\",\"attempt_id\":1,\"status\":\"SUCCESS\",\"message\":\"Scene check passed.\"}'}"
-```
-
-Terminal statuses are `SUCCESS` and `FAILURE`. Non-terminal statuses such as
-`PENDING`, `RUNNING`, `WAIT_HUMAN`, and `MANUAL_INTERVENTION_REQUIRED` keep the
-gate open.
-
-## Run With The BT Runner
-
-Use one terminal for this Python server and a second terminal for the C++
-runner:
-
-```bash
-ros2 launch lerobot_bt_runtime_cpp make_sandwich.launch.py
-```
-
-To switch task:
-
-```bash
-TASK=items_in_drawer
-uv run lerobot-bt-skill-server \
-  --config_path=src/lerobot_bt_python/${TASK}_executor.yaml
-
-ros2 launch lerobot_bt_runtime_cpp ${TASK}.launch.py
-```
-
-## Preflight
-
-Run before hardware rollout:
-
-```bash
-uv run python scripts/bt_preflight_check.py --task make_sandwich
-uv run python scripts/bt_preflight_check.py --task make_sandwich --real
-```
-
-## Tests And Checks
-
-Targeted BT Python tests:
-
-```bash
-uv run pytest tests/lerobot_bt -q
-```
-
-Basic syntax check when dependencies are unavailable:
-
-```bash
-python3 -m py_compile src/lerobot_bt_python/*.py
-```
+Commands for starting the skill server, running VLM bridge compatibility,
+publishing manual VLM verdicts, preflight, and tests are centralized in
+`../README.md`.

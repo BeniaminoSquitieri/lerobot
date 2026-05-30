@@ -52,43 +52,7 @@ Important integration points:
 - `processor/` provides `RobotProcessorPipeline` and the processor registry
   used by `../lerobot_bt_python/processor_factory.py`.
 
-## Common Commands
+## Commands
 
-Install dependencies from the repository root:
-
-```bash
-uv sync --locked --extra all
-```
-
-Inspect the local environment:
-
-```bash
-uv run lerobot-info
-```
-
-Find connected cameras:
-
-```bash
-uv run lerobot-find-cameras
-```
-
-Run generic LeRobot training:
-
-```bash
-uv run lerobot-train \
-  --policy=act \
-  --dataset.repo_id=lerobot/aloha_mobile_cabinet
-```
-
-Run generic LeRobot evaluation:
-
-```bash
-uv run lerobot-eval \
-  --policy.path=lerobot/pi0_libero_finetuned \
-  --env.type=libero \
-  --env.task=libero_object \
-  --eval.n_episodes=10
-```
-
-Run the BT/Panda stack from the sibling READMEs instead of adding BT launch
-logic here.
+Operational commands for setup, generic LeRobot tools, and the BT/Panda stack
+are centralized in `../README.md`.

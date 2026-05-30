@@ -56,28 +56,9 @@ Legacy external verifier -> Python server update path.
 Prefer publishing JSON to `/lerobot_bt/vlm_result` for new integrations. Keep
 this service compatible while legacy clients exist.
 
-## Build
+## Commands
 
-From the repository root:
-
-```bash
-source /opt/ros/jazzy/setup.bash
-rosdep install --from-paths src --ignore-src -r -y
-colcon build --base-paths src --packages-up-to lerobot_bt_interfaces --symlink-install
-source install/setup.bash
-```
-
-For Humble, source `/opt/ros/humble/setup.bash` instead.
-
-## Inspect The Generated Interfaces
-
-After building and sourcing `install/setup.bash`:
-
-```bash
-ros2 interface show lerobot_bt_interfaces/srv/RunNamedCommand
-ros2 interface show lerobot_bt_interfaces/srv/GetSkillVerification
-ros2 interface show lerobot_bt_interfaces/srv/ReportSkillVerification
-```
+Build and interface-inspection commands are centralized in `../README.md`.
 
 ## Compatibility Rules
 

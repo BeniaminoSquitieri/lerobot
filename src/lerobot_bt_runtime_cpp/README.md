@@ -50,44 +50,6 @@ Name alignment matters:
 3. The matching Python `*_executor.yaml` must list the same names under
    `expected_skill_names` and `skills`.
 
-## Build
-
-From the repository root:
-
-```bash
-source /opt/ros/jazzy/setup.bash
-rosdep install --from-paths src --ignore-src -r -y
-colcon build --base-paths src --packages-up-to lerobot_bt_runtime_cpp --symlink-install
-source install/setup.bash
-```
-
-For Humble, source `/opt/ros/humble/setup.bash` instead.
-
-## Run
-
-Start the Python skill server first in another terminal:
-
-```bash
-uv run lerobot-bt-skill-server \
-  --config_path=src/lerobot_bt_python/make_sandwich_executor.yaml
-```
-
-Then launch the BT runner:
-
-```bash
-ros2 launch lerobot_bt_runtime_cpp make_sandwich.launch.py
-```
-
-Run another task by swapping the launch file and the Python executor YAML:
-
-```bash
-TASK=items_in_drawer
-uv run lerobot-bt-skill-server \
-  --config_path=src/lerobot_bt_python/${TASK}_executor.yaml
-
-ros2 launch lerobot_bt_runtime_cpp ${TASK}.launch.py
-```
-
 ## Runner Parameters
 
 The launch files pass task defaults, but the executable also accepts ROS
@@ -104,29 +66,15 @@ parameters:
 - `groot_publisher_port`: Groot2 publisher port when supported. Default:
   `1667`.
 
-Example override:
-
-```bash
-ros2 launch lerobot_bt_runtime_cpp make_sandwich.launch.py \
-  enable_groot_publisher:=false
-```
-
 ## Groot2 Monitor
 
-When the runner starts with Groot publishing enabled, open the monitor with:
+When the runner starts with Groot publishing enabled, the monitor can connect
+to the publisher endpoint configured by the runner parameters.
 
-```bash
-uv run lerobot-bt-groot2
-```
+## Commands
 
-## Preflight
-
-Run before a real robot session:
-
-```bash
-uv run python scripts/bt_preflight_check.py --task make_sandwich
-uv run python scripts/bt_preflight_check.py --task make_sandwich --real
-```
+Build, launch, Groot2, and preflight commands are centralized in
+`../README.md`.
 
 ## Changing A Task
 
