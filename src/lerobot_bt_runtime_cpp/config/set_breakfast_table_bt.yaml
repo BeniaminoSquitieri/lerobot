@@ -5,12 +5,12 @@ lerobot_bt_runner:
   ros__parameters:
     bt:
       tablecloth_ready_gate: "breakfast_table.tablecloth_ready"
-      tablecloth_ready_max_attempts: -1
+      tablecloth_ready_max_attempts: 3
       place_cereal_box_skill: "place_cereal_box"
       place_cereal_box_timeout_s: 120.0
       place_cereal_box_max_attempts: 3
       tea_box_ready_gate: "breakfast_table.tea_box_ready"
-      tea_box_ready_max_attempts: -1
+      tea_box_ready_max_attempts: 3
       place_bottle_skill: "place_bottle"
       place_bottle_timeout_s: 120.0
       place_bottle_max_attempts: 3
@@ -21,6 +21,6 @@ lerobot_bt_runner:
       place_bowl_timeout_s: 120.0
       place_bowl_max_attempts: 3
       spoon_ready_gate: "breakfast_table.spoon_ready"
-      spoon_ready_max_attempts: -1
+      spoon_ready_max_attempts: 3
       task_complete_gate: "breakfast_table.task_complete"
-      task_complete_max_attempts: -1
+      task_complete_max_attempts: 3

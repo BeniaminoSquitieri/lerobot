@@ -60,7 +60,7 @@ DEFAULT_CONFIG_PATH = Path(__file__).resolve().parent / "make_sandwich_executor.
 if TYPE_CHECKING:
     from lerobot.robots.custom_manipulator.custom_manipulator import CustomManipulator
 
-VLM_GATE_KIND = "vlm_gate"
+VLM_GATE_KIND = "vlm_gate_pending"
 """Command kind that acknowledges a gate but leaves the VLM check running."""
 
 _legacy_vlm_service_warned = False

@@ -4,7 +4,7 @@
 # Request fields:
 # kind selects the command path:
 #   - "skill"            -> run one learned primitive
-#   - "vlm_gate" -> open one gate and wait for a VLM result
+#   - "vlm_gate_pending" -> open one gate and wait for a VLM result
 string kind
 # name must match one configured command entry on the Python side.
 string name

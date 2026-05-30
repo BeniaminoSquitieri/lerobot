@@ -390,7 +390,7 @@ AwaitSceneNode::AwaitSceneNode(
   // Comment: executes this BT logic statement in C++.
   const std::string& vlm_service)
 // Comment: executes this BT logic statement in C++.
-: MergedRunAndVerifyNode(name, config, ros_node, command_service, vlm_service, "vlm_gate")
+: MergedRunAndVerifyNode(name, config, ros_node, command_service, vlm_service, "vlm_gate_pending")
 // Comment: opens a new C++ code block.
 {
 // Comment: closes the current C++ code block.

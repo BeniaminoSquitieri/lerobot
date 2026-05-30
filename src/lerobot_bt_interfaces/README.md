@@ -22,7 +22,7 @@ C++ BT -> Python server command request.
 
 Request:
 
-- `kind`: command path. Current values are `skill` and `vlm_gate`.
+- `kind`: command path. Current values are `skill` and `vlm_gate_pending`.
 - `name`: configured skill or gate name.
 - `timeout_s`: optional timeout override. `0` lets the Python config decide.
 
@@ -64,6 +64,6 @@ Build and interface-inspection commands are centralized in `../README.md`.
 - Do not rename fields casually. Both the C++ BT runner and Python server use
   these generated types.
 - Additive fields still require coordinated C++ and Python changes.
-- Keep `kind` string values stable: `skill` and `vlm_gate` are part of
+- Keep `kind` string values stable: `skill` and `vlm_gate_pending` are part of
   the runtime contract.
 - New task names belong in BT/Python YAML, not in `.srv` files.

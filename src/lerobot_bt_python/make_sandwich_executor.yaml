@@ -18,7 +18,7 @@ vlm_request_topic: "/lerobot_bt/vlm_request"
 vlm_result_topic: "/lerobot_bt/vlm_result"
 # If the VLM/manual verifier does not report SUCCESS before this deadline,
 # the attempt is marked FAILURE and the BT retry wrapper reruns the skill.
-vlm_timeout_s: 0.0
+vlm_timeout_s: 60.0
 
 # Default variant. Per-skill policy_variant can mix any registered LeRobot
 # policy type, e.g. act.
@@ -111,7 +111,7 @@ skills:
         chunk_size: 16
     transition:
       mode: timeout
-      max_duration_s: 12000.0
+      max_duration_s: 120.0
     settle_time_s: 0.0
 
   - name: place_second_toast
@@ -130,5 +130,5 @@ skills:
         chunk_size: 16
     transition:
       mode: timeout
-      max_duration_s: 12000.0
+      max_duration_s: 30.0
     settle_time_s: 0.0

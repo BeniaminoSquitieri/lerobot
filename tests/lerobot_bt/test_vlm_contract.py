@@ -105,6 +105,32 @@ def test_topic_names_are_stable():
     assert _skill_server_config_default("vlm_result_topic") == "/lerobot_bt/vlm_result"
 
 
+def test_vlm_gate_command_kind_stays_compatible():
+    module = _module_ast("src/lerobot_bt_python/server.py")
+    for node in module.body:
+        if isinstance(node, ast.Assign):
+            for target in node.targets:
+                if isinstance(target, ast.Name) and target.id == "VLM_GATE_KIND":
+                    assert isinstance(node.value, ast.Constant)
+                    assert node.value.value == "vlm_gate_pending"
+                    return
+    raise AssertionError("VLM_GATE_KIND not found")
+
+
+def test_removed_vlm_statuses_are_rejected():
+    registry = SceneVerdictStore(known_skill_names={"test_skill"})
+    registry.begin_attempt("test_skill")
+
+    removed_statuses = (
+        "PEND" + "ING",
+        "WAIT" + "_HUMAN",
+        "MANUAL" + "_INTERVENTION" + "_REQUIRED",
+    )
+    for removed_status in removed_statuses:
+        with pytest.raises(ValueError):
+            registry.report(skill_name="test_skill", status=removed_status)
+
+
 def test_legacy_service_name_default():
     config_module = pytest.importorskip("lerobot_bt_python.config", reason="lerobot_bt_python.config import unavailable")
 

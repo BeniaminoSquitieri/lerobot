@@ -11,7 +11,7 @@ vlm_state_service: "/lerobot_bt/vlm_state"
 legacy_vlm_result_service: "/lerobot_bt/vlm_result_legacy"
 vlm_request_topic: "/lerobot_bt/vlm_request"
 vlm_result_topic: "/lerobot_bt/vlm_result"
-vlm_timeout_s: 0.0
+vlm_timeout_s: 60.0
 
 # Default variant. Per-skill policy_variant can mix any registered LeRobot
 # policy type, e.g. act.
