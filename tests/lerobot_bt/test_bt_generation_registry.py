@@ -4,13 +4,19 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
 from pathlib import Path
+
+import pytest
 
 from lerobot_bt_python.bt_generation.registry import (
     EXPECTED_EXECUTORS,
     HUMAN_STEP,
+    INFINITE_RETRY_ATTEMPTS,
     ROBOT_SKILL,
     VLM_GATE,
+    Registry,
+    is_valid_max_attempts,
     load_registry,
     validate_registry,
 )
@@ -59,13 +65,55 @@ def test_vlm_gates_have_tasks() -> None:
         assert entry.task.strip()
 
 
-def test_timeouts_attempts_and_executors_are_bounded() -> None:
+def test_timeouts_attempts_and_executors_are_valid() -> None:
     registry = load_registry(REGISTRY_PATH)
 
     for entry in registry.all_entries:
         assert entry.timeout_s > 0.0
-        assert 1 <= entry.max_attempts <= 5
+        assert is_valid_max_attempts(entry.max_attempts)
         assert entry.executor == EXPECTED_EXECUTORS[entry.kind]
+
+
+def test_registry_accepts_infinite_retries_for_robot_skills() -> None:
+    registry = load_registry(REGISTRY_PATH)
+
+    assert registry.robot_skills["place_first_toast"].max_attempts == INFINITE_RETRY_ATTEMPTS
+    assert validate_registry(registry) == []
+
+
+def test_infinite_retry_still_requires_positive_timeout() -> None:
+    registry = load_registry(REGISTRY_PATH)
+    bad_skill = replace(
+        registry.robot_skills["place_first_toast"],
+        max_attempts=INFINITE_RETRY_ATTEMPTS,
+        timeout_s=0.0,
+    )
+    bad_registry = Registry(
+        version=registry.version,
+        robot_skills={**registry.robot_skills, "place_first_toast": bad_skill},
+        human_steps=registry.human_steps,
+        vlm_gates=registry.vlm_gates,
+    )
+
+    errors = validate_registry(bad_registry)
+
+    assert any("timeout_s must be > 0" in error for error in errors)
+
+
+@pytest.mark.parametrize("bad", [0, -2, -10])
+def test_invalid_retry_values_fail(bad: int) -> None:
+    registry = load_registry(REGISTRY_PATH)
+    bad_skill = replace(registry.robot_skills["place_first_toast"], max_attempts=bad)
+    bad_registry = Registry(
+        version=registry.version,
+        robot_skills={**registry.robot_skills, "place_first_toast": bad_skill},
+        human_steps=registry.human_steps,
+        vlm_gates=registry.vlm_gates,
+    )
+
+    errors = validate_registry(bad_registry)
+
+    assert any("max_attempts must be -1" in error for error in errors)
 
 
 def test_robot_skill_names_are_explicitly_robotic() -> None:

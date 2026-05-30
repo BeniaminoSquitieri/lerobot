@@ -28,7 +28,8 @@ def test_cli_generates_make_sandwich(tmp_path: Path) -> None:
     assert result.returncode == 0, result.stderr
     assert "human_step:" in result.stdout
     ET.parse(tree)
-    yaml.safe_load(config.read_text(encoding="utf-8"))
+    cfg = yaml.safe_load(config.read_text(encoding="utf-8"))
+    assert cfg["lerobot_bt_runner"]["ros__parameters"]["bt"]["place_first_toast_max_attempts"] == -1
 
 
 def test_cli_generates_set_breakfast_table(tmp_path: Path) -> None:

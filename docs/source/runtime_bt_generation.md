@@ -42,6 +42,32 @@ avoids duplicated verification after robot skills. Human steps still keep their
 `verify_after` gate because `HumanStep(pour_ingredient)` and
 `AwaitScene(ingredient_poured)` are separate intended phases.
 
+## Retry Policy
+
+The generator does not choose retry counts on its own. It preserves
+`max_attempts` from the registry and writes the same value into generated BT
+YAML. The generated XML keeps `RetryUntilSuccessful` and reads
+`num_attempts` from the blackboard, for example
+`num_attempts="{place_first_toast_max_attempts}"`.
+
+In this repository, infinite retry is represented as `max_attempts: -1`.
+BehaviorTree.CPP's `RetryNode` documents `-1` as the infinite loop value and
+its tick logic keeps retrying while `max_attempts_ == -1`.
+
+| value | meaning |
+|---|---|
+| `-1` | retry indefinitely until the child returns `SUCCESS` |
+| `0` | not an infinite value; rejected by the generator validator |
+| positive `N` | retry at most `N` failing attempts |
+| other negative value | invalid |
+
+Every single attempt still needs `timeout_s > 0`. Infinite external retry is
+therefore different from a `DoSkill` without timeout: the child must be able to
+return `SUCCESS` or `FAILURE` so `RetryUntilSuccessful` can decide whether to
+stop or try again. A robot policy may also retry internally during its own
+execution window, while the outer `RetryUntilSuccessful` repeats the BT node
+after a failed attempt.
+
 ## Step Kinds
 
 `robot_skill` is a robot action backed by an executor YAML skill and

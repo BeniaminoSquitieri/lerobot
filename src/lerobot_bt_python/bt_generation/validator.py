@@ -7,7 +7,16 @@ from typing import Any
 
 import yaml
 
-from .registry import ALLOWED_KINDS, HUMAN_STEP, ROBOT_SKILL, VLM_GATE, Registry, RegistryEntry
+from .registry import (
+    ALLOWED_KINDS,
+    HUMAN_STEP,
+    INFINITE_RETRY_ATTEMPTS,
+    ROBOT_SKILL,
+    VLM_GATE,
+    Registry,
+    RegistryEntry,
+    is_valid_max_attempts,
+)
 
 FORBIDDEN_STEP_KINDS = {
     "skill",
@@ -151,8 +160,11 @@ def _validate_runtime_bounds(entry: RegistryEntry) -> list[str]:
     errors: list[str] = []
     if entry.timeout_s <= 0.0:
         errors.append(f"{entry.kind} {entry.name!r} timeout_s must be > 0.")
-    if not 1 <= entry.max_attempts <= 5:
-        errors.append(f"{entry.kind} {entry.name!r} max_attempts must be within [1, 5].")
+    if not is_valid_max_attempts(entry.max_attempts):
+        errors.append(
+            f"{entry.kind} {entry.name!r} max_attempts must be "
+            f"{INFINITE_RETRY_ATTEMPTS} for infinite retries or a positive integer."
+        )
     return errors
 
 

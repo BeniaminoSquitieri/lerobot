@@ -10,6 +10,8 @@ from typing import Any
 import pytest
 import yaml
 
+from lerobot_bt_python.bt_generation.registry import is_valid_max_attempts
+
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 BT_CONFIG_DIR = REPO_ROOT / "src/lerobot_bt_runtime_cpp/config"
@@ -32,7 +34,7 @@ def _bt_yaml_paths() -> list[Path]:
 
 
 @pytest.mark.parametrize("path", _bt_yaml_paths(), ids=lambda path: path.name)
-def test_bt_retry_limits_are_finite(path: Path) -> None:
+def test_bt_retry_values_are_valid(path: Path) -> None:
     cfg = _load_yaml(path)
     bt_params = cfg["lerobot_bt_runner"]["ros__parameters"]["bt"]
 
@@ -45,7 +47,17 @@ def test_bt_retry_limits_are_finite(path: Path) -> None:
     assert retry_limits, f"{path} should define retry limits"
     for key, value in retry_limits.items():
         assert isinstance(value, int), f"{path}:{key} must be an integer"
-        assert value > 0, f"{path}:{key} must be finite and positive"
+        assert is_valid_max_attempts(value), f"{path}:{key} must be -1 or a positive integer"
+
+
+@pytest.mark.parametrize("value", [-1, 1, 3])
+def test_retry_value_helper_accepts_supported_values(value: int) -> None:
+    assert is_valid_max_attempts(value)
+
+
+@pytest.mark.parametrize("value", [0, -2, -10])
+def test_retry_value_helper_rejects_invalid_values(value: int) -> None:
+    assert not is_valid_max_attempts(value)
 
 
 @pytest.mark.parametrize("path", _executor_yaml_paths(), ids=lambda path: path.name)

@@ -7,8 +7,17 @@ from __future__ import annotations
 from dataclasses import replace
 from pathlib import Path
 
+import pytest
+
 from lerobot_bt_python.bt_generation.planner import build_linear_plan
-from lerobot_bt_python.bt_generation.registry import HUMAN_STEP, ROBOT_SKILL, VLM_GATE, Registry, load_registry
+from lerobot_bt_python.bt_generation.registry import (
+    HUMAN_STEP,
+    INFINITE_RETRY_ATTEMPTS,
+    ROBOT_SKILL,
+    VLM_GATE,
+    Registry,
+    load_registry,
+)
 from lerobot_bt_python.bt_generation.validator import validate_linear_plan
 
 
@@ -23,6 +32,54 @@ def test_valid_plan_passes() -> None:
     plan = build_linear_plan("make_sandwich", registry)
 
     assert validate_linear_plan(plan, registry, SANDWICH_EXECUTOR) == []
+
+
+def test_validator_accepts_infinite_robot_skill_retries() -> None:
+    registry = load_registry(REGISTRY_PATH)
+    plan = {
+        "task_name": "make_sandwich",
+        "steps": [{"kind": ROBOT_SKILL, "name": "place_first_toast"}],
+    }
+
+    assert registry.robot_skills["place_first_toast"].max_attempts == INFINITE_RETRY_ATTEMPTS
+    assert validate_linear_plan(plan, registry, SANDWICH_EXECUTOR) == []
+
+
+def test_infinite_retry_still_requires_positive_timeout() -> None:
+    registry = load_registry(REGISTRY_PATH)
+    bad_skill = replace(
+        registry.robot_skills["place_first_toast"],
+        max_attempts=INFINITE_RETRY_ATTEMPTS,
+        timeout_s=0.0,
+    )
+    bad_registry = Registry(
+        version=registry.version,
+        robot_skills={**registry.robot_skills, "place_first_toast": bad_skill},
+        human_steps=registry.human_steps,
+        vlm_gates=registry.vlm_gates,
+    )
+    plan = {"task_name": "bad", "steps": [{"kind": ROBOT_SKILL, "name": "place_first_toast"}]}
+
+    errors = validate_linear_plan(plan, bad_registry, SANDWICH_EXECUTOR)
+
+    assert any("timeout_s must be > 0" in error for error in errors)
+
+
+@pytest.mark.parametrize("bad", [0, -2])
+def test_invalid_retry_value_fails(bad: int) -> None:
+    registry = load_registry(REGISTRY_PATH)
+    bad_skill = replace(registry.robot_skills["place_first_toast"], max_attempts=bad)
+    bad_registry = Registry(
+        version=registry.version,
+        robot_skills={**registry.robot_skills, "place_first_toast": bad_skill},
+        human_steps=registry.human_steps,
+        vlm_gates=registry.vlm_gates,
+    )
+    plan = {"task_name": "bad", "steps": [{"kind": ROBOT_SKILL, "name": "place_first_toast"}]}
+
+    errors = validate_linear_plan(plan, bad_registry, SANDWICH_EXECUTOR)
+
+    assert any("max_attempts must be -1" in error for error in errors)
 
 
 def test_unknown_robot_skill_fails() -> None:

@@ -10,7 +10,7 @@ import xml.etree.ElementTree as ET
 import yaml
 
 from lerobot_bt_python.bt_generation.planner import build_linear_plan
-from lerobot_bt_python.bt_generation.registry import load_registry
+from lerobot_bt_python.bt_generation.registry import INFINITE_RETRY_ATTEMPTS, load_registry
 from lerobot_bt_python.bt_generation.renderer import render_bt_params_yaml, render_xml
 
 
@@ -65,6 +65,26 @@ def test_yaml_is_parseable_and_contains_all_step_params() -> None:
     assert bt_params["initial_scene_ready_gate"] == "initial_scene_ready"
     assert bt_params["ingredient_poured_gate"] == "ingredient_poured"
     assert "first_toast_placed_gate" not in bt_params
+
+
+def test_renderer_preserves_infinite_retry_value() -> None:
+    _, yaml_text = _sandwich_outputs()
+    cfg = yaml.safe_load(yaml_text)
+    bt_params = cfg["lerobot_bt_runner"]["ros__parameters"]["bt"]
+
+    assert bt_params["place_first_toast_max_attempts"] == INFINITE_RETRY_ATTEMPTS
+
+
+def test_generated_yaml_preserves_infinite_max_attempts() -> None:
+    registry = load_registry(REGISTRY_PATH)
+    plan = build_linear_plan("make_sandwich", registry)
+    cfg = yaml.safe_load(render_bt_params_yaml(plan, registry))
+
+    assert (
+        cfg["lerobot_bt_runner"]["ros__parameters"]["bt"]["place_first_toast_max_attempts"]
+        == registry.robot_skills["place_first_toast"].max_attempts
+        == INFINITE_RETRY_ATTEMPTS
+    )
 
 
 def test_renderer_does_not_duplicate_do_skill_verification_by_default() -> None:

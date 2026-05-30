@@ -11,6 +11,7 @@ import yaml
 ROBOT_SKILL = "robot_skill"
 HUMAN_STEP = "human_step"
 VLM_GATE = "vlm_gate"
+INFINITE_RETRY_ATTEMPTS = -1
 
 ALLOWED_KINDS = {ROBOT_SKILL, HUMAN_STEP, VLM_GATE}
 EXPECTED_EXECUTORS = {
@@ -18,6 +19,12 @@ EXPECTED_EXECUTORS = {
     HUMAN_STEP: "human",
     VLM_GATE: "vlm",
 }
+
+
+def is_valid_max_attempts(value: int) -> bool:
+    """Return whether BehaviorTree.CPP accepts this retry budget."""
+
+    return value == INFINITE_RETRY_ATTEMPTS or value >= 1
 
 
 @dataclass(frozen=True)
@@ -185,6 +192,9 @@ def _validate_common_entry(entry: RegistryEntry) -> list[str]:
         )
     if entry.timeout_s <= 0.0:
         errors.append(f"{entry.kind} {entry.name!r} timeout_s must be > 0.")
-    if not 1 <= entry.max_attempts <= 5:
-        errors.append(f"{entry.kind} {entry.name!r} max_attempts must be within [1, 5].")
+    if not is_valid_max_attempts(entry.max_attempts):
+        errors.append(
+            f"{entry.kind} {entry.name!r} max_attempts must be "
+            f"{INFINITE_RETRY_ATTEMPTS} for infinite retries or a positive integer."
+        )
     return errors
