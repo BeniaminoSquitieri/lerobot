@@ -63,4 +63,17 @@ def test_yaml_is_parseable_and_contains_all_step_params() -> None:
     assert bt_params["pour_ingredient_gate"] == "pour_ingredient"
     assert bt_params["pour_ingredient_instruction"]
     assert bt_params["initial_scene_ready_gate"] == "initial_scene_ready"
-    assert bt_params["first_toast_placed_gate"] == "first_toast_placed"
+    assert bt_params["ingredient_poured_gate"] == "ingredient_poured"
+    assert "first_toast_placed_gate" not in bt_params
+
+
+def test_renderer_does_not_duplicate_do_skill_verification_by_default() -> None:
+    xml_text, _ = _sandwich_outputs()
+    root = ET.fromstring(xml_text)
+
+    await_scene_names = {
+        node.attrib.get("scene_name")
+        for node in root.findall(".//AwaitScene")
+    }
+    assert "{first_toast_placed_gate}" not in await_scene_names
+    assert "{second_toast_placed_gate}" not in await_scene_names

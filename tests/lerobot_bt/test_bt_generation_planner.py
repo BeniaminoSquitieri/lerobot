@@ -60,17 +60,37 @@ def test_place_first_toast_is_robot_skill_from_repo_audit() -> None:
     assert {"kind": ROBOT_SKILL, "name": "place_first_toast"} in plan["steps"]
 
 
-def test_robot_and_human_steps_are_followed_by_verify_after() -> None:
+def test_human_steps_are_followed_by_verify_after() -> None:
     registry = load_registry(REGISTRY_PATH)
     plan = build_linear_plan("make_sandwich", registry)
 
     for index, step in enumerate(plan["steps"]):
-        if step["kind"] not in {ROBOT_SKILL, HUMAN_STEP}:
+        if step["kind"] != HUMAN_STEP:
             continue
         verify_after = registry.get(step["kind"], step["name"]).verify_after
         if verify_after is None:
             continue
         assert plan["steps"][index + 1] == {"kind": VLM_GATE, "name": verify_after}
+
+
+def test_robot_postcondition_gates_are_not_default_because_do_skill_verifies() -> None:
+    registry = load_registry(REGISTRY_PATH)
+    plan = build_linear_plan("make_sandwich", registry)
+
+    assert {"kind": VLM_GATE, "name": "first_toast_placed"} not in plan["steps"]
+    assert {"kind": VLM_GATE, "name": "second_toast_placed"} not in plan["steps"]
+
+
+def test_robot_postcondition_gates_can_be_requested_explicitly() -> None:
+    registry = load_registry(REGISTRY_PATH)
+    plan = build_linear_plan(
+        "make_sandwich",
+        registry,
+        explicit_robot_postcondition_gates=True,
+    )
+
+    assert {"kind": VLM_GATE, "name": "first_toast_placed"} in plan["steps"]
+    assert {"kind": VLM_GATE, "name": "second_toast_placed"} in plan["steps"]
 
 
 def test_unknown_task_fails() -> None:

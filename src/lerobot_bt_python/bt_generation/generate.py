@@ -20,6 +20,14 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--executor-yaml", type=Path, help="Executor YAML used for consistency checks.")
     parser.add_argument("--out-tree", required=True, type=Path, help="Output BehaviorTree.CPP XML path.")
     parser.add_argument("--out-config", required=True, type=Path, help="Output BT params YAML path.")
+    parser.add_argument(
+        "--explicit-postcondition-gates",
+        action="store_true",
+        help=(
+            "Also render robot_skill verify_after gates. Off by default because "
+            "the current DoSkill C++ node already waits for GetSkillVerification."
+        ),
+    )
     args = parser.parse_args(argv)
 
     errors: list[str] = []
@@ -27,7 +35,11 @@ def main(argv: list[str] | None = None) -> int:
         registry = load_registry(args.registry)
         errors.extend(validate_registry(registry))
         if not errors:
-            plan = build_linear_plan(args.task, registry)
+            plan = build_linear_plan(
+                args.task,
+                registry,
+                explicit_robot_postcondition_gates=args.explicit_postcondition_gates,
+            )
             errors.extend(validate_linear_plan(plan, registry, args.executor_yaml))
         else:
             plan = None

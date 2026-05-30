@@ -21,6 +21,27 @@ The v1 flow is deterministic:
 The VLM verifies scene state. It does not generate XML, choose the task order,
 or allocate work between robot and human.
 
+## C++ Runtime Contract
+
+The active C++ runtime registers two merged BehaviorTree.CPP leaves:
+
+| Node | Calls service | Uses blackboard keys | Waits/polls | Returns SUCCESS when | Notes |
+|---|---|---|---|---|---|
+| `DoSkill` | `RunNamedCommand(kind="skill")`, then `GetSkillVerification` | `{*_skill}`, `{*_timeout_s}` | Yes, polls `GetSkillVerification(skill_name)` | command succeeds and VLM status becomes `SUCCESS` | The node already includes skill verification. |
+| `AwaitScene` | `RunNamedCommand(kind="vlm_gate_pending")`, then `GetSkillVerification` | `{*_gate}` | Yes, polls `GetSkillVerification(scene_name)` | gate command succeeds and VLM status becomes `SUCCESS` | Used for VLM gates and human steps. |
+| `RunNamedCommandNode` | `RunNamedCommand` only | `kind`, `command_name`, optional `timeout_s` | Waits for command future only | service response has `success=true` | Legacy/base wrapper, not used by generated XML. |
+
+There is no active separate `WaitForVLMVerdict` XML node. The current
+`AwaitScene` and `DoSkill` nodes replace the old open-gate plus wait-verdict
+pairs.
+
+Because `DoSkill` already waits for `GetSkillVerification`, generated BTs do
+not add robot `verify_after` gates by default. The CLI supports
+`--explicit-postcondition-gates` for manual experiments, but the safe default
+avoids duplicated verification after robot skills. Human steps still keep their
+`verify_after` gate because `HumanStep(pour_ingredient)` and
+`AwaitScene(ingredient_poured)` are separate intended phases.
+
 ## Step Kinds
 
 `robot_skill` is a robot action backed by an executor YAML skill and
@@ -113,13 +134,64 @@ python -m lerobot_bt_python.bt_generation.generate \
 
 The CLI writes no outputs if registry or plan validation fails.
 
+## Testing Without The Robot
+
+Generate a sandwich BT:
+
+```bash
+PYTHONPATH=src python -m lerobot_bt_python.bt_generation.generate \
+  --task make_sandwich \
+  --registry src/lerobot_bt_python/bt_generation/skills_registry.yaml \
+  --executor-yaml src/lerobot_bt_python/make_sandwich_executor.yaml \
+  --out-tree /tmp/generated_make_sandwich.xml \
+  --out-config /tmp/generated_make_sandwich_bt.yaml
+```
+
+Start the fake ROS2 server:
+
+```bash
+PYTHONPATH=src python -m lerobot_bt_python.fakes.fake_bt_executor_server \
+  --scenario success_all
+```
+
+Run the generated tree with the C++ runner in another sourced ROS2 shell:
+
+```bash
+ros2 run lerobot_bt_runtime_cpp lerobot_bt_runner \
+  --ros-args \
+  --params-file /tmp/generated_make_sandwich_bt.yaml \
+  -p tree_xml_path:=/tmp/generated_make_sandwich.xml \
+  -p enable_groot_publisher:=false
+```
+
+Or run the helper script:
+
+```bash
+PYTHON_BIN=python scripts/test_generated_bt_with_fake_server.sh success_all success
+PYTHON_BIN=python scripts/test_generated_bt_with_fake_server.sh initial_scene_failed failure
+```
+
+Fake scenarios:
+
+| Scenario | Behavior | Expected result |
+|---|---|---|
+| `success_all` | every command and VLM check succeeds | BT success |
+| `initial_scene_failed` | `initial_scene_ready` VLM check fails | BT failure before robot skills |
+| `robot_first_toast_failed` | `place_first_toast` command fails | BT failure before human pour |
+| `human_pouring_timeout` | `pour_ingredient` remains `RUNNING` until fake timeout | BT failure before second toast |
+| `vlm_postcondition_failed` | `place_first_toast` VLM check fails | BT failure before human pour |
+| `unknown_status` | fake VLM typo such as `DONE`/`SUCESS` is normalized | failure, never infinite running |
+
+The fake server validates BT/ROS/VLM contracts only. It does not test Panda
+hardware, policy inference, camera publishing, physical safety, or real VLM
+quality.
+
 ## Known Limits
 
 - Templates are deterministic and must be edited in code.
 - The current renderer uses existing `AwaitScene` for `human_step`.
 - The current `DoSkill` node is a merged action-plus-verification node, so
-  generated explicit `verify_after` gates are an extra safety check on top of
-  current runtime behavior.
+  robot `verify_after` gates are not rendered by default.
 - No LLM planner is included.
 - No VLM-generated XML is accepted.
 - No automatic human fallback is emitted.

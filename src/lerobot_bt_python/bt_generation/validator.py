@@ -163,7 +163,7 @@ def _validate_verify_after_adjacency(steps: list[Any], registry: Registry) -> li
             continue
         kind = step.get("kind")
         name = step.get("name")
-        if kind not in {ROBOT_SKILL, HUMAN_STEP} or not isinstance(name, str):
+        if kind != HUMAN_STEP or not isinstance(name, str):
             continue
         if registry.kind_for_name(name) != kind:
             continue

@@ -32,7 +32,12 @@ TASK_TEMPLATES: dict[str, list[dict[str, str]]] = {
 }
 
 
-def build_linear_plan(task_name: str, registry: Registry) -> dict:
+def build_linear_plan(
+    task_name: str,
+    registry: Registry,
+    *,
+    explicit_robot_postcondition_gates: bool = False,
+) -> dict:
     """Build a deterministic Linear IR plan for a known task name."""
 
     if task_name not in TASK_TEMPLATES:
@@ -49,6 +54,9 @@ def build_linear_plan(task_name: str, registry: Registry) -> dict:
 
         if kind not in {ROBOT_SKILL, HUMAN_STEP}:
             continue
+        if kind == ROBOT_SKILL and not explicit_robot_postcondition_gates:
+            _validate_verify_after_target(registry, kind, name)
+            continue
 
         verify_after = registry.get(kind, name).verify_after
         if not verify_after:
@@ -61,6 +69,12 @@ def build_linear_plan(task_name: str, registry: Registry) -> dict:
         steps.append({"kind": VLM_GATE, "name": verify_after})
 
     return {"task_name": task_name, "steps": steps}
+
+
+def _validate_verify_after_target(registry: Registry, kind: str, name: str) -> None:
+    verify_after = registry.get(kind, name).verify_after
+    if verify_after:
+        _require_registry_match(registry, VLM_GATE, verify_after)
 
 
 def _require_registry_match(registry: Registry, kind: str, name: str) -> None:
