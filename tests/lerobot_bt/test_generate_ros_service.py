@@ -1,7 +1,5 @@
 import json
-import types
-import pytest
-from pathlib import Path
+
 from lerobot_bt_python.bt_generation import generate
 
 def test_generate_ros_service_mode(monkeypatch, tmp_path):

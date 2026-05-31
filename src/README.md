@@ -39,8 +39,8 @@ lerobot_bt_runtime_cpp
 
 Static task XML/YAML files remain the source of truth for existing hand-written
 BTs. Generated BTs are created on demand by
-`lerobot_bt_python.bt_generation.generate` and written to the paths passed
-through `--out-tree` and `--out-config`.
+`lerobot_bt_python.bt_generation.generate` and written either to `--output-dir`
+or to the explicit paths passed through `--out-tree` and `--out-config`.
 
 Name alignment rule:
 
@@ -77,22 +77,29 @@ task name
   -> BehaviorTree.CPP runner
 ```
 
-### Planner Modes
-
-- `template`: deterministic, offline, no external dependencies
-- `model-response`: reads a pre-generated Linear IR JSON
-- `ros-service`: queries a remote VLM planner over ROS2 (now implemented)
-
-#### ROS-service Planner Mode
-
-The `ros-service` planner mode enables live integration with a remote VLM server (e.g., `panda_live_viewer`) over ROS2. It sends the task name, a filtered planner registry payload, and optional scene facts to the service (default `/lerobot_bt/generate_plan`). The remote server returns a Linear IR JSON plan, which is strictly validated and compiled to XML/YAML. The raw plan response is saved for inspection. This mode is fully implemented and available in the CLI.
-
-The planner and verifier protocols are separate: planning occurs once before BT execution, while the verifier runs during execution.
-candidate instead of the deterministic template. The same `lerobot` validation,
-rendering, and static blackboard checks still decide whether it is accepted.
-
 The generated BTs reproduce known task structures while avoiding manual
 XML/YAML duplication.
+
+### Planner Modes
+
+- `template`: deterministic, offline, no external dependencies.
+- `model-response`: reads a pre-generated Linear IR JSON candidate from disk.
+- `ros-service`: queries a remote VLM planner over ROS2.
+
+All modes keep `lerobot` as the owner of validation, rendering, and generated
+artifacts.
+
+### Canonical Task Sequence
+
+`lerobot` also owns BT leaf order. For every template-supported task,
+`TASK_TEMPLATES` is the source of truth for the exact `kind`/`name` sequence.
+The planner registry payload exported to a remote VLM includes
+`canonical_task_sequence` and adjacent `ordering_constraints`.
+
+The VLM should follow `canonical_task_sequence`; it does not freely decide leaf
+order. In strict generated mode, `lerobot` rejects plans that reorder, remove,
+or add steps. Future work may add explicit scene-fact variants or skip rules,
+but no variant mechanism is active today.
 
 ### Supported Static Tasks
 
@@ -150,10 +157,11 @@ model response JSON
   -> static blackboard check
 ```
 
-The model cannot invent skills or decide freely what is human versus robotic.
-The registry owns the roles, the validator decides whether the plan is
-acceptable, and the renderer is the only component that emits XML/YAML. The BT
-is generated once at the beginning of the episode and then executed normally.
+The model cannot invent skills, decide freely what is human versus robotic, or
+change the canonical leaf order. The registry owns the roles, `TASK_TEMPLATES`
+owns the order, the validator decides whether the plan is acceptable, and the
+renderer is the only component that emits XML/YAML. The BT is generated once at
+the beginning of the episode and then executed normally.
 
 Planner and verifier roles are intentionally separate:
 
@@ -170,10 +178,22 @@ Model-response planner mode:
 The verifier continues to run during BT execution through `DoSkill` and
 `AwaitScene`. The planner runs only before the BT exists.
 
-The intended live integration path is a future `ros-service` planner mode:
-`lerobot` asks a remote `panda_live_viewer`/VLM ROS service for Linear IR JSON,
-then `lerobot` validates and compiles it. That live mode is not implemented in
-this repository yet.
+### ROS-service Planner Mode
+
+The `ros-service` planner mode asks a remote `panda_live_viewer`/VLM ROS
+service for Linear IR JSON:
+
+```bash
+--planner ros-service
+--plan-service-name /lerobot_bt/generate_plan
+--plan-service-timeout-s 30.0
+```
+
+`lerobot` sends the task name, optional scene facts, and a filtered planner
+registry payload containing `canonical_task_sequence` and
+`ordering_constraints`. The VLM server may already receive camera images over
+ROS, but it still returns Linear IR JSON only. `lerobot` validates the returned
+order and compiles accepted plans to XML/YAML.
 
 ### Generated BT Output Location
 
@@ -205,7 +225,7 @@ generated_bt/trees/make_sandwich.xml
 generated_bt/config/make_sandwich_bt.yaml
 ```
 
-Model-response mode also writes:
+Model-response and ros-service planner modes also write:
 
 ```text
 generated_bt/plans/make_sandwich_linear_ir.json
@@ -232,6 +252,8 @@ generated BT must be inspected, handed off, or passed to the ROS 2 runner.
 | ------------------------------------------------------ | ------------------------------------------------------------------------------------------------- |
 | `lerobot_bt_python/bt_generation/skills_registry.yaml` | Registry of known `robot_skill`, `human_step`, and `vlm_gate` entries.                            |
 | `lerobot_bt_python/bt_generation/planner.py`           | Deterministic template planner that creates a Linear IR from a known task name.                   |
+| `lerobot_bt_python/bt_generation/export_planner_registry.py` | Exports filtered planner payloads with canonical task sequence and ordering constraints.    |
+| `lerobot_bt_python/bt_generation/ros_plan_client.py`   | Optional ROS2 client for requesting Linear IR JSON from a remote planner service.                  |
 | `lerobot_bt_python/bt_generation/vlm_planner.py`       | Parser and canonicalizer for pre-generated model Linear IR JSON responses.                        |
 | `lerobot_bt_python/bt_generation/validator.py`         | Validates names, step kinds, retry values, timeouts, executor YAML alignment, and VLM gate tasks. |
 | `lerobot_bt_python/bt_generation/renderer.py`          | Renders BehaviorTree.CPP XML and BT parameter YAML.                                               |

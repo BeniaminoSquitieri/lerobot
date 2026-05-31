@@ -59,6 +59,28 @@ The default planner is still the deterministic template planner:
 
 It runs entirely in `lerobot` and supports all five static tasks listed above.
 
+### Canonical Ordering Contract
+
+`lerobot` owns BT leaf order. For every template-supported task,
+`TASK_TEMPLATES` is the source of truth for the canonical `kind`/`name`
+sequence. The planner registry export includes:
+
+```text
+canonical_task_sequence
+ordering_constraints
+```
+
+`canonical_task_sequence` is the exact list of Linear IR leaves the planner may
+return. `ordering_constraints` are adjacent name-only constraints derived from
+that sequence. A VLM or remote planner may observe the scene, but it does not
+freely decide leaf order, remove leaves, or add leaves.
+
+When `strict_generated=True`, `lerobot` validates returned model or ROS-service
+plans against the canonical sequence for all supported tasks. Future work may
+add explicit allowed variants or skip rules based on scene facts; no such
+variant mechanism exists today, so current runtime generation is deterministic
+in order even when the candidate plan comes from a VLM.
+
 ### Model-response Planner Mode
 
 An optional controlled planner mode reads a pre-generated model response from
@@ -90,10 +112,8 @@ task_name + optional scene_facts/model_response
 The registry decides which names are `robot_skill`, `human_step`, and
 `vlm_gate`. The validator rejects unknown names and wrong kinds, such as
 `pour_ingredient` as a `robot_skill` or `place_first_toast` as a `human_step`.
-For `make_sandwich`, strict validation also requires `initial_scene_ready` at
-the start, `make_sandwich.task_complete` at the end, `second_toast_ready`
-before `place_second_toast`, and `ingredient_poured` after `pour_ingredient`
-when the human pouring step appears.
+For template-supported tasks, strict validation also requires the returned
+`steps` to match `canonical_task_sequence` exactly.
 
 Example:
 
@@ -128,7 +148,8 @@ The `ros-service` planner mode enables live integration with a remote `panda_liv
 **Flow:**
 
 1. `lerobot` loads and validates the registry.
-2. Builds a filtered planner registry payload for the requested task.
+2. Builds a filtered planner registry payload for the requested task, including
+   `canonical_task_sequence` and adjacent `ordering_constraints`.
 3. Calls the ROS2 service (default `/lerobot_bt/generate_plan`) with:
     - `task_name`
     - `planner_registry_json`
@@ -142,6 +163,7 @@ The `ros-service` planner mode enables live integration with a remote `panda_liv
 **Notes:**
 - The service request does not carry images; the VLM server already receives camera streams over ROS.
 - The planner and verifier are separate protocols. The planner runs once before BT execution; the verifier runs during execution.
+- The VLM should follow `canonical_task_sequence`; `lerobot` rejects returned order mismatches.
 - If the ROS service is unavailable or returns an error, the CLI fails with a clear message.
 - Normal pytest and offline scripts do not require ROS2 and remain functional.
 
@@ -467,3 +489,34 @@ quality.
 - No automatic human fallback is emitted.
 - No `Parallel` nodes are emitted.
 - No hot-swap of a running BT is implemented.
+
+## Code Hygiene / Stale Concept Cleanup
+
+Focused cleanup checks cover stale planning and BT-generation concepts:
+
+```bash
+grep -R "hot-swap\|runtime replan\|replanning\|VLM generates XML\|generate XML directly\|shared /tmp file is main integration\|only make_sandwich and set_breakfast_table\|template only\|WaitForVLMVerdict\|OpenVLMGate\|type.*robot_skill" -n src docs scripts tests README.md generated_bt || true
+grep -R "live_vlm_planner\|plan_with_vlm\|raw_xml\|free_text\|explanation" -n src/lerobot_bt_python tests docs scripts || true
+```
+
+Cleanup result:
+
+- stale Python comments that described the current verifier polling path as
+  `WaitForVLMVerdict` were updated to the current merged `DoSkill`/`AwaitScene`
+  wording;
+- stale docs that said `ros-service` was only future work were removed;
+- no remaining docs claim only two template tasks are supported;
+- no remaining docs claim model-authored XML output or that
+  `panda_live_viewer` validates/compiles BTs;
+- `/tmp` remains only as a quick/manual testing example;
+- `generated_bt/` remains the preferred visible output directory;
+- verifier concepts remain separate from planner concepts.
+
+Intentional leftovers:
+
+- negative-limit statements such as "no hot-swap" remain because they document
+  current runtime constraints;
+- `WaitForVLMVerdict` and `OpenVLMGate` may appear only as historical/runtime
+  audit references, not generated-tree requirements;
+- strict-field tests may mention forbidden fields such as `raw_xml`,
+  `free_text`, or `explanation` to prove they are rejected.

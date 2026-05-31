@@ -12,10 +12,13 @@ Directory layout:
 - `trees/`: generated BehaviorTree.CPP XML files.
 - `config/`: generated BT parameter YAML files.
 - `raw_model_responses/`: optional raw planner responses from model-response or
-  future ROS-service planner modes, useful for debugging.
+  ROS-service planner modes, useful for debugging.
 
 
-When using the `ros-service` planner mode, raw plan responses from the remote VLM server are saved in `raw_model_responses/` for debugging and inspection. This mode is now implemented and available in the CLI.
+When using the `ros-service` planner mode, `lerobot` exports a planner payload
+that includes `canonical_task_sequence` and `ordering_constraints`. The remote
+VLM server should return Linear IR JSON following that sequence; `lerobot`
+validates the returned order before writing XML/YAML.
 
 Generated files should generally not be committed unless they are intentionally
 being added as fixtures or examples. The repository keeps this README and the

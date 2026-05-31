@@ -8,7 +8,7 @@
 
 # ROS2 service used by RunNamedCommand BT leaves.
 bt_command_service: "/lerobot_bt/run"
-# ROS2 service used by WaitForVLMVerdict BT leaves.
+# ROS2 service polled by merged DoSkill/AwaitScene BT leaves.
 vlm_state_service: "/lerobot_bt/vlm_state"
 # Legacy ROS2 service for external verifier verdicts.
 legacy_vlm_result_service: "/lerobot_bt/vlm_result_legacy"

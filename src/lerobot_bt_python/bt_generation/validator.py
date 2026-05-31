@@ -7,6 +7,7 @@ from typing import Any
 
 import yaml
 
+from .planner import TASK_TEMPLATES
 from .registry import (
     ALLOWED_KINDS,
     HUMAN_STEP,
@@ -119,6 +120,7 @@ def validate_linear_plan(
     if not strict_generated:
         errors.extend(_validate_verify_after_adjacency(steps, registry))
     if strict_generated:
+        errors.extend(_validate_canonical_task_sequence(plan, steps))
         errors.extend(_validate_make_sandwich_strict_rules(plan, steps))
     return errors
 
@@ -239,6 +241,27 @@ def _validate_step_object(step: dict[str, Any], registry: Registry, index: int) 
             )
 
     return errors
+
+
+def _validate_canonical_task_sequence(plan: dict, steps: list[Any]) -> list[str]:
+    task_name = plan.get("task_name")
+    if not isinstance(task_name, str) or task_name not in TASK_TEMPLATES:
+        return []
+
+    expected = [(step["kind"], step["name"]) for step in TASK_TEMPLATES[task_name]]
+    got: list[tuple[Any, Any]] = []
+    for step in steps:
+        if isinstance(step, dict):
+            got.append((step.get("kind"), step.get("name")))
+        else:
+            got.append(("<invalid>", "<invalid>"))
+
+    if got == expected:
+        return []
+    return [
+        f"Generated plan does not match canonical task sequence for '{task_name}'. "
+        f"Expected: {expected}. Got: {got}."
+    ]
 
 
 def _validate_make_sandwich_strict_rules(plan: dict, steps: list[Any]) -> list[str]:

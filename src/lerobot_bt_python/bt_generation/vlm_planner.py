@@ -6,6 +6,7 @@ import json
 import re
 from typing import Any
 
+from .planner import TASK_TEMPLATES
 from .registry import HUMAN_STEP, ROBOT_SKILL, VLM_GATE, Registry
 
 XML_TAG_RE = re.compile(r"</?\s*[A-Za-z][A-Za-z0-9_:.-]*(?:\s[^<>]*)?/?>")
@@ -32,6 +33,34 @@ def build_planner_prompt(
         "Available vlm_gates:",
         *_format_names(registry.vlm_gates),
     ]
+    if task_name in TASK_TEMPLATES:
+        canonical_task_sequence = [dict(step) for step in TASK_TEMPLATES[task_name]]
+        ordering_constraints = [
+            {"before": current["name"], "after": following["name"]}
+            for current, following in zip(canonical_task_sequence, canonical_task_sequence[1:])
+        ]
+        lines.extend(
+            [
+                "",
+                "canonical_task_sequence JSON:",
+                json.dumps(canonical_task_sequence, indent=2),
+                "",
+                "ordering_constraints JSON:",
+                json.dumps(ordering_constraints, indent=2),
+                "",
+                "Ordering rules:",
+                "Follow canonical_task_sequence exactly.",
+                "Do not reorder steps.",
+                "Do not remove steps.",
+                "Do not add steps.",
+                "Do not infer order from object names.",
+                "Use only kind/name pairs from canonical_task_sequence.",
+                (
+                    "The returned steps must match canonical_task_sequence exactly unless "
+                    "future allowed_variants are explicitly provided."
+                ),
+            ]
+        )
     if scene_facts is not None:
         lines.extend(
             [
@@ -67,6 +96,7 @@ def build_planner_prompt(
             "Use vlm_gate only for entries listed under vlm_gates.",
             "The output must be a JSON object with task_name and steps.",
             "Each step must have kind and name.",
+            "Return Linear IR JSON only.",
         ]
     )
     return "\n".join(lines) + "\n"

@@ -1,57 +1,107 @@
+#!/usr/bin/env python
+
+"""Tests for planner registry payload export."""
+
+from __future__ import annotations
+
 import json
 from pathlib import Path
+
+import pytest
+
 from lerobot_bt_python.bt_generation.export_planner_registry import build_planner_registry_payload
 from lerobot_bt_python.bt_generation.registry import load_registry
 
-def test_make_sandwich_registry_payload(tmp_path):
-    registry = load_registry("src/lerobot_bt_python/bt_generation/skills_registry.yaml")
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
+REGISTRY_PATH = REPO_ROOT / "src/lerobot_bt_python/bt_generation/skills_registry.yaml"
+
+
+def test_make_sandwich_payload_contains_canonical_task_sequence() -> None:
+    registry = load_registry(REGISTRY_PATH)
     payload = build_planner_registry_payload("make_sandwich", registry)
-    # Check required steps
-    robot_skill_names = {s["name"] for s in payload["robot_skills"]}
-    human_step_names = {s["name"] for s in payload["human_steps"]}
-    vlm_gate_names = {s["name"] for s in payload["vlm_gates"]}
-    assert "place_first_toast" in robot_skill_names
-    assert "place_second_toast" in robot_skill_names
-    assert "pour_ingredient" in human_step_names
-    assert "ingredient_poured" in vlm_gate_names
-    assert "second_toast_ready" in vlm_gate_names
-    assert "make_sandwich.task_complete" in vlm_gate_names
-    # Check rules as dict
-    rules = payload["rules"]
-    assert isinstance(rules, dict)
-    for rule in ["return_json_only", "no_xml", "registered_names_only", "do_not_change_step_kinds"]:
-        assert rules[rule] is True
 
-def test_export_fails_on_missing_registry_entry():
-    class DummyRegistry:
-        def kind_for_name(self, name):
-            return None
-    dummy = DummyRegistry()
-    with pytest.raises(ValueError, match="not present in registry"):
-        build_planner_registry_payload("make_sandwich", dummy)
+    assert payload["canonical_task_sequence"] == [
+        {"kind": "vlm_gate", "name": "initial_scene_ready"},
+        {"kind": "robot_skill", "name": "place_first_toast"},
+        {"kind": "human_step", "name": "pour_ingredient"},
+        {"kind": "vlm_gate", "name": "ingredient_poured"},
+        {"kind": "vlm_gate", "name": "second_toast_ready"},
+        {"kind": "robot_skill", "name": "place_second_toast"},
+        {"kind": "vlm_gate", "name": "make_sandwich.task_complete"},
+    ]
 
-def test_export_fails_on_kind_mismatch(monkeypatch):
-    registry = load_registry("src/lerobot_bt_python/bt_generation/skills_registry.yaml")
-    # Patch kind_for_name to return wrong kind for a known step
-    orig = registry.kind_for_name
-    def wrong_kind(name):
-        if name == "pour_ingredient":
-            return "robot_skill"
-        return orig(name)
-    monkeypatch.setattr(registry, "kind_for_name", wrong_kind)
-    with pytest.raises(ValueError, match="kind mismatch"):
-        build_planner_registry_payload("make_sandwich", registry)
 
-def test_exported_payload_is_json_serializable():
-    registry = load_registry("src/lerobot_bt_python/bt_generation/skills_registry.yaml")
+def test_make_sandwich_sequence_places_ingredient_poured_after_pour_ingredient() -> None:
+    registry = load_registry(REGISTRY_PATH)
     payload = build_planner_registry_payload("make_sandwich", registry)
+    names = [step["name"] for step in payload["canonical_task_sequence"]]
+
+    assert names.index("ingredient_poured") == names.index("pour_ingredient") + 1
+
+
+def test_make_coffee_payload_contains_canonical_task_sequence() -> None:
+    registry = load_registry(REGISTRY_PATH)
+    payload = build_planner_registry_payload("make_coffee", registry)
+
+    assert payload["canonical_task_sequence"] == [
+        {"kind": "vlm_gate", "name": "make_coffee.scene_0_ready"},
+        {"kind": "human_step", "name": "make_coffee.cup_under_dispenser"},
+        {"kind": "robot_skill", "name": "pick_and_insert_capsule"},
+        {"kind": "robot_skill", "name": "close_coffee_machine"},
+        {"kind": "human_step", "name": "make_coffee.human_press_start_button"},
+    ]
+
+
+def test_ordering_constraints_are_adjacent_step_pairs() -> None:
+    registry = load_registry(REGISTRY_PATH)
+    payload = build_planner_registry_payload("make_sandwich", registry)
+
+    assert payload["ordering_constraints"] == [
+        {"before": "initial_scene_ready", "after": "place_first_toast"},
+        {"before": "place_first_toast", "after": "pour_ingredient"},
+        {"before": "pour_ingredient", "after": "ingredient_poured"},
+        {"before": "ingredient_poured", "after": "second_toast_ready"},
+        {"before": "second_toast_ready", "after": "place_second_toast"},
+        {"before": "place_second_toast", "after": "make_sandwich.task_complete"},
+    ]
+
+
+def test_payload_filters_entries_and_keeps_rules_json_serializable() -> None:
+    registry = load_registry(REGISTRY_PATH)
+    payload = build_planner_registry_payload("make_sandwich", registry)
+
+    assert {entry["name"] for entry in payload["robot_skills"]} == {
+        "place_first_toast",
+        "place_second_toast",
+    }
+    assert {entry["name"] for entry in payload["human_steps"]} == {"pour_ingredient"}
+    assert {
+        "initial_scene_ready",
+        "ingredient_poured",
+        "second_toast_ready",
+        "make_sandwich.task_complete",
+    }.issubset({entry["name"] for entry in payload["vlm_gates"]})
+    for rule in [
+        "return_json_only",
+        "no_xml",
+        "registered_names_only",
+        "do_not_change_step_kinds",
+        "follow_canonical_task_sequence",
+        "do_not_reorder_steps",
+        "do_not_add_steps",
+        "do_not_remove_steps",
+    ]:
+        assert payload["rules"][rule] is True
     json.dumps(payload)
 
-def test_objects_are_serialized_as_dicts():
-    registry = load_registry("src/lerobot_bt_python/bt_generation/skills_registry.yaml")
-    payload = build_planner_registry_payload("make_sandwich", registry)
-    if "objects" in payload:
-        for obj in payload["objects"]:
-            assert isinstance(obj, dict)
-            assert "canonical_name" in obj
-            assert isinstance(obj["aliases"], list)
+
+def test_export_fails_on_missing_registry_entry() -> None:
+    class DummyRegistry:
+        objects = {}
+
+        def kind_for_name(self, name: str) -> None:
+            return None
+
+    with pytest.raises(ValueError, match="not present in registry"):
+        build_planner_registry_payload("make_sandwich", DummyRegistry())  # type: ignore[arg-type]

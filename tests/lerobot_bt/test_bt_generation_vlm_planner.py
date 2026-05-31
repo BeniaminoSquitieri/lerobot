@@ -13,7 +13,7 @@ import xml.etree.ElementTree as ET
 import pytest
 import yaml
 
-from lerobot_bt_python.bt_generation.planner import build_linear_plan
+from lerobot_bt_python.bt_generation.planner import TASK_TEMPLATES, build_linear_plan
 from lerobot_bt_python.bt_generation.registry import load_registry
 from lerobot_bt_python.bt_generation.renderer import render_bt_params_yaml, render_xml
 from lerobot_bt_python.bt_generation.static_checks import validate_xml_yaml_blackboard_text
@@ -29,6 +29,13 @@ from lerobot_bt_python.bt_generation.vlm_planner import (
 REPO_ROOT = Path(__file__).resolve().parents[2]
 REGISTRY_PATH = REPO_ROOT / "src/lerobot_bt_python/bt_generation/skills_registry.yaml"
 SANDWICH_EXECUTOR = REPO_ROOT / "src/lerobot_bt_python/make_sandwich_executor.yaml"
+EXECUTOR_PATHS = {
+    "make_sandwich": SANDWICH_EXECUTOR,
+    "set_breakfast_table": REPO_ROOT / "src/lerobot_bt_python/set_breakfast_table_executor.yaml",
+    "make_coffee": REPO_ROOT / "src/lerobot_bt_python/make_coffee_executor.yaml",
+    "prepare_picnic_bag": REPO_ROOT / "src/lerobot_bt_python/prepare_picnic_bag_executor.yaml",
+    "items_in_drawer": REPO_ROOT / "src/lerobot_bt_python/items_in_drawer_executor.yaml",
+}
 ASSET_DIR = REPO_ROOT / "tests/assets/vlm_planner"
 
 
@@ -56,6 +63,14 @@ def test_build_planner_prompt_lists_available_step_kinds() -> None:
     assert "ingredient_poured = vlm_gate" in prompt
     assert "Return JSON only." in prompt
     assert "Do not return XML." in prompt
+    assert "canonical_task_sequence JSON:" in prompt
+    assert '"name": "ingredient_poured"' in prompt
+    assert "ordering_constraints JSON:" in prompt
+    assert '"before": "pour_ingredient"' in prompt
+    assert '"after": "ingredient_poured"' in prompt
+    assert "Follow canonical_task_sequence exactly." in prompt
+    assert "Do not reorder steps." in prompt
+    assert "The returned steps must match canonical_task_sequence exactly" in prompt
     assert '"ingredient_visible": true' in prompt
 
 
@@ -198,7 +213,7 @@ def test_place_second_toast_without_second_toast_ready_fails() -> None:
     assert any("must be preceded by vlm_gate 'second_toast_ready'" in error for error in errors)
 
 
-def test_ingredient_poured_does_not_need_to_be_immediate() -> None:
+def test_swapped_make_sandwich_order_fails_strict_validation() -> None:
     registry = load_registry(REGISTRY_PATH)
     plan = {
         "task_name": "make_sandwich",
@@ -213,8 +228,78 @@ def test_ingredient_poured_does_not_need_to_be_immediate() -> None:
         ],
     }
 
-    assert validate_linear_plan(plan, registry, SANDWICH_EXECUTOR, strict_generated=True) == []
-    render_xml(plan, registry)
+    errors = validate_linear_plan(plan, registry, SANDWICH_EXECUTOR, strict_generated=True)
+
+    assert any("does not match canonical task sequence" in error for error in errors)
+
+
+def test_missing_ingredient_poured_fails_strict_validation() -> None:
+    registry = load_registry(REGISTRY_PATH)
+    plan = {
+        "task_name": "make_sandwich",
+        "steps": [
+            {"kind": "vlm_gate", "name": "initial_scene_ready"},
+            {"kind": "robot_skill", "name": "place_first_toast"},
+            {"kind": "human_step", "name": "pour_ingredient"},
+            {"kind": "vlm_gate", "name": "second_toast_ready"},
+            {"kind": "robot_skill", "name": "place_second_toast"},
+            {"kind": "vlm_gate", "name": "make_sandwich.task_complete"},
+        ],
+    }
+
+    errors = validate_linear_plan(plan, registry, SANDWICH_EXECUTOR, strict_generated=True)
+
+    assert any("does not match canonical task sequence" in error for error in errors)
+
+
+def test_make_coffee_wrong_order_fails_strict_validation() -> None:
+    registry = load_registry(REGISTRY_PATH)
+    plan = {
+        "task_name": "make_coffee",
+        "steps": [
+            {"kind": "vlm_gate", "name": "make_coffee.scene_0_ready"},
+            {"kind": "robot_skill", "name": "pick_and_insert_capsule"},
+            {"kind": "human_step", "name": "make_coffee.cup_under_dispenser"},
+            {"kind": "robot_skill", "name": "close_coffee_machine"},
+            {"kind": "human_step", "name": "make_coffee.human_press_start_button"},
+        ],
+    }
+
+    errors = validate_linear_plan(
+        plan,
+        registry,
+        EXECUTOR_PATHS["make_coffee"],
+        strict_generated=True,
+    )
+
+    assert any("does not match canonical task sequence for 'make_coffee'" in error for error in errors)
+
+
+def test_extra_step_fails_strict_validation() -> None:
+    registry = load_registry(REGISTRY_PATH)
+    plan = {
+        "task_name": "make_sandwich",
+        "steps": [
+            *TASK_TEMPLATES["make_sandwich"],
+            {"kind": "vlm_gate", "name": "first_toast_placed"},
+        ],
+    }
+
+    errors = validate_linear_plan(plan, registry, SANDWICH_EXECUTOR, strict_generated=True)
+
+    assert any("does not match canonical task sequence" in error for error in errors)
+
+
+def test_missing_step_fails_strict_validation() -> None:
+    registry = load_registry(REGISTRY_PATH)
+    plan = {
+        "task_name": "make_sandwich",
+        "steps": TASK_TEMPLATES["make_sandwich"][:-1],
+    }
+
+    errors = validate_linear_plan(plan, registry, SANDWICH_EXECUTOR, strict_generated=True)
+
+    assert any("does not match canonical task sequence" in error for error in errors)
 
 
 def test_known_object_alias_canonicalizes() -> None:
@@ -269,6 +354,15 @@ def test_template_plan_remains_valid() -> None:
     plan = build_linear_plan("make_sandwich", registry)
 
     assert validate_linear_plan(plan, registry, SANDWICH_EXECUTOR) == []
+
+
+def test_template_plans_for_all_tasks_pass_strict_canonical_validation() -> None:
+    registry = load_registry(REGISTRY_PATH)
+
+    for task_name, executor_path in EXECUTOR_PATHS.items():
+        plan = build_linear_plan(task_name, registry)
+
+        assert validate_linear_plan(plan, registry, executor_path, strict_generated=True) == []
 
 
 def _strict_errors_for_asset(asset_name: str) -> list[str]:

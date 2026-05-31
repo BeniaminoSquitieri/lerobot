@@ -1,4 +1,4 @@
-"""CLI for deterministic runtime BT generation."""
+"""CLI for runtime BT generation."""
 
 from __future__ import annotations
 
@@ -155,6 +155,8 @@ def main(argv: list[str] | None = None) -> int:
         plan = None
 
     if errors or plan is None:
+        if raw_response_output_path is not None and model_response_text is not None:
+            _write_text(raw_response_output_path, model_response_text)
         _print_errors(errors)
         return 1
 
