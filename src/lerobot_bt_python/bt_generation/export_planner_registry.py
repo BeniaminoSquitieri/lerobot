@@ -17,7 +17,12 @@ def build_planner_registry_payload(task_name: str, registry) -> dict:
     for step in steps:
         kind = step["kind"]
         name = step["name"]
-        if kind == ROBOT_SKILL and name in registry.robot_skills:
+        actual_kind = registry.kind_for_name(name)
+        if actual_kind is None:
+            raise ValueError(f"{name!r} is not present in registry")
+        if actual_kind != kind:
+            raise ValueError(f"{name!r} kind mismatch: template={kind}, registry={actual_kind}")
+        if kind == ROBOT_SKILL:
             entry = registry.robot_skills[name]
             robot_skills.append({
                 "name": entry.name,
@@ -25,44 +30,43 @@ def build_planner_registry_payload(task_name: str, registry) -> dict:
                 "timeout_s": getattr(entry, "timeout_s", None),
                 "max_attempts": getattr(entry, "max_attempts", None),
             })
-        elif kind == HUMAN_STEP and name in registry.human_steps:
+        elif kind == HUMAN_STEP:
             entry = registry.human_steps[name]
             human_steps.append({
                 "name": entry.name,
                 "kind": entry.kind,
                 "instruction": getattr(entry, "instruction", ""),
             })
-        elif kind == VLM_GATE and name in registry.vlm_gates:
+        elif kind == VLM_GATE:
             entry = registry.vlm_gates[name]
             vlm_gates.append({
                 "name": entry.name,
                 "kind": entry.kind,
                 "task": getattr(entry, "task", None),
             })
-        else:
-            # fallback for gates not in registry
-            if kind == VLM_GATE:
-                vlm_gates.append({"name": name, "kind": kind})
-            elif kind == HUMAN_STEP:
-                human_steps.append({"name": name, "kind": kind, "instruction": ""})
-            elif kind == ROBOT_SKILL:
-                robot_skills.append({"name": name, "kind": kind})
     payload = {
         "task_name": task_name,
         "robot_skills": robot_skills,
         "human_steps": human_steps,
         "vlm_gates": vlm_gates,
-        "rules": [
-            "return_json_only",
-            "no_xml",
-            "registered_names_only",
-            "do_not_change_step_kinds",
-        ],
+        "rules": {
+            "return_json_only": True,
+            "no_xml": True,
+            "registered_names_only": True,
+            "do_not_change_step_kinds": True,
+        },
     }
     # Optionally include objects/aliases if present
-    if hasattr(registry, "objects"):
-        payload["objects"] = registry.objects
-    if hasattr(registry, "aliases"):
+    if hasattr(registry, "objects") and registry.objects:
+        payload["objects"] = [
+            {
+                "canonical_name": obj.canonical_name,
+                "aliases": list(obj.aliases),
+                "allowed_for": list(obj.allowed_for),
+            }
+            for obj in registry.objects.values()
+        ]
+    if hasattr(registry, "aliases") and registry.aliases:
         payload["aliases"] = registry.aliases
     return payload
 
