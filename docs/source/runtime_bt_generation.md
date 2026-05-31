@@ -3,12 +3,14 @@
 This document describes the first safe version of runtime Behavior Tree
 generation for the BT-VLM tasks.
 
-Non voglio un allocator intelligente. Voglio che l'agente deduca dal repository
-quali step sono robot_skill, human_step e vlm_gate.
-
 ## Flow
 
-The v1 flow is deterministic:
+`lerobot` owns validation, compilation, generated XML/YAML, and BT execution.
+`panda_live_viewer` owns visual planning and VLM reasoning. When visual planning
+is used, it must return Linear IR JSON only; it must never generate
+BehaviorTree.CPP XML.
+
+The default v1 flow is deterministic:
 
 1. A known `task_name` selects a hard-coded template.
 2. The template is expanded into a Linear IR JSON object.
@@ -17,9 +19,11 @@ The v1 flow is deterministic:
 4. The plan validator checks the Linear IR against the registry and, when
    provided, the executor YAML.
 5. The renderer writes BehaviorTree.CPP XML and ROS2 BT parameter YAML.
+6. The generated XML/YAML pass a static blackboard key check.
 
-The VLM verifies scene state. It does not generate XML, choose the task order,
-or allocate work between robot and human.
+The BT is generated once at episode start and then executed normally by
+BehaviorTree.CPP. There is no hot-swap during execution and no runtime
+replanning yet.
 
 ## Supported Static Tasks
 
@@ -43,7 +47,9 @@ YAML files. `DoSkill` leaves become `robot_skill`; human-operated
 remain, the VLM can report failure and BehaviorTree.CPP retries the same leaf
 until the configured retry budget is exhausted or the VLM reports completion.
 
-## Model-response Planner Mode
+## Planner Modes
+
+### Template Planner
 
 The default planner is still the deterministic template planner:
 
@@ -51,7 +57,12 @@ The default planner is still the deterministic template planner:
 --planner template
 ```
 
-An optional controlled planner mode can read a pre-generated model response:
+It runs entirely in `lerobot` and supports all five static tasks listed above.
+
+### Model-response Planner Mode
+
+An optional controlled planner mode reads a pre-generated model response from
+disk:
 
 ```bash
 --planner model-response
@@ -93,9 +104,31 @@ PYTHONPATH=src python -m lerobot_bt_python.bt_generation.generate \
   --model-response-file tests/assets/vlm_planner/make_sandwich_valid.json \
   --registry src/lerobot_bt_python/bt_generation/skills_registry.yaml \
   --executor-yaml src/lerobot_bt_python/make_sandwich_executor.yaml \
-  --out-tree /tmp/generated_make_sandwich_model.xml \
-  --out-config /tmp/generated_make_sandwich_model_bt.yaml
+  --output-dir generated_bt
 ```
+
+This writes the validated Linear IR to
+`generated_bt/plans/make_sandwich_linear_ir.json`, XML to
+`generated_bt/trees/make_sandwich.xml`, YAML to
+`generated_bt/config/make_sandwich_bt.yaml`, and the raw response to
+`generated_bt/raw_model_responses/make_sandwich_raw_response.json`.
+
+### ROS-service Planner Mode
+
+`ros-service` is the intended live integration path with `panda_live_viewer`,
+but it is not implemented in this repository yet. The intended contract is:
+
+```text
+lerobot
+  -> asks a remote panda_live_viewer/VLM ROS service for Linear IR JSON
+  -> validates and canonicalizes that JSON
+  -> renders BehaviorTree.CPP XML/YAML
+  -> executes the generated BT normally
+```
+
+The VLM server may already receive camera images over ROS. It still returns
+Linear IR JSON only; `lerobot` remains the component that validates and
+compiles BT artifacts.
 
 Keep the model-response planner and the runtime VLM verifier separate:
 
@@ -111,6 +144,40 @@ Model-response planner mode:
 
 The verifier still runs during BT execution through `DoSkill` and
 `AwaitScene`. The planner runs only once before the BT is generated.
+
+## Generated Output Directory
+
+The preferred visible output folder is repository-local:
+
+```text
+generated_bt/
+  plans/
+  trees/
+  config/
+  raw_model_responses/
+```
+
+Use `--output-dir generated_bt` for normal development:
+
+```bash
+PYTHONPATH=src python -m lerobot_bt_python.bt_generation.generate \
+  --task make_sandwich \
+  --planner template \
+  --registry src/lerobot_bt_python/bt_generation/skills_registry.yaml \
+  --executor-yaml src/lerobot_bt_python/make_sandwich_executor.yaml \
+  --output-dir generated_bt
+```
+
+This writes:
+
+```text
+generated_bt/trees/make_sandwich.xml
+generated_bt/config/make_sandwich_bt.yaml
+```
+
+`/tmp` can still be used for quick one-off tests with explicit `--out-tree` and
+`--out-config`, but `generated_bt/` is the recommended path for normal
+inspection and handoff.
 
 ## C++ Runtime Contract
 
@@ -238,40 +305,40 @@ To add a VLM gate:
 
 ## CLI
 
-Example:
+Example using the preferred visible output directory:
 
 ```bash
-python -m lerobot_bt_python.bt_generation.generate \
+PYTHONPATH=src python -m lerobot_bt_python.bt_generation.generate \
   --task make_sandwich \
+  --planner template \
   --registry src/lerobot_bt_python/bt_generation/skills_registry.yaml \
   --executor-yaml src/lerobot_bt_python/make_sandwich_executor.yaml \
-  --out-tree /tmp/generated_make_sandwich.xml \
-  --out-config /tmp/generated_make_sandwich_bt.yaml
+  --output-dir generated_bt
 ```
 
 Generate the other static tasks by changing the task and executor YAML:
 
 ```bash
-python -m lerobot_bt_python.bt_generation.generate \
+PYTHONPATH=src python -m lerobot_bt_python.bt_generation.generate \
   --task make_coffee \
+  --planner template \
   --registry src/lerobot_bt_python/bt_generation/skills_registry.yaml \
   --executor-yaml src/lerobot_bt_python/make_coffee_executor.yaml \
-  --out-tree /tmp/generated_make_coffee.xml \
-  --out-config /tmp/generated_make_coffee_bt.yaml
+  --output-dir generated_bt
 
-python -m lerobot_bt_python.bt_generation.generate \
+PYTHONPATH=src python -m lerobot_bt_python.bt_generation.generate \
   --task prepare_picnic_bag \
+  --planner template \
   --registry src/lerobot_bt_python/bt_generation/skills_registry.yaml \
   --executor-yaml src/lerobot_bt_python/prepare_picnic_bag_executor.yaml \
-  --out-tree /tmp/generated_prepare_picnic_bag.xml \
-  --out-config /tmp/generated_prepare_picnic_bag_bt.yaml
+  --output-dir generated_bt
 
-python -m lerobot_bt_python.bt_generation.generate \
+PYTHONPATH=src python -m lerobot_bt_python.bt_generation.generate \
   --task items_in_drawer \
+  --planner template \
   --registry src/lerobot_bt_python/bt_generation/skills_registry.yaml \
   --executor-yaml src/lerobot_bt_python/items_in_drawer_executor.yaml \
-  --out-tree /tmp/generated_items_in_drawer.xml \
-  --out-config /tmp/generated_items_in_drawer_bt.yaml
+  --output-dir generated_bt
 ```
 
 The CLI writes no outputs if registry or plan validation fails.
@@ -291,10 +358,10 @@ Generate a sandwich BT:
 ```bash
 PYTHONPATH=src conda run -n lerobot python -m lerobot_bt_python.bt_generation.generate \
   --task make_sandwich \
+  --planner template \
   --registry src/lerobot_bt_python/bt_generation/skills_registry.yaml \
   --executor-yaml src/lerobot_bt_python/make_sandwich_executor.yaml \
-  --out-tree /tmp/generated_make_sandwich.xml \
-  --out-config /tmp/generated_make_sandwich_bt.yaml
+  --output-dir generated_bt
 ```
 
 The offline helper generates and checks all five supported tasks:
@@ -312,7 +379,7 @@ pytest OK
 Run the offline helper:
 
 ```bash
-PYTHONPATH=src PYTHON_BIN=python scripts/check_generated_bt_offline.sh
+PYTHONPATH=src PYTHON_BIN=python GENERATED_BT_DIR=generated_bt scripts/check_generated_bt_offline.sh
 ```
 
 The generator performs a static blackboard check before writing output: every
@@ -355,8 +422,8 @@ The script runs the equivalent C++ command after preflight passes:
 ```bash
 ros2 run lerobot_bt_runtime_cpp lerobot_bt_runner \
   --ros-args \
-  --params-file /tmp/generated_make_sandwich_bt.yaml \
-  -p tree_xml_path:=/tmp/generated_make_sandwich.xml \
+  --params-file generated_bt/config/make_sandwich_bt.yaml \
+  -p tree_xml_path:=generated_bt/trees/make_sandwich.xml \
   -p enable_groot_publisher:=false
 ```
 

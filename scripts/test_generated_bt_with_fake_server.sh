@@ -4,8 +4,9 @@ set -euo pipefail
 SCENARIO="${1:-success_all}"
 EXPECTED="${2:-success}"
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-TREE_PATH="/tmp/generated_make_sandwich.xml"
-CONFIG_PATH="/tmp/generated_make_sandwich_bt.yaml"
+GENERATED_BT_DIR="${GENERATED_BT_DIR:-generated_bt}"
+TREE_PATH="${GENERATED_BT_DIR}/trees/make_sandwich.xml"
+CONFIG_PATH="${GENERATED_BT_DIR}/config/make_sandwich_bt.yaml"
 PYTHON_BIN="${PYTHON_BIN:-python}"
 read -r -a PYTHON_CMD <<< "${PYTHON_BIN}"
 
@@ -47,8 +48,7 @@ ros2 pkg prefix lerobot_bt_runtime_cpp >/dev/null 2>&1 || {
   --task make_sandwich \
   --registry src/lerobot_bt_python/bt_generation/skills_registry.yaml \
   --executor-yaml src/lerobot_bt_python/make_sandwich_executor.yaml \
-  --out-tree "${TREE_PATH}" \
-  --out-config "${CONFIG_PATH}"
+  --output-dir "${GENERATED_BT_DIR}"
 
 "${PYTHON_CMD[@]}" -m lerobot_bt_python.fakes.fake_bt_executor_server \
   --scenario "${SCENARIO}" \

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import sys
 from collections import Counter
 from pathlib import Path
@@ -12,11 +13,11 @@ from .registry import load_registry, validate_registry
 from .renderer import render_bt_params_yaml, render_xml
 from .static_checks import validate_xml_yaml_blackboard_text
 from .validator import validate_linear_plan
-from .vlm_planner import generate_plan_from_model_response
+from .vlm_planner import canonicalize_plan, parse_planner_response
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="Generate a deterministic BT XML/YAML pair.")
+    parser = argparse.ArgumentParser(description="Generate a runtime BT XML/YAML pair.")
     parser.add_argument("--task", required=True, help="Known deterministic task name.")
     parser.add_argument(
         "--planner",
@@ -31,8 +32,16 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument("--registry", required=True, type=Path, help="skills_registry.yaml path.")
     parser.add_argument("--executor-yaml", type=Path, help="Executor YAML used for consistency checks.")
-    parser.add_argument("--out-tree", required=True, type=Path, help="Output BehaviorTree.CPP XML path.")
-    parser.add_argument("--out-config", required=True, type=Path, help="Output BT params YAML path.")
+    parser.add_argument("--out-tree", type=Path, help="Output BehaviorTree.CPP XML path.")
+    parser.add_argument("--out-config", type=Path, help="Output BT params YAML path.")
+    parser.add_argument(
+        "--output-dir",
+        type=Path,
+        help=(
+            "Repository-local output directory. When --out-tree/--out-config are not provided, "
+            "writes trees/<task>.xml and config/<task>_bt.yaml under this directory."
+        ),
+    )
     parser.add_argument(
         "--explicit-postcondition-gates",
         action="store_true",
@@ -44,9 +53,17 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     errors: list[str] = []
+    out_tree, out_config, output_errors = _resolve_tree_config_paths(args)
+    errors.extend(output_errors)
+    plan_output_path = _plan_output_path(args)
+    raw_response_output_path: Path | None = None
+    model_response_text: str | None = None
+
     try:
-        registry = load_registry(args.registry)
-        errors.extend(validate_registry(registry))
+        if not errors:
+            registry = load_registry(args.registry)
+            errors.extend(validate_registry(registry))
+
         if not errors:
             if args.planner == "template":
                 plan = build_linear_plan(
@@ -61,19 +78,22 @@ def main(argv: list[str] | None = None) -> int:
                     plan = None
                 else:
                     model_response_text = args.model_response_file.read_text(encoding="utf-8")
-                    plan = generate_plan_from_model_response(
-                        args.task,
-                        registry,
-                        model_response_text,
-                    )
-                    errors.extend(
-                        validate_linear_plan(
-                            plan,
-                            registry,
-                            args.executor_yaml,
-                            strict_generated=True,
+                    raw_response_output_path = _raw_response_output_path(args, model_response_text)
+                    plan = canonicalize_plan(parse_planner_response(model_response_text), registry)
+                    if plan["task_name"] != args.task:
+                        errors.append(
+                            f"Planner response task_name {plan['task_name']!r} does not match requested "
+                            f"task_name {args.task!r}."
                         )
-                    )
+                    else:
+                        errors.extend(
+                            validate_linear_plan(
+                                plan,
+                                registry,
+                                args.executor_yaml,
+                                strict_generated=True,
+                            )
+                        )
         else:
             plan = None
     except Exception as exc:  # noqa: BLE001
@@ -96,19 +116,73 @@ def main(argv: list[str] | None = None) -> int:
         _print_errors(errors)
         return 1
 
-    args.out_tree.parent.mkdir(parents=True, exist_ok=True)
-    args.out_config.parent.mkdir(parents=True, exist_ok=True)
-    args.out_tree.write_text(xml_text, encoding="utf-8")
-    args.out_config.write_text(yaml_text, encoding="utf-8")
+    assert out_tree is not None
+    assert out_config is not None
+    if plan_output_path is not None:
+        _write_text(plan_output_path, json.dumps(plan, indent=2, sort_keys=True) + "\n")
+    if raw_response_output_path is not None and model_response_text is not None:
+        _write_text(raw_response_output_path, model_response_text)
+    _write_text(out_tree, xml_text)
+    _write_text(out_config, yaml_text)
 
     counts = Counter(step["kind"] for step in plan["steps"])
     print(f"task_name: {plan['task_name']}")
     print(f"robot_skill: {counts.get('robot_skill', 0)}")
     print(f"human_step: {counts.get('human_step', 0)}")
     print(f"vlm_gate: {counts.get('vlm_gate', 0)}")
-    print(f"wrote tree: {args.out_tree}")
-    print(f"wrote config: {args.out_config}")
+    if plan_output_path is not None:
+        print(f"wrote plan: {plan_output_path}")
+    print(f"wrote tree: {out_tree}")
+    print(f"wrote config: {out_config}")
+    if raw_response_output_path is not None:
+        print(f"wrote raw response: {raw_response_output_path}")
     return 0
+
+
+def _resolve_tree_config_paths(args: argparse.Namespace) -> tuple[Path | None, Path | None, list[str]]:
+    has_out_tree = args.out_tree is not None
+    has_out_config = args.out_config is not None
+    if has_out_tree != has_out_config:
+        return None, None, ["--out-tree and --out-config must be provided together."]
+
+    if has_out_tree and has_out_config:
+        return args.out_tree, args.out_config, []
+
+    if args.output_dir is not None:
+        return (
+            args.output_dir / "trees" / f"{args.task}.xml",
+            args.output_dir / "config" / f"{args.task}_bt.yaml",
+            [],
+        )
+
+    return None, None, ["Provide --out-tree and --out-config, or provide --output-dir."]
+
+
+def _plan_output_path(args: argparse.Namespace) -> Path | None:
+    if args.output_dir is None or args.planner != "model-response":
+        return None
+    return args.output_dir / "plans" / f"{args.task}_linear_ir.json"
+
+
+def _raw_response_output_path(args: argparse.Namespace, model_response_text: str) -> Path | None:
+    if args.output_dir is None or args.planner != "model-response":
+        return None
+
+    suffix = ".json" if _is_json_document(model_response_text) else ".txt"
+    return args.output_dir / "raw_model_responses" / f"{args.task}_raw_response{suffix}"
+
+
+def _is_json_document(text: str) -> bool:
+    try:
+        json.loads(text)
+    except json.JSONDecodeError:
+        return False
+    return True
+
+
+def _write_text(path: Path, text: str) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(text, encoding="utf-8")
 
 
 def _print_errors(errors: list[str]) -> None:

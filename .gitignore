@@ -179,3 +179,15 @@ outputs/
 *.xml
 !src/**/package.xml
 !src/lerobot_bt_runtime_cpp/trees/*.xml
+
+# Runtime BT generated artifacts. Keep the visible directory layout, but ignore
+# normal generated outputs unless they are intentionally promoted to fixtures.
+generated_bt/plans/*
+generated_bt/trees/*
+generated_bt/config/*
+generated_bt/raw_model_responses/*
+!generated_bt/plans/.gitkeep
+!generated_bt/trees/.gitkeep
+!generated_bt/config/.gitkeep
+!generated_bt/raw_model_responses/.gitkeep
+!generated_bt/README.md

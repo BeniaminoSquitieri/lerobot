@@ -52,8 +52,18 @@ Name alignment rule:
 
 ## Runtime BT Generation MVP
 
-This repository supports deterministic runtime BT generation for selected
-BT-VLM tasks.
+This repository supports runtime BT generation for all current static BT-VLM
+tasks.
+
+Ownership boundary:
+
+```text
+lerobot: validation, Linear IR canonicalization, XML/YAML generation, BT execution
+panda_live_viewer: visual planning and VLM reasoning
+```
+
+When `panda_live_viewer` participates in planning, it must return Linear IR JSON
+only. `lerobot` validates that JSON and compiles it to BehaviorTree.CPP XML/YAML.
 
 The generator does **not** use an LLM or VLM to write XML directly. It uses a
 small controlled pipeline:
@@ -66,6 +76,10 @@ task name
   -> XML/YAML rendering
   -> BehaviorTree.CPP runner
 ```
+
+The optional `model-response` planner starts from a pre-generated Linear IR JSON
+candidate instead of the deterministic template. The same `lerobot` validation,
+rendering, and static blackboard checks still decide whether it is accepted.
 
 The generated BTs reproduce known task structures while avoiding manual
 XML/YAML duplication.
@@ -108,8 +122,7 @@ PYTHONPATH=src python -m lerobot_bt_python.bt_generation.generate \
   --model-response-file tests/assets/vlm_planner/make_sandwich_valid.json \
   --registry src/lerobot_bt_python/bt_generation/skills_registry.yaml \
   --executor-yaml src/lerobot_bt_python/make_sandwich_executor.yaml \
-  --out-tree /tmp/generated_make_sandwich_model.xml \
-  --out-config /tmp/generated_make_sandwich_model_bt.yaml
+  --output-dir generated_bt
 ```
 
 This mode reads a pre-generated Linear IR JSON candidate from disk. It does not
@@ -147,11 +160,49 @@ Model-response planner mode:
 The verifier continues to run during BT execution through `DoSkill` and
 `AwaitScene`. The planner runs only before the BT exists.
 
+The intended live integration path is a future `ros-service` planner mode:
+`lerobot` asks a remote `panda_live_viewer`/VLM ROS service for Linear IR JSON,
+then `lerobot` validates and compiles it. That live mode is not implemented in
+this repository yet.
+
 ### Generated BT Output Location
 
-Generated BT files are written wherever `--out-tree` and `--out-config` point.
+The preferred visible output folder is repository-local:
 
-Example writing to `/tmp`:
+```text
+generated_bt/
+  plans/
+  trees/
+  config/
+  raw_model_responses/
+```
+
+Use `--output-dir generated_bt` for normal development:
+
+```bash
+PYTHONPATH=src uv run python -m lerobot_bt_python.bt_generation.generate \
+  --task make_sandwich \
+  --planner template \
+  --registry src/lerobot_bt_python/bt_generation/skills_registry.yaml \
+  --executor-yaml src/lerobot_bt_python/make_sandwich_executor.yaml \
+  --output-dir generated_bt
+```
+
+This creates:
+
+```text
+generated_bt/trees/make_sandwich.xml
+generated_bt/config/make_sandwich_bt.yaml
+```
+
+Model-response mode also writes:
+
+```text
+generated_bt/plans/make_sandwich_linear_ir.json
+generated_bt/raw_model_responses/make_sandwich_raw_response.json
+```
+
+Explicit output paths remain supported for quick one-off tests:
 
 ```bash
 PYTHONPATH=src uv run python -m lerobot_bt_python.bt_generation.generate \
@@ -162,47 +213,8 @@ PYTHONPATH=src uv run python -m lerobot_bt_python.bt_generation.generate \
   --out-config /tmp/generated_make_sandwich_bt.yaml
 ```
 
-This creates:
-
-```text
-/tmp/generated_make_sandwich.xml
-/tmp/generated_make_sandwich_bt.yaml
-```
-
-For persistent generated files, use a repository-local output directory:
-
-```bash
-mkdir -p generated_bt/trees generated_bt/config
-
-PYTHONPATH=src uv run python -m lerobot_bt_python.bt_generation.generate \
-  --task make_sandwich \
-  --registry src/lerobot_bt_python/bt_generation/skills_registry.yaml \
-  --executor-yaml src/lerobot_bt_python/make_sandwich_executor.yaml \
-  --out-tree generated_bt/trees/generated_make_sandwich.xml \
-  --out-config generated_bt/config/generated_make_sandwich_bt.yaml
-```
-
-Recommended layout:
-
-```text
-generated_bt/
-  trees/
-    generated_make_sandwich.xml
-    generated_set_breakfast_table.xml
-    generated_make_coffee.xml
-    generated_prepare_picnic_bag.xml
-    generated_items_in_drawer.xml
-  config/
-    generated_make_sandwich_bt.yaml
-    generated_set_breakfast_table_bt.yaml
-    generated_make_coffee_bt.yaml
-    generated_prepare_picnic_bag_bt.yaml
-    generated_items_in_drawer_bt.yaml
-```
-
-`/tmp` is useful for quick testing. A repository-local folder is better when the
-generated BT must be inspected, committed, copied to another machine, or passed
-to the ROS 2 runner.
+`/tmp` is useful for quick testing. `generated_bt/` is preferred when the
+generated BT must be inspected, handed off, or passed to the ROS 2 runner.
 
 ### Runtime Generation Components
 
@@ -275,10 +287,10 @@ Generate `make_sandwich`:
 ```bash
 PYTHONPATH=src uv run python -m lerobot_bt_python.bt_generation.generate \
   --task make_sandwich \
+  --planner template \
   --registry src/lerobot_bt_python/bt_generation/skills_registry.yaml \
   --executor-yaml src/lerobot_bt_python/make_sandwich_executor.yaml \
-  --out-tree /tmp/generated_make_sandwich.xml \
-  --out-config /tmp/generated_make_sandwich_bt.yaml
+  --output-dir generated_bt
 ```
 
 Generate `set_breakfast_table`:
@@ -286,10 +298,10 @@ Generate `set_breakfast_table`:
 ```bash
 PYTHONPATH=src uv run python -m lerobot_bt_python.bt_generation.generate \
   --task set_breakfast_table \
+  --planner template \
   --registry src/lerobot_bt_python/bt_generation/skills_registry.yaml \
   --executor-yaml src/lerobot_bt_python/set_breakfast_table_executor.yaml \
-  --out-tree /tmp/generated_set_breakfast_table.xml \
-  --out-config /tmp/generated_set_breakfast_table_bt.yaml
+  --output-dir generated_bt
 ```
 
 Generate `make_coffee`:
@@ -297,10 +309,10 @@ Generate `make_coffee`:
 ```bash
 PYTHONPATH=src uv run python -m lerobot_bt_python.bt_generation.generate \
   --task make_coffee \
+  --planner template \
   --registry src/lerobot_bt_python/bt_generation/skills_registry.yaml \
   --executor-yaml src/lerobot_bt_python/make_coffee_executor.yaml \
-  --out-tree /tmp/generated_make_coffee.xml \
-  --out-config /tmp/generated_make_coffee_bt.yaml
+  --output-dir generated_bt
 ```
 
 Generate `prepare_picnic_bag`:
@@ -308,10 +320,10 @@ Generate `prepare_picnic_bag`:
 ```bash
 PYTHONPATH=src uv run python -m lerobot_bt_python.bt_generation.generate \
   --task prepare_picnic_bag \
+  --planner template \
   --registry src/lerobot_bt_python/bt_generation/skills_registry.yaml \
   --executor-yaml src/lerobot_bt_python/prepare_picnic_bag_executor.yaml \
-  --out-tree /tmp/generated_prepare_picnic_bag.xml \
-  --out-config /tmp/generated_prepare_picnic_bag_bt.yaml
+  --output-dir generated_bt
 ```
 
 Generate `items_in_drawer`:
@@ -319,17 +331,17 @@ Generate `items_in_drawer`:
 ```bash
 PYTHONPATH=src uv run python -m lerobot_bt_python.bt_generation.generate \
   --task items_in_drawer \
+  --planner template \
   --registry src/lerobot_bt_python/bt_generation/skills_registry.yaml \
   --executor-yaml src/lerobot_bt_python/items_in_drawer_executor.yaml \
-  --out-tree /tmp/generated_items_in_drawer.xml \
-  --out-config /tmp/generated_items_in_drawer_bt.yaml
+  --output-dir generated_bt
 ```
 
 Inspect generated files:
 
 ```bash
-cat /tmp/generated_make_sandwich.xml
-cat /tmp/generated_make_sandwich_bt.yaml
+cat generated_bt/trees/make_sandwich.xml
+cat generated_bt/config/make_sandwich_bt.yaml
 ```
 
 ### Offline Validation Without ROS 2
@@ -337,7 +349,7 @@ cat /tmp/generated_make_sandwich_bt.yaml
 Use this on a laptop without ROS 2, robot, cameras, RealSense, or VLM.
 
 ```bash
-PYTHONPATH=src PYTHON_BIN=python scripts/check_generated_bt_offline.sh
+PYTHONPATH=src PYTHON_BIN=python GENERATED_BT_DIR=generated_bt scripts/check_generated_bt_offline.sh
 ```
 
 The offline script validates:
@@ -570,14 +582,12 @@ uv run lerobot-bt-groot2
 Generate the task XML/YAML first. Example for `make_sandwich`:
 
 ```bash
-mkdir -p generated_bt/trees generated_bt/config
-
 PYTHONPATH=src uv run python -m lerobot_bt_python.bt_generation.generate \
   --task make_sandwich \
+  --planner template \
   --registry src/lerobot_bt_python/bt_generation/skills_registry.yaml \
   --executor-yaml src/lerobot_bt_python/make_sandwich_executor.yaml \
-  --out-tree generated_bt/trees/generated_make_sandwich.xml \
-  --out-config generated_bt/config/generated_make_sandwich_bt.yaml
+  --output-dir generated_bt
 ```
 
 Then pass the generated paths to the C++ runner or launch file, depending on the
@@ -587,8 +597,8 @@ Example pattern:
 
 ```bash
 ros2 launch lerobot_bt_runtime_cpp make_sandwich.launch.py \
-  tree_xml_path:=generated_bt/trees/generated_make_sandwich.xml \
-  bt_params_path:=generated_bt/config/generated_make_sandwich_bt.yaml
+  tree_xml_path:=generated_bt/trees/make_sandwich.xml \
+  bt_params_path:=generated_bt/config/make_sandwich_bt.yaml
 ```
 
 If the task launch file does not expose `tree_xml_path` or `bt_params_path`,
