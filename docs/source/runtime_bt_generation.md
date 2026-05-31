@@ -21,6 +21,97 @@ The v1 flow is deterministic:
 The VLM verifies scene state. It does not generate XML, choose the task order,
 or allocate work between robot and human.
 
+## Supported Static Tasks
+
+The template planner supports all current static BT tasks:
+
+| task_name | Static tree | Executor YAML |
+|---|---|---|
+| `make_sandwich` | `src/lerobot_bt_runtime_cpp/trees/make_sandwich.xml` | `src/lerobot_bt_python/make_sandwich_executor.yaml` |
+| `set_breakfast_table` | `src/lerobot_bt_runtime_cpp/trees/set_breakfast_table.xml` | `src/lerobot_bt_python/set_breakfast_table_executor.yaml` |
+| `make_coffee` | `src/lerobot_bt_runtime_cpp/trees/make_coffee.xml` | `src/lerobot_bt_python/make_coffee_executor.yaml` |
+| `prepare_picnic_bag` | `src/lerobot_bt_runtime_cpp/trees/prepare_picnic_bag.xml` | `src/lerobot_bt_python/prepare_picnic_bag_executor.yaml` |
+| `items_in_drawer` | `src/lerobot_bt_runtime_cpp/trees/items_in_drawer.xml` | `src/lerobot_bt_python/items_in_drawer_executor.yaml` |
+
+The registry uses concrete names from the static BT YAML profiles and executor
+YAML files. `DoSkill` leaves become `robot_skill`; human-operated
+`AwaitScene` leaves become `human_step`; pure visual checkpoints become
+`vlm_gate`.
+
+`items_in_drawer` intentionally keeps `insert_next_drawer_item` under
+`RetryUntilSuccessful`. The robot skill inserts the next object; if objects
+remain, the VLM can report failure and BehaviorTree.CPP retries the same leaf
+until the configured retry budget is exhausted or the VLM reports completion.
+
+## Model-response Planner Mode
+
+The default planner is still the deterministic template planner:
+
+```bash
+--planner template
+```
+
+An optional controlled planner mode can read a pre-generated model response:
+
+```bash
+--planner model-response
+--model-response-file tests/assets/vlm_planner/make_sandwich_valid.json
+```
+
+This mode does not call any external VLM or LLM API. The model response is a
+candidate Linear IR JSON object only. It must not contain BehaviorTree.CPP XML,
+Markdown explanations, free-form actions, invented skill names, or arbitrary
+human/robot assignments.
+
+The safe flow is:
+
+```text
+task_name + optional scene_facts/model_response
+  -> constrained model planner response
+  -> Linear IR candidate JSON
+  -> canonicalization
+  -> strict validation
+  -> existing XML/YAML renderer
+  -> static XML/YAML blackboard check
+  -> generated BT executed normally
+```
+
+The registry decides which names are `robot_skill`, `human_step`, and
+`vlm_gate`. The validator rejects unknown names and wrong kinds, such as
+`pour_ingredient` as a `robot_skill` or `place_first_toast` as a `human_step`.
+For `make_sandwich`, strict validation also requires `initial_scene_ready` at
+the start, `make_sandwich.task_complete` at the end, `second_toast_ready`
+before `place_second_toast`, and `ingredient_poured` after `pour_ingredient`
+when the human pouring step appears.
+
+Example:
+
+```bash
+PYTHONPATH=src python -m lerobot_bt_python.bt_generation.generate \
+  --task make_sandwich \
+  --planner model-response \
+  --model-response-file tests/assets/vlm_planner/make_sandwich_valid.json \
+  --registry src/lerobot_bt_python/bt_generation/skills_registry.yaml \
+  --executor-yaml src/lerobot_bt_python/make_sandwich_executor.yaml \
+  --out-tree /tmp/generated_make_sandwich_model.xml \
+  --out-config /tmp/generated_make_sandwich_model_bt.yaml
+```
+
+Keep the model-response planner and the runtime VLM verifier separate:
+
+```text
+Current VLM verifier:
+  input: one condition/check
+  output: STATUS + REASON
+
+Model-response planner mode:
+  input: task + registry + optional scene facts
+  output: Linear IR JSON candidate
+```
+
+The verifier still runs during BT execution through `DoSkill` and
+`AwaitScene`. The planner runs only once before the BT is generated.
+
 ## C++ Runtime Contract
 
 The active C++ runtime registers two merged BehaviorTree.CPP leaves:
@@ -38,9 +129,9 @@ pairs.
 Because `DoSkill` already waits for `GetSkillVerification`, generated BTs do
 not add robot `verify_after` gates by default. The CLI supports
 `--explicit-postcondition-gates` for manual experiments, but the safe default
-avoids duplicated verification after robot skills. Human steps still keep their
-`verify_after` gate because `HumanStep(pour_ingredient)` and
-`AwaitScene(ingredient_poured)` are separate intended phases.
+avoids duplicated verification after robot skills. The current static-task
+templates render human stages as one merged `AwaitScene` leaf, matching the
+hand-written XML files.
 
 ## Retry Policy
 
@@ -105,8 +196,8 @@ means that the human action is part of the task contract.
 
 The v1 intentionally avoids:
 
-- LLM planning
-- VLM-generated BTs
+- external LLM/VLM API calls
+- VLM-generated XML or BehaviorTree.CPP nodes
 - automatic human/robot allocation
 - fallback branches
 - `Parallel` nodes
@@ -135,8 +226,8 @@ To add a human step:
 2. Add a `human_steps` entry with a non-empty `instruction`.
 3. Point `verify_after` to an existing `vlm_gate`, or set it explicitly to
    `null`.
-4. Add the human step name to executor YAML `vlm_gate_tasks` because the
-   current runtime renders it as `AwaitScene`.
+4. Add the human step name to executor YAML `vlm_gate_tasks` when that file
+   declares gate tasks, because the current runtime renders it as `AwaitScene`.
 
 To add a VLM gate:
 
@@ -156,6 +247,31 @@ python -m lerobot_bt_python.bt_generation.generate \
   --executor-yaml src/lerobot_bt_python/make_sandwich_executor.yaml \
   --out-tree /tmp/generated_make_sandwich.xml \
   --out-config /tmp/generated_make_sandwich_bt.yaml
+```
+
+Generate the other static tasks by changing the task and executor YAML:
+
+```bash
+python -m lerobot_bt_python.bt_generation.generate \
+  --task make_coffee \
+  --registry src/lerobot_bt_python/bt_generation/skills_registry.yaml \
+  --executor-yaml src/lerobot_bt_python/make_coffee_executor.yaml \
+  --out-tree /tmp/generated_make_coffee.xml \
+  --out-config /tmp/generated_make_coffee_bt.yaml
+
+python -m lerobot_bt_python.bt_generation.generate \
+  --task prepare_picnic_bag \
+  --registry src/lerobot_bt_python/bt_generation/skills_registry.yaml \
+  --executor-yaml src/lerobot_bt_python/prepare_picnic_bag_executor.yaml \
+  --out-tree /tmp/generated_prepare_picnic_bag.xml \
+  --out-config /tmp/generated_prepare_picnic_bag_bt.yaml
+
+python -m lerobot_bt_python.bt_generation.generate \
+  --task items_in_drawer \
+  --registry src/lerobot_bt_python/bt_generation/skills_registry.yaml \
+  --executor-yaml src/lerobot_bt_python/items_in_drawer_executor.yaml \
+  --out-tree /tmp/generated_items_in_drawer.xml \
+  --out-config /tmp/generated_items_in_drawer_bt.yaml
 ```
 
 The CLI writes no outputs if registry or plan validation fails.
@@ -179,6 +295,18 @@ PYTHONPATH=src conda run -n lerobot python -m lerobot_bt_python.bt_generation.ge
   --executor-yaml src/lerobot_bt_python/make_sandwich_executor.yaml \
   --out-tree /tmp/generated_make_sandwich.xml \
   --out-config /tmp/generated_make_sandwich_bt.yaml
+```
+
+The offline helper generates and checks all five supported tasks:
+
+```text
+generated make_sandwich OK
+generated set_breakfast_table OK
+generated make_coffee OK
+generated prepare_picnic_bag OK
+generated items_in_drawer OK
+XML/YAML blackboard keys OK
+pytest OK
 ```
 
 Run the offline helper:
@@ -253,7 +381,8 @@ quality.
 - The current renderer uses existing `AwaitScene` for `human_step`.
 - The current `DoSkill` node is a merged action-plus-verification node, so
   robot `verify_after` gates are not rendered by default.
-- No LLM planner is included.
+- Model-response mode reads a pre-generated JSON response only; no live
+  external LLM/VLM API call is included.
 - No VLM-generated XML is accepted.
 - No automatic human fallback is emitted.
 - No `Parallel` nodes are emitted.

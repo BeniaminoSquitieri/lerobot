@@ -1,0 +1,8 @@
+{
+  "task_name": "make_sandwich",
+  "steps": [
+    {"kind": "vlm_gate", "name": "initial_scene_ready"},
+    {"kind": "robot_skill", "name": "grab_toast"},
+    {"kind": "vlm_gate", "name": "make_sandwich.task_complete"}
+  ]
+}

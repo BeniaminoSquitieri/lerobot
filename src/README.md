@@ -70,6 +70,83 @@ task name
 The generated BTs reproduce known task structures while avoiding manual
 XML/YAML duplication.
 
+### Supported Static Tasks
+
+The template planner supports all current static task profiles:
+
+```text
+make_sandwich
+set_breakfast_table
+make_coffee
+prepare_picnic_bag
+items_in_drawer
+```
+
+The generator uses concrete names from the static BT YAML files and executor
+YAML files. `robot_skill` steps render as `DoSkill`; `human_step` and
+`vlm_gate` steps render as `AwaitScene`.
+
+For `items_in_drawer`, `RetryUntilSuccessful` around
+`insert_next_drawer_item` is intentional. The robot inserts the next object; if
+objects remain, the VLM can report failure and the same skill is retried until
+the configured retry budget is exhausted or the VLM reports completion.
+
+### Model-response Planner Mode
+
+The default remains the deterministic template planner:
+
+```bash
+--planner template
+```
+
+The generator also supports a controlled model-response mode:
+
+```bash
+PYTHONPATH=src python -m lerobot_bt_python.bt_generation.generate \
+  --task make_sandwich \
+  --planner model-response \
+  --model-response-file tests/assets/vlm_planner/make_sandwich_valid.json \
+  --registry src/lerobot_bt_python/bt_generation/skills_registry.yaml \
+  --executor-yaml src/lerobot_bt_python/make_sandwich_executor.yaml \
+  --out-tree /tmp/generated_make_sandwich_model.xml \
+  --out-config /tmp/generated_make_sandwich_model_bt.yaml
+```
+
+This mode reads a pre-generated Linear IR JSON candidate from disk. It does not
+call an external VLM or LLM API, and the model never generates BehaviorTree.CPP
+XML.
+
+Safety boundary:
+
+```text
+model response JSON
+  -> parse JSON only
+  -> canonicalize safe whitespace and registered object aliases
+  -> strict validation against skills_registry.yaml
+  -> existing renderer writes XML/YAML
+  -> static blackboard check
+```
+
+The model cannot invent skills or decide freely what is human versus robotic.
+The registry owns the roles, the validator decides whether the plan is
+acceptable, and the renderer is the only component that emits XML/YAML. The BT
+is generated once at the beginning of the episode and then executed normally.
+
+Planner and verifier roles are intentionally separate:
+
+```text
+Current VLM verifier:
+  input: one condition/check
+  output: STATUS + REASON
+
+Model-response planner mode:
+  input: task + registry + optional scene facts
+  output: Linear IR JSON candidate
+```
+
+The verifier continues to run during BT execution through `DoSkill` and
+`AwaitScene`. The planner runs only before the BT exists.
+
 ### Generated BT Output Location
 
 Generated BT files are written wherever `--out-tree` and `--out-config` point.
@@ -112,9 +189,15 @@ generated_bt/
   trees/
     generated_make_sandwich.xml
     generated_set_breakfast_table.xml
+    generated_make_coffee.xml
+    generated_prepare_picnic_bag.xml
+    generated_items_in_drawer.xml
   config/
     generated_make_sandwich_bt.yaml
     generated_set_breakfast_table_bt.yaml
+    generated_make_coffee_bt.yaml
+    generated_prepare_picnic_bag_bt.yaml
+    generated_items_in_drawer_bt.yaml
 ```
 
 `/tmp` is useful for quick testing. A repository-local folder is better when the
@@ -127,6 +210,7 @@ to the ROS 2 runner.
 | ------------------------------------------------------ | ------------------------------------------------------------------------------------------------- |
 | `lerobot_bt_python/bt_generation/skills_registry.yaml` | Registry of known `robot_skill`, `human_step`, and `vlm_gate` entries.                            |
 | `lerobot_bt_python/bt_generation/planner.py`           | Deterministic template planner that creates a Linear IR from a known task name.                   |
+| `lerobot_bt_python/bt_generation/vlm_planner.py`       | Parser and canonicalizer for pre-generated model Linear IR JSON responses.                        |
 | `lerobot_bt_python/bt_generation/validator.py`         | Validates names, step kinds, retry values, timeouts, executor YAML alignment, and VLM gate tasks. |
 | `lerobot_bt_python/bt_generation/renderer.py`          | Renders BehaviorTree.CPP XML and BT parameter YAML.                                               |
 | `lerobot_bt_python/bt_generation/static_checks.py`     | Verifies generated XML blackboard keys are present in the generated YAML.                         |
@@ -149,7 +233,6 @@ Example from `make_sandwich`:
 initial_scene_ready          -> vlm_gate
 place_first_toast            -> robot_skill
 pour_ingredient              -> human_step
-ingredient_poured            -> vlm_gate
 second_toast_ready           -> vlm_gate
 place_second_toast           -> robot_skill
 make_sandwich.task_complete  -> vlm_gate
@@ -209,6 +292,39 @@ PYTHONPATH=src uv run python -m lerobot_bt_python.bt_generation.generate \
   --out-config /tmp/generated_set_breakfast_table_bt.yaml
 ```
 
+Generate `make_coffee`:
+
+```bash
+PYTHONPATH=src uv run python -m lerobot_bt_python.bt_generation.generate \
+  --task make_coffee \
+  --registry src/lerobot_bt_python/bt_generation/skills_registry.yaml \
+  --executor-yaml src/lerobot_bt_python/make_coffee_executor.yaml \
+  --out-tree /tmp/generated_make_coffee.xml \
+  --out-config /tmp/generated_make_coffee_bt.yaml
+```
+
+Generate `prepare_picnic_bag`:
+
+```bash
+PYTHONPATH=src uv run python -m lerobot_bt_python.bt_generation.generate \
+  --task prepare_picnic_bag \
+  --registry src/lerobot_bt_python/bt_generation/skills_registry.yaml \
+  --executor-yaml src/lerobot_bt_python/prepare_picnic_bag_executor.yaml \
+  --out-tree /tmp/generated_prepare_picnic_bag.xml \
+  --out-config /tmp/generated_prepare_picnic_bag_bt.yaml
+```
+
+Generate `items_in_drawer`:
+
+```bash
+PYTHONPATH=src uv run python -m lerobot_bt_python.bt_generation.generate \
+  --task items_in_drawer \
+  --registry src/lerobot_bt_python/bt_generation/skills_registry.yaml \
+  --executor-yaml src/lerobot_bt_python/items_in_drawer_executor.yaml \
+  --out-tree /tmp/generated_items_in_drawer.xml \
+  --out-config /tmp/generated_items_in_drawer_bt.yaml
+```
+
 Inspect generated files:
 
 ```bash
@@ -229,6 +345,10 @@ The offline script validates:
 ```text
 generated make_sandwich OK
 generated set_breakfast_table OK
+generated make_coffee OK
+generated prepare_picnic_bag OK
+generated items_in_drawer OK
+generated make_sandwich model-response OK
 XML/YAML blackboard keys OK
 pytest OK
 ```
@@ -332,7 +452,7 @@ Use it only to validate BT/ROS/VLM control contracts.
 The MVP intentionally does not support:
 
 ```text
-LLM planner
+external LLM/VLM API calls
 VLM-generated XML
 runtime hot-swap while the tree is ticking
 Parallel nodes
@@ -351,7 +471,7 @@ The current safe extension path is:
 3. fake ROS 2 integration
 4. real robot run
 5. optional VLM scene facts
-6. optional LLM/VLM planner that outputs Linear IR, not raw XML
+6. optional live LLM/VLM call that outputs Linear IR, not raw XML
 ```
 
 ## One-Time Setup

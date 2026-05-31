@@ -26,13 +26,27 @@ FORBIDDEN_STEP_KINDS = {
     "raw_xml",
     "condition",
 }
-FORBIDDEN_STEP_FIELDS = {"fallback", "parallel", "human_fallback", "raw_xml", "condition"}
+FORBIDDEN_STEP_FIELDS = {
+    "action",
+    "condition",
+    "explanation",
+    "fallback",
+    "free_text",
+    "human_fallback",
+    "parallel",
+    "raw_xml",
+    "xml",
+}
+STRICT_ALLOWED_PLAN_FIELDS = {"task_name", "steps"}
+STRICT_ALLOWED_STEP_FIELDS = {"kind", "name", "object", "objects"}
 
 
 def validate_linear_plan(
     plan: dict,
     registry: Registry,
     executor_yaml_path: Path | None = None,
+    *,
+    strict_generated: bool = False,
 ) -> list[str]:
     """Return all plan validation errors; an empty list means valid."""
 
@@ -41,8 +55,14 @@ def validate_linear_plan(
 
     if not isinstance(plan, dict):
         return ["plan must be a dictionary."]
+    if strict_generated:
+        unexpected_plan_fields = sorted(set(plan) - STRICT_ALLOWED_PLAN_FIELDS)
+        if unexpected_plan_fields:
+            errors.append(f"plan contains unsupported strict fields {unexpected_plan_fields}.")
     if not plan.get("task_name"):
         errors.append("plan.task_name must be present and non-empty.")
+    elif strict_generated and not isinstance(plan.get("task_name"), str):
+        errors.append("plan.task_name must be a string.")
 
     steps = plan.get("steps")
     if not isinstance(steps, list) or not steps:
@@ -53,6 +73,13 @@ def validate_linear_plan(
         if not isinstance(step, dict):
             errors.append(f"plan.steps[{index}] must be a dictionary.")
             continue
+        if strict_generated:
+            unexpected_fields = sorted(set(step) - STRICT_ALLOWED_STEP_FIELDS)
+            if unexpected_fields:
+                errors.append(
+                    f"plan.steps[{index}] contains unsupported strict fields "
+                    f"{unexpected_fields}."
+                )
         forbidden_fields = sorted(FORBIDDEN_STEP_FIELDS.intersection(step))
         if forbidden_fields:
             errors.append(f"plan.steps[{index}] contains forbidden fields {forbidden_fields}.")
@@ -86,8 +113,13 @@ def validate_linear_plan(
             errors.extend(_validate_human_step(entry, executor_context))
         elif kind == VLM_GATE:
             errors.extend(_validate_vlm_gate(entry, executor_context))
+        if strict_generated:
+            errors.extend(_validate_step_object(step, registry, index))
 
-    errors.extend(_validate_verify_after_adjacency(steps, registry))
+    if not strict_generated:
+        errors.extend(_validate_verify_after_adjacency(steps, registry))
+    if strict_generated:
+        errors.extend(_validate_make_sandwich_strict_rules(plan, steps))
     return errors
 
 
@@ -126,7 +158,10 @@ def _validate_robot_skill(entry: RegistryEntry, executor_context: dict[str, Any]
                 f"robot_skill {entry.name!r} is not listed in executor YAML skills or "
                 "expected_skill_names."
             )
-        if entry.name in executor_context["vlm_gate_tasks"] and entry.name not in executor_context["skill_names"]:
+        if (
+            entry.name in executor_context["vlm_gate_tasks"]
+            and entry.name not in executor_context["skill_names"]
+        ):
             errors.append(f"robot_skill {entry.name!r} appears only as a VLM gate/manual task.")
     return errors
 
@@ -166,6 +201,110 @@ def _validate_runtime_bounds(entry: RegistryEntry) -> list[str]:
             f"{INFINITE_RETRY_ATTEMPTS} for infinite retries or a positive integer."
         )
     return errors
+
+
+def _validate_step_object(step: dict[str, Any], registry: Registry, index: int) -> list[str]:
+    errors: list[str] = []
+    name = step.get("name")
+    object_values: list[Any] = []
+
+    if "object" in step:
+        object_value = step["object"]
+        if not isinstance(object_value, str) or not object_value.strip():
+            errors.append(f"plan.steps[{index}].object must be a non-empty string.")
+        else:
+            object_values.append(object_value)
+
+    if "objects" in step:
+        objects_value = step["objects"]
+        if not isinstance(objects_value, list) or not objects_value:
+            errors.append(f"plan.steps[{index}].objects must be a non-empty list.")
+        else:
+            for obj in objects_value:
+                if not isinstance(obj, str) or not obj.strip():
+                    errors.append(f"plan.steps[{index}].objects entries must be non-empty strings.")
+                else:
+                    object_values.append(obj)
+
+    for raw_object in object_values:
+        canonical_name = raw_object.strip()
+        obj = registry.objects.get(canonical_name)
+        if obj is None:
+            errors.append(f"plan.steps[{index}] object {canonical_name!r} is not registered.")
+            continue
+        if isinstance(name, str) and obj.allowed_for and name not in obj.allowed_for:
+            errors.append(
+                f"plan.steps[{index}] object {canonical_name!r} is not allowed for step "
+                f"{name!r}."
+            )
+
+    return errors
+
+
+def _validate_make_sandwich_strict_rules(plan: dict, steps: list[Any]) -> list[str]:
+    if plan.get("task_name") != "make_sandwich":
+        return []
+
+    errors: list[str] = []
+    initial_step = {"kind": VLM_GATE, "name": "initial_scene_ready"}
+    final_step = {"kind": VLM_GATE, "name": "make_sandwich.task_complete"}
+    if steps[0] != initial_step:
+        errors.append("make_sandwich must start with vlm_gate 'initial_scene_ready'.")
+    if steps[-1] != final_step:
+        errors.append("make_sandwich must finish with vlm_gate 'make_sandwich.task_complete'.")
+
+    normalized_steps = [
+        step
+        for step in steps
+        if isinstance(step, dict)
+        and step.get("kind") in ALLOWED_KINDS
+        and isinstance(step.get("name"), str)
+    ]
+    for index, step in enumerate(normalized_steps):
+        kind = step["kind"]
+        name = step["name"]
+        if name == "pour_ingredient" and kind != HUMAN_STEP:
+            errors.append("make_sandwich step 'pour_ingredient' must be a human_step.")
+        if name == "place_first_toast" and kind != ROBOT_SKILL:
+            errors.append("make_sandwich step 'place_first_toast' must be a robot_skill.")
+        if name == "place_second_toast" and kind != ROBOT_SKILL:
+            errors.append("make_sandwich step 'place_second_toast' must be a robot_skill.")
+        if name == "place_second_toast" and not _has_prior_gate(
+            normalized_steps,
+            index,
+            "second_toast_ready",
+        ):
+            errors.append(
+                "make_sandwich robot_skill 'place_second_toast' must be preceded by "
+                "vlm_gate 'second_toast_ready'."
+            )
+        if name == "pour_ingredient" and not _has_later_gate_before_task_end(
+            normalized_steps,
+            index,
+            "ingredient_poured",
+        ):
+            errors.append(
+                "make_sandwich human_step 'pour_ingredient' must be followed later by "
+                "vlm_gate 'ingredient_poured' before task completion."
+            )
+
+    return errors
+
+
+def _has_prior_gate(steps: list[dict[str, Any]], before_index: int, name: str) -> bool:
+    return any(
+        step.get("kind") == VLM_GATE and step.get("name") == name
+        for step in steps[:before_index]
+    )
+
+
+def _has_later_gate_before_task_end(steps: list[dict[str, Any]], after_index: int, name: str) -> bool:
+    for step in steps[after_index + 1 :]:
+        if step.get("kind") == VLM_GATE and step.get("name") == "make_sandwich.task_complete":
+            return False
+        if step.get("kind") == VLM_GATE and step.get("name") == name:
+            return True
+    return False
 
 
 def _validate_verify_after_adjacency(steps: list[Any], registry: Registry) -> list[str]:

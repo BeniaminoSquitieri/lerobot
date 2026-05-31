@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
@@ -43,6 +43,15 @@ class RegistryEntry:
 
 
 @dataclass(frozen=True)
+class RegistryObject:
+    """Optional object aliases accepted in model-proposed Linear IR."""
+
+    canonical_name: str
+    aliases: tuple[str, ...] = ()
+    allowed_for: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True)
 class Registry:
     """Validated registry grouped by generation kind."""
 
@@ -50,6 +59,7 @@ class Registry:
     robot_skills: dict[str, RegistryEntry]
     human_steps: dict[str, RegistryEntry]
     vlm_gates: dict[str, RegistryEntry]
+    objects: dict[str, RegistryObject] = field(default_factory=dict)
 
     def items_for_kind(self, kind: str) -> dict[str, RegistryEntry]:
         if kind == ROBOT_SKILL:
@@ -83,6 +93,15 @@ class Registry:
             *self.vlm_gates.values(),
         ]
 
+    @property
+    def all_object_aliases(self) -> dict[str, str]:
+        aliases: dict[str, str] = {}
+        for obj in self.objects.values():
+            aliases[obj.canonical_name] = obj.canonical_name
+            for alias in obj.aliases:
+                aliases[alias] = obj.canonical_name
+        return aliases
+
 
 def load_registry(path: Path | str) -> Registry:
     """Load a registry YAML file without silently inventing entries."""
@@ -102,6 +121,7 @@ def registry_from_dict(data: dict[str, Any]) -> Registry:
         robot_skills=_entries_from_section(data.get("robot_skills", []), ROBOT_SKILL),
         human_steps=_entries_from_section(data.get("human_steps", []), HUMAN_STEP),
         vlm_gates=_entries_from_section(data.get("vlm_gates", []), VLM_GATE),
+        objects=_objects_from_section(data.get("objects", [])),
     )
 
 
@@ -146,6 +166,7 @@ def validate_registry(registry: Registry) -> list[str]:
         if not entry.task.strip():
             errors.append(f"vlm_gate {entry.name!r} must have a non-empty task.")
 
+    errors.extend(_validate_objects(registry))
     return errors
 
 
@@ -179,6 +200,36 @@ def _entries_from_section(raw_entries: Any, expected_kind: str) -> dict[str, Reg
     return entries
 
 
+def _objects_from_section(raw_objects: Any) -> dict[str, RegistryObject]:
+    if raw_objects is None:
+        raw_objects = []
+    if not isinstance(raw_objects, list):
+        raise ValueError("objects section must be a list.")
+
+    objects: dict[str, RegistryObject] = {}
+    for raw in raw_objects:
+        if not isinstance(raw, dict):
+            raise ValueError("objects entry must be a mapping.")
+
+        canonical_name = str(raw.get("canonical_name", "")).strip()
+        aliases = raw.get("aliases", []) or []
+        allowed_for = raw.get("allowed_for", []) or []
+        if not isinstance(aliases, list):
+            raise ValueError(f"object {canonical_name!r} aliases must be a list.")
+        if not isinstance(allowed_for, list):
+            raise ValueError(f"object {canonical_name!r} allowed_for must be a list.")
+        if canonical_name in objects:
+            raise ValueError(f"Duplicate object registry entry {canonical_name!r}.")
+
+        objects[canonical_name] = RegistryObject(
+            canonical_name=canonical_name,
+            aliases=tuple(str(alias).strip() for alias in aliases),
+            allowed_for=tuple(str(name).strip() for name in allowed_for),
+        )
+
+    return objects
+
+
 def _validate_common_entry(entry: RegistryEntry) -> list[str]:
     errors: list[str] = []
     if not entry.name:
@@ -197,4 +248,37 @@ def _validate_common_entry(entry: RegistryEntry) -> list[str]:
             f"{entry.kind} {entry.name!r} max_attempts must be "
             f"{INFINITE_RETRY_ATTEMPTS} for infinite retries or a positive integer."
         )
+    return errors
+
+
+def _validate_objects(registry: Registry) -> list[str]:
+    errors: list[str] = []
+    alias_owners: dict[str, str] = {}
+    for obj in registry.objects.values():
+        if not obj.canonical_name:
+            errors.append("object entry has an empty canonical_name.")
+            continue
+        if not obj.allowed_for:
+            errors.append(f"object {obj.canonical_name!r} must declare allowed_for.")
+
+        for name in obj.allowed_for:
+            if not name:
+                errors.append(f"object {obj.canonical_name!r} has an empty allowed_for entry.")
+            elif registry.kind_for_name(name) is None:
+                errors.append(
+                    f"object {obj.canonical_name!r} allowed_for points to unknown step {name!r}."
+                )
+
+        for alias in (obj.canonical_name, *obj.aliases):
+            if not alias:
+                errors.append(f"object {obj.canonical_name!r} has an empty alias.")
+                continue
+            previous = alias_owners.get(alias)
+            if previous is not None and previous != obj.canonical_name:
+                errors.append(
+                    f"object alias {alias!r} is used by both {previous!r} and "
+                    f"{obj.canonical_name!r}."
+                )
+            alias_owners[alias] = obj.canonical_name
+
     return errors
