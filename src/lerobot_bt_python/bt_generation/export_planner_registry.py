@@ -66,8 +66,6 @@ def build_planner_registry_payload(task_name: str, registry) -> dict:
             }
             for obj in registry.objects.values()
         ]
-    if hasattr(registry, "aliases") and registry.aliases:
-        payload["aliases"] = registry.aliases
     return payload
 
 def main():
