@@ -164,6 +164,8 @@ The `ros-service` planner mode enables live integration with a remote `panda_liv
 - The service request does not carry images; the VLM server already receives camera streams over ROS.
 - The planner and verifier are separate protocols. The planner runs once before BT execution; the verifier runs during execution.
 - The VLM should follow `canonical_task_sequence`; `lerobot` rejects returned order mismatches.
+- `generate_and_run` generates the BT once before starting the runner; it does
+  not hot-swap or replan while the BT is ticking.
 - If the ROS service is unavailable or returns an error, the CLI fails with a clear message.
 - Normal pytest and offline scripts do not require ROS2 and remain functional.
 
@@ -179,6 +181,49 @@ PYTHONPATH=src python -m lerobot_bt_python.bt_generation.generate \
 ```
 
 This writes the validated Linear IR to `generated_bt/plans/make_sandwich_linear_ir.json`, XML to `generated_bt/trees/make_sandwich.xml`, YAML to `generated_bt/config/make_sandwich_bt.yaml`, and the raw plan response to `generated_bt/raw_model_responses/make_sandwich_raw_response.json`.
+
+### Generate And Run
+
+Use `generate` when you only want artifacts:
+
+```bash
+PYTHONPATH=src python -m lerobot_bt_python.bt_generation.generate \
+  --task make_sandwich \
+  --planner ros-service \
+  --registry src/lerobot_bt_python/bt_generation/skills_registry.yaml \
+  --executor-yaml src/lerobot_bt_python/make_sandwich_executor.yaml \
+  --output-dir generated_bt
+```
+
+Use `generate_and_run` when the Python skill server and `panda_live_viewer`/VLM
+planning service are already running and you want to start the existing C++
+BehaviorTree.CPP runner immediately after generation:
+
+```bash
+PYTHONPATH=src python -m lerobot_bt_python.bt_generation.generate_and_run \
+  --task make_sandwich \
+  --planner ros-service \
+  --registry src/lerobot_bt_python/bt_generation/skills_registry.yaml \
+  --executor-yaml src/lerobot_bt_python/make_sandwich_executor.yaml \
+  --output-dir generated_bt
+```
+
+The command first generates and validates the Linear IR, XML, and YAML under
+`generated_bt/`, then runs:
+
+```bash
+ros2 run lerobot_bt_runtime_cpp lerobot_bt_runner \
+  --ros-args \
+  --params-file generated_bt/config/make_sandwich_bt.yaml \
+  -p tree_xml_path:=generated_bt/trees/make_sandwich.xml
+```
+
+For a dry run that does not require ROS2, add `--no-run`. It still generates
+the BT once, verifies the generated files exist, and prints the runner command.
+
+`generate_and_run` does not start the Python skill server, does not start
+`panda_live_viewer`, does not regenerate the BT during execution, and does not
+perform runtime replanning.
 
 ## Generated Output Directory
 
@@ -340,10 +385,21 @@ To add a VLM gate:
 
 ## CLI
 
-Example using the preferred visible output directory:
+Generate only, using the preferred visible output directory:
 
 ```bash
 PYTHONPATH=src python -m lerobot_bt_python.bt_generation.generate \
+  --task make_sandwich \
+  --planner template \
+  --registry src/lerobot_bt_python/bt_generation/skills_registry.yaml \
+  --executor-yaml src/lerobot_bt_python/make_sandwich_executor.yaml \
+  --output-dir generated_bt
+```
+
+Generate and run with the existing C++ runner:
+
+```bash
+PYTHONPATH=src python -m lerobot_bt_python.bt_generation.generate_and_run \
   --task make_sandwich \
   --planner template \
   --registry src/lerobot_bt_python/bt_generation/skills_registry.yaml \

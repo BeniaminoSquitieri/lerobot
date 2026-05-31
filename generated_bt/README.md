@@ -20,6 +20,11 @@ that includes `canonical_task_sequence` and `ordering_constraints`. The remote
 VLM server should return Linear IR JSON following that sequence; `lerobot`
 validates the returned order before writing XML/YAML.
 
+`lerobot_bt_python.bt_generation.generate_and_run` uses these generated
+`trees/` and `config/` files to launch the existing C++ BehaviorTree.CPP runner.
+It generates the BT once before execution; it does not hot-swap or replan while
+the tree is ticking.
+
 Generated files should generally not be committed unless they are intentionally
 being added as fixtures or examples. The repository keeps this README and the
 empty folders, while normal generated artifacts are ignored by git.

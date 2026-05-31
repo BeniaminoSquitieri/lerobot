@@ -195,6 +195,37 @@ registry payload containing `canonical_task_sequence` and
 ROS, but it still returns Linear IR JSON only. `lerobot` validates the returned
 order and compiles accepted plans to XML/YAML.
 
+### Generate And Run
+
+Use `generate` when you only want artifacts:
+
+```bash
+PYTHONPATH=src python -m lerobot_bt_python.bt_generation.generate \
+  --task make_sandwich \
+  --planner ros-service \
+  --registry src/lerobot_bt_python/bt_generation/skills_registry.yaml \
+  --executor-yaml src/lerobot_bt_python/make_sandwich_executor.yaml \
+  --output-dir generated_bt
+```
+
+Use `generate_and_run` when the Python skill server and `panda_live_viewer`/VLM
+planning service are already running:
+
+```bash
+PYTHONPATH=src python -m lerobot_bt_python.bt_generation.generate_and_run \
+  --task make_sandwich \
+  --planner ros-service \
+  --registry src/lerobot_bt_python/bt_generation/skills_registry.yaml \
+  --executor-yaml src/lerobot_bt_python/make_sandwich_executor.yaml \
+  --output-dir generated_bt
+```
+
+This generates the BT once, saves XML/YAML under `generated_bt/`, and then runs
+the existing C++ runner against those generated files. It does not start the
+skill server, does not start `panda_live_viewer`, does not hot-swap the BT, and
+does not do runtime replanning. Add `--no-run` to print the runner command
+without starting ROS2.
+
 ### Generated BT Output Location
 
 The preferred visible output folder is repository-local:
@@ -259,6 +290,7 @@ generated BT must be inspected, handed off, or passed to the ROS 2 runner.
 | `lerobot_bt_python/bt_generation/renderer.py`          | Renders BehaviorTree.CPP XML and BT parameter YAML.                                               |
 | `lerobot_bt_python/bt_generation/static_checks.py`     | Verifies generated XML blackboard keys are present in the generated YAML.                         |
 | `lerobot_bt_python/bt_generation/generate.py`          | CLI entry point for generating XML/YAML.                                                          |
+| `lerobot_bt_python/bt_generation/generate_and_run.py`  | Generates XML/YAML once, then runs the existing C++ BehaviorTree.CPP runner.                      |
 | `lerobot_bt_python/fakes/fake_bt_executor_server.py`   | Fake ROS 2 server for testing generated BTs without robot, camera, policy, or VLM.                |
 
 ### Step Kinds
@@ -636,6 +668,22 @@ ros2 launch lerobot_bt_runtime_cpp make_sandwich.launch.py \
 If the task launch file does not expose `tree_xml_path` or `bt_params_path`,
 use the runner executable or update the launch file to forward those parameters.
 
+For the normal live planner path, `generate_and_run` performs the generate step
+and then launches the existing C++ runner directly:
+
+```bash
+PYTHONPATH=src uv run python -m lerobot_bt_python.bt_generation.generate_and_run \
+  --task make_sandwich \
+  --planner ros-service \
+  --registry src/lerobot_bt_python/bt_generation/skills_registry.yaml \
+  --executor-yaml src/lerobot_bt_python/make_sandwich_executor.yaml \
+  --output-dir generated_bt
+```
+
+The Python skill server and `panda_live_viewer`/VLM service must already be
+running. Use `--no-run` to generate the files and print the exact `ros2 run`
+command without starting the runner.
+
 ## Run Another Task
 
 Set the task name and use the matching Python executor YAML and C++ launch
@@ -737,7 +785,7 @@ uv run pytest tests -svv --maxfail=10
 Run generated BT offline validation without ROS 2:
 
 ```bash
-PYTHONPATH=src PYTHON_BIN=python scripts/check_generated_bt_offline.sh
+PYTHONPATH=src PYTHON_BIN=python GENERATED_BT_DIR=generated_bt scripts/check_generated_bt_offline.sh
 ```
 
 When dependencies are unavailable, at least syntax-check the BT Python files:
