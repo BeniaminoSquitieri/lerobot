@@ -21,9 +21,26 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--task", required=True, help="Known deterministic task name.")
     parser.add_argument(
         "--planner",
-        choices=("template", "model-response"),
+        choices=("template", "model-response", "ros-service"),
         default="template",
-        help="Planner source. template is deterministic; model-response reads Linear IR JSON.",
+        help="Planner source. template is deterministic; model-response reads Linear IR JSON; ros-service queries a ROS2 planning service.",
+    )
+    parser.add_argument(
+        "--plan-service-name",
+        type=str,
+        default="/lerobot_bt/generate_plan",
+        help="ROS2 service name for ros-service planner mode.",
+    )
+    parser.add_argument(
+        "--plan-service-timeout-s",
+        type=float,
+        default=30.0,
+        help="Timeout (seconds) for ROS2 planning service.",
+    )
+    parser.add_argument(
+        "--scene-facts-file",
+        type=Path,
+        help="Optional JSON file with scene facts for planning.",
     )
     parser.add_argument(
         "--model-response-file",
@@ -79,6 +96,43 @@ def main(argv: list[str] | None = None) -> int:
                 else:
                     model_response_text = args.model_response_file.read_text(encoding="utf-8")
                     raw_response_output_path = _raw_response_output_path(args, model_response_text)
+                    plan = canonicalize_plan(parse_planner_response(model_response_text), registry)
+                    if plan["task_name"] != args.task:
+                        errors.append(
+                            f"Planner response task_name {plan['task_name']!r} does not match requested "
+                            f"task_name {args.task!r}."
+                        )
+                    else:
+                        errors.extend(
+                            validate_linear_plan(
+                                plan,
+                                registry,
+                                args.executor_yaml,
+                                strict_generated=True,
+                            )
+                        )
+            elif args.planner == "ros-service":
+                # Build planner registry payload
+                from .export_planner_registry import build_planner_registry_payload
+                from .ros_plan_client import request_plan_from_ros_service
+                planner_registry_payload = build_planner_registry_payload(args.task, registry)
+                scene_facts = None
+                if args.scene_facts_file is not None:
+                    scene_facts = json.loads(args.scene_facts_file.read_text(encoding="utf-8"))
+                # Call ROS service
+                try:
+                    model_response_text = request_plan_from_ros_service(
+                        args.task,
+                        planner_registry_payload,
+                        service_name=args.plan_service_name,
+                        scene_facts=scene_facts,
+                        timeout_s=args.plan_service_timeout_s,
+                    )
+                except Exception as exc:
+                    errors.append(str(exc))
+                    plan = None
+                else:
+                    raw_response_output_path = _raw_response_output_path(args, model_response_text or "")
                     plan = canonicalize_plan(parse_planner_response(model_response_text), registry)
                     if plan["task_name"] != args.task:
                         errors.append(
@@ -159,13 +213,13 @@ def _resolve_tree_config_paths(args: argparse.Namespace) -> tuple[Path | None, P
 
 
 def _plan_output_path(args: argparse.Namespace) -> Path | None:
-    if args.output_dir is None or args.planner != "model-response":
+    if args.output_dir is None or args.planner not in ("model-response", "ros-service"):
         return None
     return args.output_dir / "plans" / f"{args.task}_linear_ir.json"
 
 
 def _raw_response_output_path(args: argparse.Namespace, model_response_text: str) -> Path | None:
-    if args.output_dir is None or args.planner != "model-response":
+    if args.output_dir is None or args.planner not in ("model-response", "ros-service"):
         return None
 
     suffix = ".json" if _is_json_document(model_response_text) else ".txt"

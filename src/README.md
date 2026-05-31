@@ -77,7 +77,17 @@ task name
   -> BehaviorTree.CPP runner
 ```
 
-The optional `model-response` planner starts from a pre-generated Linear IR JSON
+### Planner Modes
+
+- `template`: deterministic, offline, no external dependencies
+- `model-response`: reads a pre-generated Linear IR JSON
+- `ros-service`: queries a remote VLM planner over ROS2 (now implemented)
+
+#### ROS-service Planner Mode
+
+The `ros-service` planner mode enables live integration with a remote VLM server (e.g., `panda_live_viewer`) over ROS2. It sends the task name, a filtered planner registry payload, and optional scene facts to the service (default `/lerobot_bt/generate_plan`). The remote server returns a Linear IR JSON plan, which is strictly validated and compiled to XML/YAML. The raw plan response is saved for inspection. This mode is fully implemented and available in the CLI.
+
+The planner and verifier protocols are separate: planning occurs once before BT execution, while the verifier runs during execution.
 candidate instead of the deterministic template. The same `lerobot` validation,
 rendering, and static blackboard checks still decide whether it is accepted.
 

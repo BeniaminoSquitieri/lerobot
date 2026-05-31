@@ -113,37 +113,50 @@ This writes the validated Linear IR to
 `generated_bt/config/make_sandwich_bt.yaml`, and the raw response to
 `generated_bt/raw_model_responses/make_sandwich_raw_response.json`.
 
+
 ### ROS-service Planner Mode
 
-`ros-service` is the intended live integration path with `panda_live_viewer`,
-but it is not implemented in this repository yet. The intended contract is:
+The `ros-service` planner mode enables live integration with a remote `panda_live_viewer` or VLM server over ROS2. This mode is now implemented and available in the CLI:
 
-```text
-lerobot
-  -> asks a remote panda_live_viewer/VLM ROS service for Linear IR JSON
-  -> validates and canonicalizes that JSON
-  -> renders BehaviorTree.CPP XML/YAML
-  -> executes the generated BT normally
+```bash
+--planner ros-service
+--plan-service-name /lerobot_bt/generate_plan
+--plan-service-timeout-s 30.0
+--scene-facts-file optional_scene_facts.json
 ```
 
-The VLM server may already receive camera images over ROS. It still returns
-Linear IR JSON only; `lerobot` remains the component that validates and
-compiles BT artifacts.
+**Flow:**
 
-Keep the model-response planner and the runtime VLM verifier separate:
+1. `lerobot` loads and validates the registry.
+2. Builds a filtered planner registry payload for the requested task.
+3. Calls the ROS2 service (default `/lerobot_bt/generate_plan`) with:
+    - `task_name`
+    - `planner_registry_json`
+    - optional `scene_facts_json`
+4. The remote VLM server (e.g., `panda_live_viewer`) returns a Linear IR JSON plan in `plan_json`.
+5. `lerobot` validates, canonicalizes, and compiles the plan to XML/YAML.
+6. All strict validation and executor checks are enforced (no bypass).
+7. The raw plan response is saved to `generated_bt/raw_model_responses/` if `--output-dir` is used.
+8. The verifier protocol remains separate and is used only during BT execution.
 
-```text
-Current VLM verifier:
-  input: one condition/check
-  output: STATUS + REASON
+**Notes:**
+- The service request does not carry images; the VLM server already receives camera streams over ROS.
+- The planner and verifier are separate protocols. The planner runs once before BT execution; the verifier runs during execution.
+- If the ROS service is unavailable or returns an error, the CLI fails with a clear message.
+- Normal pytest and offline scripts do not require ROS2 and remain functional.
 
-Model-response planner mode:
-  input: task + registry + optional scene facts
-  output: Linear IR JSON candidate
+**Example:**
+
+```bash
+PYTHONPATH=src python -m lerobot_bt_python.bt_generation.generate \
+  --task make_sandwich \
+  --planner ros-service \
+  --registry src/lerobot_bt_python/bt_generation/skills_registry.yaml \
+  --executor-yaml src/lerobot_bt_python/make_sandwich_executor.yaml \
+  --output-dir generated_bt
 ```
 
-The verifier still runs during BT execution through `DoSkill` and
-`AwaitScene`. The planner runs only once before the BT is generated.
+This writes the validated Linear IR to `generated_bt/plans/make_sandwich_linear_ir.json`, XML to `generated_bt/trees/make_sandwich.xml`, YAML to `generated_bt/config/make_sandwich_bt.yaml`, and the raw plan response to `generated_bt/raw_model_responses/make_sandwich_raw_response.json`.
 
 ## Generated Output Directory
 

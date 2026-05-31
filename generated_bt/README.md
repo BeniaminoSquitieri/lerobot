@@ -14,7 +14,8 @@ Directory layout:
 - `raw_model_responses/`: optional raw planner responses from model-response or
   future ROS-service planner modes, useful for debugging.
 
-Do not store secrets or huge logs in `raw_model_responses/`.
+
+When using the `ros-service` planner mode, raw plan responses from the remote VLM server are saved in `raw_model_responses/` for debugging and inspection. This mode is now implemented and available in the CLI.
 
 Generated files should generally not be committed unless they are intentionally
 being added as fixtures or examples. The repository keeps this README and the

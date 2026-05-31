@@ -12,6 +12,7 @@ TASK_TEMPLATES: dict[str, list[dict[str, str]]] = {
         {"kind": VLM_GATE, "name": "initial_scene_ready"},
         {"kind": ROBOT_SKILL, "name": "place_first_toast"},
         {"kind": HUMAN_STEP, "name": "pour_ingredient"},
+        {"kind": VLM_GATE, "name": "ingredient_poured"},
         {"kind": VLM_GATE, "name": "second_toast_ready"},
         {"kind": ROBOT_SKILL, "name": "place_second_toast"},
         {"kind": VLM_GATE, "name": "make_sandwich.task_complete"},

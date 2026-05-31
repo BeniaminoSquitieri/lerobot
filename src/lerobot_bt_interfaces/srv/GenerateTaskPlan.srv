@@ -1,0 +1,7 @@
+string task_name
+string planner_registry_json
+string scene_facts_json
+---
+bool success
+string plan_json
+string error_message

@@ -63,7 +63,7 @@ def test_yaml_is_parseable_and_contains_all_step_params() -> None:
     assert bt_params["pour_ingredient_gate"] == "pour_ingredient"
     assert bt_params["pour_ingredient_instruction"]
     assert bt_params["initial_scene_ready_gate"] == "initial_scene_ready"
-    assert "ingredient_poured_gate" not in bt_params
+    assert bt_params["ingredient_poured_gate"] == "ingredient_poured"
     assert "first_toast_placed_gate" not in bt_params
 
 
