@@ -39,6 +39,27 @@ git switch after_lorenzo_meeting
 If your checkout is nested under `lerobot/panda_live_viewer`, use that path
 instead.
 
+## Known Contract Checks Before Robot
+
+Run these checks before moving from laptop/service tests to any robot execution:
+
+- `registry_contract_hash` is stable and excludes derived hash fields; its
+  schema-version semantics are covered by
+  `tests/lerobot_bt/test_export_planner_registry.py`.
+- `panda_live_viewer` rejects extra Linear IR step fields such as `confidence`
+  or `reason`; only `kind`, `name`, `object`, and `objects` are accepted before
+  `lerobot` performs final validation.
+- `WAIT_HUMAN` support is not present in current `lerobot`
+  `GetSkillVerification` runtime: the Python verifier and C++ polling node use
+  `RUNNING`, `SUCCESS`, and `FAILURE`. Panda may publish `WAIT_HUMAN` only if
+  the request explicitly includes it in `allowed_statuses`; otherwise it maps
+  the verdict to `RUNNING` and prefixes the message with `WAIT_HUMAN: `.
+- The Panda dry-run planning service is tested without model load:
+  `build_generate_plan_response(..., dry_run=True)` must not call the VLM
+  backend, and `lazy_load_model=True` must not call `load_model` in node init.
+- `generate_and_run --planner ros-service --no-run` must produce plan, tree,
+  config, and manifest artifacts.
+
 ## Test A - Offline LeRobot Template
 
 Purpose: validates deterministic `lerobot` template planning, rendering,
@@ -240,6 +261,7 @@ wrote manifest: generated_bt/manifests/make_sandwich_manifest.json
 generated plan: generated_bt/plans/make_sandwich_linear_ir.json
 generated tree: generated_bt/trees/make_sandwich.xml
 generated config: generated_bt/config/make_sandwich_bt.yaml
+generated manifest: generated_bt/manifests/make_sandwich_manifest.json
 runner command: ros2 run lerobot_bt_runtime_cpp lerobot_bt_runner ...
 ```
 

@@ -9,7 +9,10 @@ from pathlib import Path
 
 import pytest
 
-from lerobot_bt_python.bt_generation.export_planner_registry import build_planner_registry_payload
+from lerobot_bt_python.bt_generation.export_planner_registry import (
+    DERIVED_CONTRACT_FIELDS,
+    build_planner_registry_payload,
+)
 from lerobot_bt_python.bt_generation.manifest import sha256_text
 from lerobot_bt_python.bt_generation.planner import TASK_TEMPLATES
 from lerobot_bt_python.bt_generation.registry import load_registry
@@ -98,7 +101,7 @@ def test_payload_filters_entries_and_keeps_rules_json_serializable() -> None:
     json.dumps(payload)
 
 
-def test_planner_contract_hashes_are_deterministic() -> None:
+def test_planner_contract_hashes_are_deterministic_and_include_schema_version() -> None:
     registry = load_registry(REGISTRY_PATH)
     payload = build_planner_registry_payload("make_sandwich", registry)
     payload_again = build_planner_registry_payload("make_sandwich", registry)
@@ -106,9 +109,35 @@ def test_planner_contract_hashes_are_deterministic() -> None:
     assert payload == payload_again
     assert payload["contract_schema_version"] == 1
     assert payload["task_template_hash"] == _stable_json_sha256(TASK_TEMPLATES["make_sandwich"])
-    contract_payload = dict(payload)
-    registry_contract_hash = contract_payload.pop("registry_contract_hash")
-    assert registry_contract_hash == _stable_json_sha256(contract_payload)
+    contract_payload = _without_derived_contract_fields(payload)
+
+    # contract_schema_version is included deliberately: changing the exported
+    # contract shape must change registry_contract_hash.
+    assert "contract_schema_version" in contract_payload
+    assert payload["registry_contract_hash"] == _stable_json_sha256(contract_payload)
+
+
+def test_registry_contract_hash_ignores_derived_hash_fields() -> None:
+    registry = load_registry(REGISTRY_PATH)
+    payload = build_planner_registry_payload("make_sandwich", registry)
+    contract_payload = _without_derived_contract_fields(payload)
+
+    payload_with_derived_fields = dict(contract_payload)
+    payload_with_derived_fields["registry_contract_hash"] = "ignored recursive value"
+    payload_with_derived_fields["task_template_hash"] = "ignored template hash"
+
+    assert payload["registry_contract_hash"] == _stable_json_sha256(
+        _without_derived_contract_fields(payload_with_derived_fields)
+    )
+
+
+def test_task_template_hash_changes_when_canonical_task_sequence_changes() -> None:
+    registry = load_registry(REGISTRY_PATH)
+    payload = build_planner_registry_payload("make_sandwich", registry)
+    changed_sequence = [dict(step) for step in payload["canonical_task_sequence"]]
+    changed_sequence[-1] = {"kind": "vlm_gate", "name": "different_final_gate"}
+
+    assert payload["task_template_hash"] != _stable_json_sha256(changed_sequence)
 
 
 def test_empty_allowed_variants_are_not_exported() -> None:
@@ -131,3 +160,7 @@ def test_export_fails_on_missing_registry_entry() -> None:
 
 def _stable_json_sha256(value: object) -> str:
     return sha256_text(json.dumps(value, sort_keys=True))
+
+
+def _without_derived_contract_fields(payload: dict) -> dict:
+    return {key: value for key, value in payload.items() if key not in DERIVED_CONTRACT_FIELDS}

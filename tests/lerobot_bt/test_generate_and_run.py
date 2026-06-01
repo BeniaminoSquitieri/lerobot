@@ -53,6 +53,8 @@ def test_generate_and_run_no_run_generates_files_and_does_not_call_runner(
     assert rc == 0
     assert (output_dir / "trees/make_sandwich.xml").exists()
     assert (output_dir / "config/make_sandwich_bt.yaml").exists()
+    assert (output_dir / "manifests/make_sandwich_manifest.json").exists()
+    assert f"generated manifest: {output_dir / 'manifests/make_sandwich_manifest.json'}" in captured.out
     assert "runner command: ros2 run lerobot_bt_runtime_cpp lerobot_bt_runner" in captured.out
 
 
@@ -154,6 +156,7 @@ def test_generate_and_run_model_response_no_run(tmp_path: Path) -> None:
 def test_generate_and_run_ros_service_no_run_with_monkeypatched_plan(
     monkeypatch: pytest.MonkeyPatch,
     tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     def fake_request_plan_from_ros_service(task_name, planner_registry_payload, **kwargs):
         return json.dumps(
@@ -179,10 +182,13 @@ def test_generate_and_run_ros_service_no_run_with_monkeypatched_plan(
 
     rc = generate_and_run.main([*_base_args(output_dir), "--planner", "ros-service", "--no-run"])
 
+    captured = capsys.readouterr()
     assert rc == 0
     assert (output_dir / "plans/make_sandwich_linear_ir.json").exists()
     assert (output_dir / "trees/make_sandwich.xml").exists()
     assert (output_dir / "config/make_sandwich_bt.yaml").exists()
+    assert (output_dir / "manifests/make_sandwich_manifest.json").exists()
+    assert f"generated manifest: {output_dir / 'manifests/make_sandwich_manifest.json'}" in captured.out
 
 
 def _base_args(output_dir: Path) -> list[str]:

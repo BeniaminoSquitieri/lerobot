@@ -73,6 +73,7 @@ def main(argv: list[str] | None = None) -> int:
     tree_path = args.output_dir / "trees" / f"{args.task}.xml"
     config_path = args.output_dir / "config" / f"{args.task}_bt.yaml"
     plan_path = _generated_plan_path(args)
+    manifest_path = _generated_manifest_path(args)
     missing = [path for path in (tree_path, config_path) if not path.exists()]
     if missing:
         _print_errors([f"Expected generated file does not exist: {path}" for path in missing])
@@ -83,6 +84,8 @@ def main(argv: list[str] | None = None) -> int:
         print(f"generated plan: {plan_path}")
     print(f"generated tree: {tree_path}")
     print(f"generated config: {config_path}")
+    if manifest_path.exists():
+        print(f"generated manifest: {manifest_path}")
     print(f"runner command: {_format_command(runner_command)}")
 
     if args.no_run:
@@ -120,6 +123,10 @@ def _generated_plan_path(args: argparse.Namespace) -> Path | None:
     if args.planner not in {"model-response", "ros-service"}:
         return None
     return args.output_dir / "plans" / f"{args.task}_linear_ir.json"
+
+
+def _generated_manifest_path(args: argparse.Namespace) -> Path:
+    return args.output_dir / "manifests" / f"{args.task}_manifest.json"
 
 
 def _generation_args(args: argparse.Namespace) -> list[str]:

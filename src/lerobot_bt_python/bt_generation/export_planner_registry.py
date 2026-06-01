@@ -11,6 +11,14 @@ from .planner import TASK_ALLOWED_VARIANTS, TASK_TEMPLATES
 from .registry import HUMAN_STEP, ROBOT_SKILL, VLM_GATE, Registry, RegistryEntry, load_registry
 
 
+DERIVED_CONTRACT_FIELDS = frozenset(
+    (
+        "registry_contract_hash",
+        "task_template_hash",
+    )
+)
+
+
 def build_planner_registry_payload(task_name: str, registry: Registry) -> dict:
     """Build the constrained payload sent to a planner/VLM service."""
 
@@ -79,7 +87,7 @@ def build_planner_registry_payload(task_name: str, registry: Registry) -> dict:
         payload["allowed_variants"] = allowed_variants
     payload["contract_schema_version"] = 1
     payload["task_template_hash"] = _stable_json_sha256(canonical_task_sequence)
-    payload["registry_contract_hash"] = _stable_json_sha256(payload)
+    payload["registry_contract_hash"] = _stable_json_sha256(_registry_contract_payload(payload))
     return payload
 
 
@@ -117,6 +125,10 @@ def _ordering_constraints(steps: list[dict[str, str]]) -> list[dict[str, str]]:
 
 def _stable_json_sha256(value: object) -> str:
     return sha256_text(json.dumps(value, sort_keys=True))
+
+
+def _registry_contract_payload(payload: dict) -> dict:
+    return {key: value for key, value in payload.items() if key not in DERIVED_CONTRACT_FIELDS}
 
 
 def main() -> None:
