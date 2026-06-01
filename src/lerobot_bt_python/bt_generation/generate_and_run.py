@@ -7,9 +7,10 @@ import shlex
 import shutil
 import subprocess
 import sys
+import time
 from pathlib import Path
 
-from . import generate
+from . import experiment_log, generate
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -62,9 +63,37 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="Generate artifacts and print the runner command without executing ros2.",
     )
+    parser.add_argument(
+        "--experiment-log",
+        type=Path,
+        help=(
+            "Append-only JSONL file for experiment events. When omitted, defaults to "
+            "<output-dir>/experiments/trials.jsonl."
+        ),
+    )
+    parser.add_argument(
+        "--trial-id",
+        type=str,
+        help="Stable trial id shared by generation and runner events.",
+    )
+    parser.add_argument(
+        "--planner-label",
+        type=str,
+        help="Human-readable planner label for experiment grouping (defaults to --planner).",
+    )
+    parser.add_argument(
+        "--condition-label",
+        type=str,
+        help="Experiment condition label for grouping (defaults to 'default').",
+    )
     args = parser.parse_args(argv)
 
-    generation_args = _generation_args(args)
+    trial_id = args.trial_id or experiment_log.new_trial_id(args.task, args.planner)
+    planner_label = args.planner_label or args.planner
+    condition_label = args.condition_label or "default"
+    log_path = experiment_log.resolve_log_path(args.experiment_log, args.output_dir)
+
+    generation_args = _generation_args(args, trial_id=trial_id, log_path=log_path)
     generation_status = generate.main(generation_args)
     if generation_status != 0:
         print("BT generation failed; not starting lerobot_bt_runner.", file=sys.stderr)
@@ -88,6 +117,9 @@ def main(argv: list[str] | None = None) -> int:
         print(f"generated manifest: {manifest_path}")
     print(f"runner command: {_format_command(runner_command)}")
 
+    # Semantics for --no-run: no runner event is logged. The runner never
+    # starts, so it must not affect runner_success_rate. The generation event
+    # written by generate.py already records that artifacts were produced.
     if args.no_run:
         return 0
 
@@ -99,10 +131,40 @@ def main(argv: list[str] | None = None) -> int:
                 "Example: source /opt/ros/<distro>/setup.bash && source install/setup.bash",
             ]
         )
+        _log_runner_event(
+            args,
+            log_path=log_path,
+            trial_id=trial_id,
+            planner_label=planner_label,
+            condition_label=condition_label,
+            runner_started=False,
+            runner_return_code=127,
+            duration_s=0.0,
+            tree_path=tree_path,
+            config_path=config_path,
+            plan_path=plan_path,
+            manifest_path=manifest_path,
+        )
         return 127
 
+    start_time = time.time()
     result = subprocess.run(runner_command, check=False)
-    return int(result.returncode)
+    return_code = int(result.returncode)
+    _log_runner_event(
+        args,
+        log_path=log_path,
+        trial_id=trial_id,
+        planner_label=planner_label,
+        condition_label=condition_label,
+        runner_started=True,
+        runner_return_code=return_code,
+        duration_s=time.time() - start_time,
+        tree_path=tree_path,
+        config_path=config_path,
+        plan_path=plan_path,
+        manifest_path=manifest_path,
+    )
+    return return_code
 
 
 def build_runner_command(tree_path: Path, config_path: Path) -> list[str]:
@@ -129,7 +191,12 @@ def _generated_manifest_path(args: argparse.Namespace) -> Path:
     return args.output_dir / "manifests" / f"{args.task}_manifest.json"
 
 
-def _generation_args(args: argparse.Namespace) -> list[str]:
+def _generation_args(
+    args: argparse.Namespace,
+    *,
+    trial_id: str,
+    log_path: Path | None,
+) -> list[str]:
     generation_args = [
         "--task",
         args.task,
@@ -143,7 +210,15 @@ def _generation_args(args: argparse.Namespace) -> list[str]:
         args.plan_service_name,
         "--plan-service-timeout-s",
         str(args.plan_service_timeout_s),
+        "--trial-id",
+        trial_id,
     ]
+    if log_path is not None:
+        generation_args.extend(["--experiment-log", str(log_path)])
+    if args.planner_label is not None:
+        generation_args.extend(["--planner-label", args.planner_label])
+    if args.condition_label is not None:
+        generation_args.extend(["--condition-label", args.condition_label])
     if args.executor_yaml is not None:
         generation_args.extend(["--executor-yaml", str(args.executor_yaml)])
     if args.model_response_file is not None:
@@ -153,6 +228,50 @@ def _generation_args(args: argparse.Namespace) -> list[str]:
     if args.explicit_postcondition_gates:
         generation_args.append("--explicit-postcondition-gates")
     return generation_args
+
+
+def _log_runner_event(
+    args: argparse.Namespace,
+    *,
+    log_path: Path | None,
+    trial_id: str,
+    planner_label: str,
+    condition_label: str,
+    runner_started: bool,
+    runner_return_code: int | None,
+    duration_s: float,
+    tree_path: Path,
+    config_path: Path,
+    plan_path: Path | None,
+    manifest_path: Path,
+) -> None:
+    if log_path is None:
+        return
+    success = runner_return_code == 0
+    failure_stage = None if success else experiment_log.STAGE_RUNNER
+    event = experiment_log.build_event(
+        event_type=experiment_log.EVENT_RUNNER,
+        trial_id=trial_id,
+        task_name=args.task,
+        planner=args.planner,
+        planner_label=planner_label,
+        condition_label=condition_label,
+        success=success,
+        failure_stage=failure_stage,
+        failure_reason=None
+        if success
+        else f"runner exited with return code {runner_return_code}.",
+        duration_s=duration_s,
+        output_dir=str(args.output_dir),
+        linear_ir_path=str(plan_path) if plan_path is not None else None,
+        raw_response_path=None,
+        tree_xml_path=str(tree_path),
+        bt_yaml_path=str(config_path),
+        manifest_path=str(manifest_path) if manifest_path.exists() else None,
+        runner_started=runner_started,
+        runner_return_code=runner_return_code,
+    )
+    experiment_log.append_event(log_path, event)
 
 
 def _format_command(command: list[str]) -> str:

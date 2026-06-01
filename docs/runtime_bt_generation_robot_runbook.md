@@ -288,3 +288,50 @@ PYTHONPATH=src python3 -m lerobot_bt_python.bt_generation.generate_and_run \
 - do not modify registry on robot day unless necessary
 - do not debug model issues before ROS service contract passes
 - do not enable future `allowed_variants`, skips, or replanning
+
+## 15. Experiment logging for paper data
+
+The generators write append-only JSONL experiment events for paper metrics. The
+safe runtime path is unchanged: logging only observes outcomes.
+
+- `trials.jsonl` lives under `<output-dir>/experiments/trials.jsonl` by default.
+  With `--output-dir generated_bt`, that is
+  `generated_bt/experiments/trials.jsonl`. Override with `--experiment-log`.
+- `generate.py` writes one `generation` event per attempt (success and failure).
+  `generate_and_run.py` writes one `runner` event only when the runner actually
+  starts. With `--no-run`, no runner event is written (so `runner_success_rate`
+  reflects real executions only); the generation event is still recorded.
+- Failures are useful data. Each failure records a `failure_stage` of `parse`,
+  `validation`, `static_check`, `artifact_write`, `runner`, `service`, or
+  `unknown`, so you can report where the pipeline stopped.
+
+Generate the CSV tables:
+
+```bash
+PYTHONPATH=src python3 scripts/summarize_runtime_bt_experiments.py \
+  --jsonl generated_bt/experiments/trials.jsonl \
+  --out-csv generated_bt/experiments/trials.csv \
+  --summary-csv generated_bt/experiments/summary.csv
+```
+
+- `trials.csv` is event-level (one row per logged event).
+- `summary.csv` aggregates per `task_name`, `planner_label`, `condition_label`
+  with `count`, `generation_success_rate`, `runner_success_rate`, and per-stage
+  failure counts.
+
+Offline validator ablation (no robot, validator stays strict):
+
+```bash
+PYTHONPATH=src python3 -m lerobot_bt_python.bt_generation.eval_ablation \
+  --task make_sandwich \
+  --registry src/lerobot_bt_python/bt_generation/skills_registry.yaml \
+  --executor-yaml src/lerobot_bt_python/make_sandwich_executor.yaml \
+  --responses-dir generated_bt/raw_model_responses \
+  --out-jsonl generated_bt/experiments/ablation_results.jsonl \
+  --out-csv generated_bt/experiments/ablation_results.csv
+```
+
+The `direct_xml` and `unconstrained` baselines (built in `panda_live_viewer`)
+are offline/unsafe measurement artifacts only. They are not robot execution
+paths: the safe runtime path stays VLM/ROS service → Linear IR JSON → lerobot
+strict validation → XML/YAML → BehaviorTree.CPP.

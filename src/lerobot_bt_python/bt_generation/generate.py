@@ -5,9 +5,11 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+import time
 from collections import Counter
 from pathlib import Path
 
+from . import experiment_log
 from .manifest import build_generation_manifest, write_generation_manifest
 from .planner import TASK_TEMPLATES, build_linear_plan
 from .registry import load_registry, validate_registry
@@ -68,11 +70,42 @@ def main(argv: list[str] | None = None) -> int:
             "the current DoSkill C++ node already waits for GetSkillVerification."
         ),
     )
+    parser.add_argument(
+        "--experiment-log",
+        type=Path,
+        help=(
+            "Append-only JSONL file for experiment events. When omitted and "
+            "--output-dir is set, defaults to <output-dir>/experiments/trials.jsonl."
+        ),
+    )
+    parser.add_argument(
+        "--trial-id",
+        type=str,
+        help="Stable trial id. Generated automatically when not provided.",
+    )
+    parser.add_argument(
+        "--planner-label",
+        type=str,
+        help="Human-readable planner label for experiment grouping (defaults to --planner).",
+    )
+    parser.add_argument(
+        "--condition-label",
+        type=str,
+        help="Experiment condition label for grouping (defaults to 'default').",
+    )
     args = parser.parse_args(argv)
 
+    start_time = time.time()
+    trial_id = args.trial_id or experiment_log.new_trial_id(args.task, args.planner)
+    planner_label = args.planner_label or args.planner
+    condition_label = args.condition_label or "default"
+
     errors: list[str] = []
+    failure_stage: str | None = None
     out_tree, out_config, output_errors = _resolve_tree_config_paths(args)
     errors.extend(output_errors)
+    if output_errors:
+        failure_stage = experiment_log.STAGE_VALIDATION
     plan_output_path = _plan_output_path(args)
     raw_response_output_path: Path | None = None
     model_response_text: str | None = None
@@ -80,7 +113,10 @@ def main(argv: list[str] | None = None) -> int:
     try:
         if not errors:
             registry = load_registry(args.registry)
-            errors.extend(validate_registry(registry))
+            registry_errors = validate_registry(registry)
+            if registry_errors:
+                errors.extend(registry_errors)
+                failure_stage = experiment_log.STAGE_VALIDATION
 
         if not errors:
             if args.planner == "template":
@@ -89,29 +125,48 @@ def main(argv: list[str] | None = None) -> int:
                     registry,
                     explicit_robot_postcondition_gates=args.explicit_postcondition_gates,
                 )
-                errors.extend(validate_linear_plan(plan, registry, args.executor_yaml))
+                template_errors = validate_linear_plan(plan, registry, args.executor_yaml)
+                if template_errors:
+                    errors.extend(template_errors)
+                    failure_stage = experiment_log.STAGE_VALIDATION
             elif args.planner == "model-response":
                 if args.model_response_file is None:
                     errors.append("--planner model-response requires --model-response-file.")
+                    failure_stage = experiment_log.STAGE_VALIDATION
                     plan = None
                 else:
                     model_response_text = args.model_response_file.read_text(encoding="utf-8")
                     raw_response_output_path = _raw_response_output_path(args, model_response_text)
-                    plan = canonicalize_plan(parse_planner_response(model_response_text), registry)
-                    if plan["task_name"] != args.task:
-                        errors.append(
-                            f"Planner response task_name {plan['task_name']!r} does not match requested "
-                            f"task_name {args.task!r}."
-                        )
+                    try:
+                        parsed = parse_planner_response(model_response_text)
+                    except Exception as exc:  # noqa: BLE001
+                        errors.append(str(exc))
+                        failure_stage = experiment_log.STAGE_PARSE
+                        plan = None
                     else:
-                        errors.extend(
-                            validate_linear_plan(
-                                plan,
-                                registry,
-                                args.executor_yaml,
-                                strict_generated=True,
-                            )
-                        )
+                        try:
+                            plan = canonicalize_plan(parsed, registry)
+                        except Exception as exc:  # noqa: BLE001
+                            errors.append(str(exc))
+                            failure_stage = experiment_log.STAGE_VALIDATION
+                            plan = None
+                        else:
+                            if plan["task_name"] != args.task:
+                                errors.append(
+                                    f"Planner response task_name {plan['task_name']!r} does not "
+                                    f"match requested task_name {args.task!r}."
+                                )
+                                failure_stage = experiment_log.STAGE_VALIDATION
+                            else:
+                                validation_errors = validate_linear_plan(
+                                    plan,
+                                    registry,
+                                    args.executor_yaml,
+                                    strict_generated=True,
+                                )
+                                if validation_errors:
+                                    errors.extend(validation_errors)
+                                    failure_stage = experiment_log.STAGE_VALIDATION
             elif args.planner == "ros-service":
                 # Build planner registry payload
                 from .export_planner_registry import build_planner_registry_payload
@@ -131,34 +186,66 @@ def main(argv: list[str] | None = None) -> int:
                     )
                 except Exception as exc:
                     errors.append(str(exc))
+                    failure_stage = experiment_log.STAGE_SERVICE
                     plan = None
                 else:
                     raw_response_output_path = _raw_response_output_path(args, model_response_text or "")
-                    plan = canonicalize_plan(parse_planner_response(model_response_text), registry)
-                    if plan["task_name"] != args.task:
-                        errors.append(
-                            f"Planner response task_name {plan['task_name']!r} does not match requested "
-                            f"task_name {args.task!r}."
-                        )
+                    try:
+                        parsed = parse_planner_response(model_response_text)
+                    except Exception as exc:  # noqa: BLE001
+                        errors.append(str(exc))
+                        failure_stage = experiment_log.STAGE_PARSE
+                        plan = None
                     else:
-                        errors.extend(
-                            validate_linear_plan(
-                                plan,
-                                registry,
-                                args.executor_yaml,
-                                strict_generated=True,
-                            )
-                        )
+                        try:
+                            plan = canonicalize_plan(parsed, registry)
+                        except Exception as exc:  # noqa: BLE001
+                            errors.append(str(exc))
+                            failure_stage = experiment_log.STAGE_VALIDATION
+                            plan = None
+                        else:
+                            if plan["task_name"] != args.task:
+                                errors.append(
+                                    f"Planner response task_name {plan['task_name']!r} does not "
+                                    f"match requested task_name {args.task!r}."
+                                )
+                                failure_stage = experiment_log.STAGE_VALIDATION
+                            else:
+                                validation_errors = validate_linear_plan(
+                                    plan,
+                                    registry,
+                                    args.executor_yaml,
+                                    strict_generated=True,
+                                )
+                                if validation_errors:
+                                    errors.extend(validation_errors)
+                                    failure_stage = experiment_log.STAGE_VALIDATION
         else:
             plan = None
     except Exception as exc:  # noqa: BLE001
         errors.append(str(exc))
+        if failure_stage is None:
+            failure_stage = experiment_log.STAGE_UNKNOWN
         plan = None
 
     if errors or plan is None:
         if raw_response_output_path is not None and model_response_text is not None:
             _write_text(raw_response_output_path, model_response_text)
         _print_errors(errors)
+        _log_generation_event(
+            args,
+            trial_id=trial_id,
+            planner_label=planner_label,
+            condition_label=condition_label,
+            success=False,
+            failure_stage=failure_stage or experiment_log.STAGE_UNKNOWN,
+            failure_reason="; ".join(errors) or None,
+            start_time=start_time,
+            out_tree=out_tree,
+            out_config=out_config,
+            plan_output_path=plan_output_path,
+            raw_response_output_path=raw_response_output_path,
+        )
         return 1
 
     try:
@@ -167,34 +254,95 @@ def main(argv: list[str] | None = None) -> int:
         errors.extend(validate_xml_yaml_blackboard_text(xml_text, yaml_text))
     except Exception as exc:  # noqa: BLE001
         _print_errors([str(exc)])
+        _log_generation_event(
+            args,
+            trial_id=trial_id,
+            planner_label=planner_label,
+            condition_label=condition_label,
+            success=False,
+            failure_stage=experiment_log.STAGE_STATIC_CHECK,
+            failure_reason=str(exc),
+            start_time=start_time,
+            out_tree=out_tree,
+            out_config=out_config,
+            plan_output_path=plan_output_path,
+            raw_response_output_path=raw_response_output_path,
+        )
         return 1
 
     if errors:
         _print_errors(errors)
+        _log_generation_event(
+            args,
+            trial_id=trial_id,
+            planner_label=planner_label,
+            condition_label=condition_label,
+            success=False,
+            failure_stage=experiment_log.STAGE_STATIC_CHECK,
+            failure_reason="; ".join(errors) or None,
+            start_time=start_time,
+            out_tree=out_tree,
+            out_config=out_config,
+            plan_output_path=plan_output_path,
+            raw_response_output_path=raw_response_output_path,
+        )
         return 1
 
     assert out_tree is not None
     assert out_config is not None
-    if plan_output_path is not None:
-        _write_text(plan_output_path, json.dumps(plan, indent=2, sort_keys=True) + "\n")
-    if raw_response_output_path is not None and model_response_text is not None:
-        _write_text(raw_response_output_path, model_response_text)
-    _write_text(out_tree, xml_text)
-    _write_text(out_config, yaml_text)
-    manifest_output_path = _manifest_output_path(args)
-    if manifest_output_path is not None:
-        manifest = build_generation_manifest(
-            task_name=args.task,
-            planner=args.planner,
-            registry_path=args.registry,
-            executor_yaml_path=args.executor_yaml,
-            tree_xml_path=out_tree,
-            bt_yaml_path=out_config,
-            canonical_task_sequence=[dict(step) for step in TASK_TEMPLATES[args.task]],
-            linear_ir_path=plan_output_path,
-            raw_response_path=raw_response_output_path,
+    try:
+        if plan_output_path is not None:
+            _write_text(plan_output_path, json.dumps(plan, indent=2, sort_keys=True) + "\n")
+        if raw_response_output_path is not None and model_response_text is not None:
+            _write_text(raw_response_output_path, model_response_text)
+        _write_text(out_tree, xml_text)
+        _write_text(out_config, yaml_text)
+        manifest_output_path = _manifest_output_path(args)
+        if manifest_output_path is not None:
+            manifest = build_generation_manifest(
+                task_name=args.task,
+                planner=args.planner,
+                registry_path=args.registry,
+                executor_yaml_path=args.executor_yaml,
+                tree_xml_path=out_tree,
+                bt_yaml_path=out_config,
+                canonical_task_sequence=[dict(step) for step in TASK_TEMPLATES[args.task]],
+                linear_ir_path=plan_output_path,
+                raw_response_path=raw_response_output_path,
+            )
+            write_generation_manifest(manifest_output_path, manifest)
+    except Exception as exc:  # noqa: BLE001
+        _print_errors([str(exc)])
+        _log_generation_event(
+            args,
+            trial_id=trial_id,
+            planner_label=planner_label,
+            condition_label=condition_label,
+            success=False,
+            failure_stage=experiment_log.STAGE_ARTIFACT_WRITE,
+            failure_reason=str(exc),
+            start_time=start_time,
+            out_tree=out_tree,
+            out_config=out_config,
+            plan_output_path=plan_output_path,
+            raw_response_output_path=raw_response_output_path,
         )
-        write_generation_manifest(manifest_output_path, manifest)
+        return 1
+
+    _log_generation_event(
+        args,
+        trial_id=trial_id,
+        planner_label=planner_label,
+        condition_label=condition_label,
+        success=True,
+        failure_stage=None,
+        failure_reason=None,
+        start_time=start_time,
+        out_tree=out_tree,
+        out_config=out_config,
+        plan_output_path=plan_output_path,
+        raw_response_output_path=raw_response_output_path,
+    )
 
     counts = Counter(step["kind"] for step in plan["steps"])
     print(f"task_name: {plan['task_name']}")
@@ -257,6 +405,48 @@ def _is_json_document(text: str) -> bool:
     except json.JSONDecodeError:
         return False
     return True
+
+
+def _log_generation_event(
+    args: argparse.Namespace,
+    *,
+    trial_id: str,
+    planner_label: str,
+    condition_label: str,
+    success: bool,
+    failure_stage: str | None,
+    failure_reason: str | None,
+    start_time: float,
+    out_tree: Path | None,
+    out_config: Path | None,
+    plan_output_path: Path | None,
+    raw_response_output_path: Path | None,
+) -> None:
+    log_path = experiment_log.resolve_log_path(args.experiment_log, args.output_dir)
+    if log_path is None:
+        return
+    manifest_path = _manifest_output_path(args)
+    event = experiment_log.build_event(
+        event_type=experiment_log.EVENT_GENERATION,
+        trial_id=trial_id,
+        task_name=args.task,
+        planner=args.planner,
+        planner_label=planner_label,
+        condition_label=condition_label,
+        success=success,
+        failure_stage=failure_stage,
+        failure_reason=failure_reason,
+        duration_s=time.time() - start_time,
+        output_dir=str(args.output_dir) if args.output_dir is not None else None,
+        linear_ir_path=str(plan_output_path) if plan_output_path is not None else None,
+        raw_response_path=str(raw_response_output_path)
+        if raw_response_output_path is not None
+        else None,
+        tree_xml_path=str(out_tree) if out_tree is not None else None,
+        bt_yaml_path=str(out_config) if out_config is not None else None,
+        manifest_path=str(manifest_path) if manifest_path is not None else None,
+    )
+    experiment_log.append_event(log_path, event)
 
 
 def _write_text(path: Path, text: str) -> None:
