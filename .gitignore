@@ -186,8 +186,14 @@ generated_bt/plans/*
 generated_bt/trees/*
 generated_bt/config/*
 generated_bt/raw_model_responses/*
+generated_bt/experiments/*
+generated_bt/manifests/*
 !generated_bt/plans/.gitkeep
 !generated_bt/trees/.gitkeep
 !generated_bt/config/.gitkeep
 !generated_bt/raw_model_responses/.gitkeep
+!generated_bt/experiments/.gitkeep
+!generated_bt/manifests/.gitkeep
 !generated_bt/README.md
+# Dataset recovery artifacts (contents re-downloadable from HuggingFace)
+.hf_recovery/
