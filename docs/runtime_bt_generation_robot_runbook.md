@@ -310,14 +310,18 @@ Generate the CSV tables:
 ```bash
 PYTHONPATH=src python3 scripts/summarize_runtime_bt_experiments.py \
   --jsonl generated_bt/experiments/trials.jsonl \
-  --out-csv generated_bt/experiments/trials.csv \
+  --trials-csv generated_bt/experiments/trials.csv \
+  --events-csv generated_bt/experiments/trials_events.csv \
   --summary-csv generated_bt/experiments/summary.csv
 ```
 
-- `trials.csv` is event-level (one row per logged event).
+- `trials.csv` is trial-level (one row per `trial_id`, merging the generation,
+  runner, and operator annotation events for that trial).
+- `trials_events.csv` is event-level (one row per logged event).
 - `summary.csv` aggregates per `task_name`, `planner_label`, `condition_label`
-  with `count`, `generation_success_rate`, `runner_success_rate`, and per-stage
-  failure counts.
+  with `count_trials`, `generation_success_rate`, `runner_success_rate`,
+  `task_success_rate` (from operator annotations), `annotated_trial_count`,
+  per-stage failure counts, and `top_failure_categories`.
 
 Offline validator ablation (no robot, validator stays strict):
 
@@ -335,3 +339,70 @@ The `direct_xml` and `unconstrained` baselines (built in `panda_live_viewer`)
 are offline/unsafe measurement artifacts only. They are not robot execution
 paths: the safe runtime path stays VLM/ROS service → Linear IR JSON → lerobot
 strict validation → XML/YAML → BehaviorTree.CPP.
+
+## 16. ICRA data collection loop
+
+Use this loop once per trial on robot day. Every step stays on the safe runtime
+path; direct XML is never executed on the robot.
+
+1. Run one trial. The wrapper always uses the constrained linear IR planner
+   (`--planner ros-service`, `--planner-label constrained_linear_ir`) and writes
+   to `generated_bt/experiments/trials.jsonl`.
+
+   ```bash
+   # Dry-run rehearsal (no robot motion):
+   PYTHON_BIN=python3 scripts/run_icra_runtime_bt_trial.sh make_sandwich dry_run_no_run
+
+   # On the robot (requires ROS + built workspace sourced):
+   PYTHON_BIN=python3 scripts/run_icra_runtime_bt_trial.sh make_sandwich robot_live
+   ```
+
+   The wrapper prints `trial_id: <id>` near the top of its output. Copy it. It
+   also prints the exact annotation command to run next.
+
+2. Annotate the trial after you watch it. This is append-only and never edits
+   earlier log lines.
+
+   ```bash
+   PYTHONPATH=src python3 scripts/annotate_runtime_bt_trial.py \
+     --jsonl generated_bt/experiments/trials.jsonl \
+     --trial-id <id> \
+     --task-success success \
+     --outcome-label completed \
+     --failure-category none
+   ```
+
+   For a failure, use e.g. `--task-success failure --outcome-label partial
+   --failure-category skill_failed --notes "gripper slipped"`.
+
+3. Summarize (regenerates `trials.csv`, `trials_events.csv`, `summary.csv`):
+
+   ```bash
+   PYTHONPATH=src python3 scripts/summarize_runtime_bt_experiments.py \
+     --jsonl generated_bt/experiments/trials.jsonl
+   ```
+
+4. Bundle artifacts + logs into a single archive for backup/sharing (no images
+   or videos are included):
+
+   ```bash
+   PYTHONPATH=src python3 scripts/bundle_runtime_bt_trial.py \
+     --output-dir generated_bt \
+     --task make_sandwich \
+     --trial-id <id> \
+     --out generated_bt/experiments/bundle_<id>.tar.gz
+   ```
+
+5. Render the Markdown report for the paper:
+
+   ```bash
+   PYTHONPATH=src python3 scripts/make_icra_runtime_bt_report.py \
+     --experiments-dir generated_bt/experiments \
+     --out-md generated_bt/experiments/icra_report.md
+   ```
+
+Optional: enable VLM verifier logging on the panda node by setting the ROS
+parameter `verifier_experiment_log_path` to a JSONL path. It records one
+verifier event per inference attempt (raw vs published status, WAIT_HUMAN→RUNNING
+coercion, frame availability). It does not change the VLM result topic payload
+and never saves images. Leave it empty to disable.

@@ -10,7 +10,7 @@ import sys
 import time
 from pathlib import Path
 
-from . import experiment_log, generate
+from . import env_snapshot, experiment_log, generate
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -92,6 +92,11 @@ def main(argv: list[str] | None = None) -> int:
     planner_label = args.planner_label or args.planner
     condition_label = args.condition_label or "default"
     log_path = experiment_log.resolve_log_path(args.experiment_log, args.output_dir)
+    env = _environment_snapshot(argv)
+
+    # Print the trial id up front so an operator can copy it before the run
+    # starts (needed later for the annotation step).
+    print(f"trial_id: {trial_id}")
 
     generation_args = _generation_args(args, trial_id=trial_id, log_path=log_path)
     generation_status = generate.main(generation_args)
@@ -144,6 +149,7 @@ def main(argv: list[str] | None = None) -> int:
             config_path=config_path,
             plan_path=plan_path,
             manifest_path=manifest_path,
+            env=env,
         )
         return 127
 
@@ -163,6 +169,7 @@ def main(argv: list[str] | None = None) -> int:
         config_path=config_path,
         plan_path=plan_path,
         manifest_path=manifest_path,
+        env=env,
     )
     return return_code
 
@@ -244,9 +251,11 @@ def _log_runner_event(
     config_path: Path,
     plan_path: Path | None,
     manifest_path: Path,
+    env: dict | None = None,
 ) -> None:
     if log_path is None:
         return
+    env = env or {}
     success = runner_return_code == 0
     failure_stage = None if success else experiment_log.STAGE_RUNNER
     event = experiment_log.build_event(
@@ -270,8 +279,25 @@ def _log_runner_event(
         manifest_path=str(manifest_path) if manifest_path.exists() else None,
         runner_started=runner_started,
         runner_return_code=runner_return_code,
+        git_commit=env.get("git_commit"),
+        git_branch=env.get("git_branch"),
+        hostname=env.get("hostname"),
+        ros_distro=env.get("ros_distro"),
+        command=env.get("command"),
     )
     experiment_log.append_event(log_path, event)
+
+
+def _environment_snapshot(argv: list[str] | None) -> dict:
+    repo_root = Path(__file__).resolve().parents[3]
+    if argv is None:
+        command_argv = list(sys.argv)
+    else:
+        command_argv = [
+            "python -m lerobot_bt_python.bt_generation.generate_and_run",
+            *[str(part) for part in argv],
+        ]
+    return env_snapshot.build_environment_snapshot(repo_root, command_argv)
 
 
 def _format_command(command: list[str]) -> str:

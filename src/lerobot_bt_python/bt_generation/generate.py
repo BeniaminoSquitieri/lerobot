@@ -9,6 +9,7 @@ import time
 from collections import Counter
 from pathlib import Path
 
+from . import env_snapshot
 from . import experiment_log
 from .manifest import build_generation_manifest, write_generation_manifest
 from .planner import TASK_TEMPLATES, build_linear_plan
@@ -99,6 +100,8 @@ def main(argv: list[str] | None = None) -> int:
     trial_id = args.trial_id or experiment_log.new_trial_id(args.task, args.planner)
     planner_label = args.planner_label or args.planner
     condition_label = args.condition_label or "default"
+    env = _environment_snapshot(argv)
+    setattr(args, "_env_snapshot", env)
 
     errors: list[str] = []
     failure_stage: str | None = None
@@ -426,6 +429,7 @@ def _log_generation_event(
     if log_path is None:
         return
     manifest_path = _manifest_output_path(args)
+    env = getattr(args, "_env_snapshot", None) or {}
     event = experiment_log.build_event(
         event_type=experiment_log.EVENT_GENERATION,
         trial_id=trial_id,
@@ -445,8 +449,25 @@ def _log_generation_event(
         tree_xml_path=str(out_tree) if out_tree is not None else None,
         bt_yaml_path=str(out_config) if out_config is not None else None,
         manifest_path=str(manifest_path) if manifest_path is not None else None,
+        git_commit=env.get("git_commit"),
+        git_branch=env.get("git_branch"),
+        hostname=env.get("hostname"),
+        ros_distro=env.get("ros_distro"),
+        command=env.get("command"),
     )
     experiment_log.append_event(log_path, event)
+
+
+def _environment_snapshot(argv: list[str] | None) -> dict:
+    repo_root = Path(__file__).resolve().parents[3]
+    if argv is None:
+        command_argv = list(sys.argv)
+    else:
+        command_argv = [
+            "python -m lerobot_bt_python.bt_generation.generate",
+            *[str(part) for part in argv],
+        ]
+    return env_snapshot.build_environment_snapshot(repo_root, command_argv)
 
 
 def _write_text(path: Path, text: str) -> None:

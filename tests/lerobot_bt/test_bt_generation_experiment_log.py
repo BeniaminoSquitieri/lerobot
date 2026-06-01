@@ -100,10 +100,71 @@ def test_write_csv_summary_aggregates_rates(tmp_path: Path) -> None:
     data = dict(zip(header, rows[1].split(",")))
     assert data["task_name"] == "make_sandwich"
     assert data["planner_label"] == "constrained"
-    assert data["count"] == "3"
+    # Two distinct trials (a, b); three events total.
+    assert data["count_trials"] == "2"
     assert data["generation_success_rate"] == "0.5000"
     assert data["runner_success_rate"] == "1.0000"
+    # No annotations recorded yet.
+    assert data["task_success_rate"] == ""
+    assert data["annotated_trial_count"] == "0"
     assert data["parse_failure_count"] == "1"
+
+
+def test_annotation_event_flows_into_trial_and_summary(tmp_path: Path) -> None:
+    log_path = tmp_path / "trials.jsonl"
+    base = dict(
+        task_name="make_sandwich",
+        planner="ros-service",
+        planner_label="constrained_linear_ir",
+        condition_label="robot_live",
+    )
+    experiment_log.append_event(
+        log_path,
+        experiment_log.build_event(
+            event_type=experiment_log.EVENT_GENERATION, trial_id="a", success=True, **base
+        ),
+    )
+    experiment_log.append_event(
+        log_path,
+        experiment_log.build_event(
+            event_type=experiment_log.EVENT_RUNNER,
+            trial_id="a",
+            success=True,
+            runner_started=True,
+            runner_return_code=0,
+            **base,
+        ),
+    )
+    experiment_log.append_event(
+        log_path,
+        experiment_log.build_annotation_event(
+            trial_id="a",
+            task_success="failure",
+            outcome_label="partial",
+            failure_category="skill_failed",
+            operator_notes="gripper slipped",
+        ),
+    )
+
+    events = experiment_log.read_events(log_path)
+    trials = experiment_log.merge_trials(events)
+    assert len(trials) == 1
+    trial = trials[0]
+    assert trial["trial_id"] == "a"
+    assert trial["generation_success"] is True
+    assert trial["runner_success"] is True
+    assert trial["task_success"] == "failure"
+    assert trial["outcome_label"] == "partial"
+    assert trial["failure_category"] == "skill_failed"
+    assert trial["annotated"] is True
+
+    summary = experiment_log.summarize_events(events)
+    assert len(summary) == 1
+    row = summary[0]
+    assert row["count_trials"] == 1
+    assert row["annotated_trial_count"] == 1
+    assert row["task_success_rate"] == "0.0000"
+    assert row["top_failure_categories"] == "skill_failed:1"
 
 
 def test_failure_stage_aggregation_counts_each_stage(tmp_path: Path) -> None:
@@ -112,7 +173,6 @@ def test_failure_stage_aggregation_counts_each_stage(tmp_path: Path) -> None:
         experiment_log.STAGE_PARSE,
         experiment_log.STAGE_VALIDATION,
         experiment_log.STAGE_STATIC_CHECK,
-        experiment_log.STAGE_RUNNER,
     ):
         events.append(
             experiment_log.build_event(
@@ -126,6 +186,21 @@ def test_failure_stage_aggregation_counts_each_stage(tmp_path: Path) -> None:
                 failure_stage=stage,
             )
         )
+    # A runner failure is recorded as a runner event, not a generation stage.
+    events.append(
+        experiment_log.build_event(
+            event_type=experiment_log.EVENT_RUNNER,
+            trial_id="runner_trial",
+            task_name="make_sandwich",
+            planner="model-response",
+            planner_label="constrained",
+            condition_label="default",
+            success=False,
+            failure_stage=experiment_log.STAGE_RUNNER,
+            runner_started=True,
+            runner_return_code=1,
+        )
+    )
     rows = experiment_log.summarize_events(events)
     assert len(rows) == 1
     row = rows[0]

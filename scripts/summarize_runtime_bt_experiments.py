@@ -4,6 +4,7 @@
 
 Reads an append-only JSONL log produced by bt_generation experiment logging and
 writes:
+- a trial-level CSV (one row per trial_id, merging generation/runner/annotation);
 - an event-level CSV (one row per logged event); and
 - an aggregated summary CSV grouped by task_name, planner_label, and
   condition_label.
@@ -36,10 +37,18 @@ def main(argv: list[str] | None = None) -> int:
         help="Input append-only JSONL log.",
     )
     parser.add_argument(
-        "--out-csv",
+        "--trials-csv",
         type=Path,
         default=Path("generated_bt/experiments/trials.csv"),
-        help="Output event-level CSV path.",
+        help="Output trial-level CSV path (one row per trial_id).",
+    )
+    parser.add_argument(
+        "--events-csv",
+        "--out-csv",
+        dest="events_csv",
+        type=Path,
+        default=Path("generated_bt/experiments/trials_events.csv"),
+        help="Output event-level CSV path (one row per logged event).",
     )
     parser.add_argument(
         "--summary-csv",
@@ -53,9 +62,11 @@ def main(argv: list[str] | None = None) -> int:
         print(f"JSONL log does not exist: {args.jsonl}", file=sys.stderr)
         return 1
 
-    experiment_log.write_events_csv(args.jsonl, args.out_csv)
+    experiment_log.write_trial_csv(args.jsonl, args.trials_csv)
+    experiment_log.write_events_csv(args.jsonl, args.events_csv)
     experiment_log.write_csv_summary(args.jsonl, args.summary_csv)
-    print(f"wrote event CSV: {args.out_csv}")
+    print(f"wrote trial CSV: {args.trials_csv}")
+    print(f"wrote event CSV: {args.events_csv}")
     print(f"wrote summary CSV: {args.summary_csv}")
     return 0
 
