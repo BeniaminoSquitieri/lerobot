@@ -25,6 +25,28 @@
 
 🤗 Comprehensive support for the open-source ecosystem to democratize physical AI.
 
+## Runtime BT generation: robot-day quickstart
+
+Use this section when testing runtime BT generation with
+`panda_live_viewer` on branch `after_lorenzo_meeting`. Detailed commands and
+STOP conditions are in
+[docs/runtime_bt_generation_robot_runbook.md](docs/runtime_bt_generation_robot_runbook.md).
+
+**Rule:** Do not start live VLM planner before dry-run ROS service and
+`--no-run` generation pass.
+
+Terminal order:
+
+| Terminal | What to run |
+|---|---|
+| T0 | `cd ~/lerobot && source /opt/ros/$ROS_DISTRO/setup.bash && colcon build --symlink-install && source install/setup.bash` |
+| T1 | Start `panda_live_viewer` dry-run planner service with `planner_dry_run:=true lazy_load_model:=true` |
+| T2 | Check `/lerobot_bt/generate_plan` exists and has type `lerobot_bt_interfaces/srv/GenerateTaskPlan` |
+| T3 | Run `generate_and_run --planner ros-service --no-run` from `~/lerobot` |
+| T4 | Start `uv run lerobot-bt-skill-server --config_path=src/lerobot_bt_python/make_sandwich_executor.yaml` |
+| T5 | Run `generate_and_run --planner ros-service` without `--no-run` |
+| Later | Restart Panda with `planner_dry_run:=false` only after dry-run service, no-run artifacts, skill server, and runner work |
+
 ## Quick Start
 
 LeRobot can be installed directly from PyPI.
