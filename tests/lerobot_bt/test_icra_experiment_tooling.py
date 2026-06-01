@@ -108,6 +108,72 @@ def test_annotate_rejects_empty_trial_id(tmp_path: Path) -> None:
     assert not log_path.exists()
 
 
+def test_annotate_rejects_unknown_trial_id(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    annotate = _load_script("annotate_runtime_bt_trial.py")
+    log_path = tmp_path / "trials.jsonl"
+    experiment_log.append_event(
+        log_path,
+        experiment_log.build_event(
+            event_type=experiment_log.EVENT_GENERATION,
+            trial_id="trial-known",
+            task_name="make_sandwich",
+            planner="ros-service",
+            planner_label="constrained_linear_ir",
+            condition_label="robot_live",
+            success=True,
+        ),
+    )
+
+    rc = annotate.main(
+        [
+            "--jsonl",
+            str(log_path),
+            "--trial-id",
+            "trial-missing",
+            "--task-success",
+            "success",
+            "--outcome-label",
+            "completed",
+            "--failure-category",
+            "none",
+        ]
+    )
+
+    captured = capsys.readouterr()
+    assert rc == 2
+    assert "Cannot annotate unknown trial_id 'trial-missing'" in captured.err
+    assert "Last available trial_id values" in captured.err
+    assert "trial-known" in captured.err
+    assert [event["trial_id"] for event in _read_jsonl(log_path)] == ["trial-known"]
+
+
+def test_annotate_allow_orphan_appends_unknown_trial_id(tmp_path: Path) -> None:
+    annotate = _load_script("annotate_runtime_bt_trial.py")
+    log_path = tmp_path / "trials.jsonl"
+
+    rc = annotate.main(
+        [
+            "--jsonl",
+            str(log_path),
+            "--trial-id",
+            "trial-orphan",
+            "--task-success",
+            "unknown",
+            "--outcome-label",
+            "unknown",
+            "--failure-category",
+            "unknown",
+            "--allow-orphan",
+        ]
+    )
+
+    assert rc == 0
+    events = _read_jsonl(log_path)
+    assert len(events) == 1
+    assert events[0]["event_type"] == "annotation"
+    assert events[0]["trial_id"] == "trial-orphan"
+
+
 def test_bundle_creates_archive_with_expected_members(tmp_path: Path) -> None:
     bundle = _load_script("bundle_runtime_bt_trial.py")
     output_dir = tmp_path / "generated_bt"
