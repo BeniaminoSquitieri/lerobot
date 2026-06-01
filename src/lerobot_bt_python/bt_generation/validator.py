@@ -7,7 +7,7 @@ from typing import Any
 
 import yaml
 
-from .planner import TASK_TEMPLATES
+from .planner import TASK_ALLOWED_VARIANTS, TASK_TEMPLATES
 from .registry import (
     ALLOWED_KINDS,
     HUMAN_STEP,
@@ -248,20 +248,42 @@ def _validate_canonical_task_sequence(plan: dict, steps: list[Any]) -> list[str]
     if not isinstance(task_name, str) or task_name not in TASK_TEMPLATES:
         return []
 
-    expected = [(step["kind"], step["name"]) for step in TASK_TEMPLATES[task_name]]
-    got: list[tuple[Any, Any]] = []
-    for step in steps:
-        if isinstance(step, dict):
-            got.append((step.get("kind"), step.get("name")))
-        else:
-            got.append(("<invalid>", "<invalid>"))
+    allowed_sequences = _allowed_task_sequence_signatures(task_name)
+    got = _task_sequence_signature(steps)
 
-    if got == expected:
+    if got in allowed_sequences:
         return []
+    expected = allowed_sequences[0]
     return [
         f"Generated plan does not match canonical task sequence for '{task_name}'. "
         f"Expected: {expected}. Got: {got}."
     ]
+
+
+def _allowed_task_sequence_signatures(task_name: str) -> list[list[tuple[Any, Any]]]:
+    signatures = [_task_sequence_signature(TASK_TEMPLATES[task_name])]
+    for variant in TASK_ALLOWED_VARIANTS.get(task_name, []):
+        variant_steps = _explicit_variant_steps(variant)
+        if variant_steps is not None:
+            signatures.append(_task_sequence_signature(variant_steps))
+    return signatures
+
+
+def _explicit_variant_steps(variant: dict) -> list[Any] | None:
+    steps = variant.get("steps")
+    if isinstance(steps, list) and steps:
+        return steps
+    return None
+
+
+def _task_sequence_signature(steps: list[Any]) -> list[tuple[Any, Any]]:
+    signature: list[tuple[Any, Any]] = []
+    for step in steps:
+        if isinstance(step, dict):
+            signature.append((step.get("kind"), step.get("name")))
+        else:
+            signature.append(("<invalid>", "<invalid>"))
+    return signature
 
 
 def _validate_make_sandwich_strict_rules(plan: dict, steps: list[Any]) -> list[str]:

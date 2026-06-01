@@ -4,11 +4,12 @@
 
 from __future__ import annotations
 
+import json
 import os
 import subprocess
 import sys
-from pathlib import Path
 import xml.etree.ElementTree as ET
+from pathlib import Path
 
 import yaml
 
@@ -43,6 +44,7 @@ def test_cli_output_dir_template_writes_standard_paths(tmp_path: Path) -> None:
     output_dir = tmp_path / "generated_bt"
     tree = output_dir / "trees/make_sandwich.xml"
     config = output_dir / "config/make_sandwich_bt.yaml"
+    manifest = output_dir / "manifests/make_sandwich_manifest.json"
 
     result = _run_cli_args(
         [
@@ -59,9 +61,17 @@ def test_cli_output_dir_template_writes_standard_paths(tmp_path: Path) -> None:
     assert result.returncode == 0, result.stderr
     assert f"wrote tree: {tree}" in result.stdout
     assert f"wrote config: {config}" in result.stdout
+    assert f"wrote manifest: {manifest}" in result.stdout
     ET.parse(tree)
     yaml.safe_load(config.read_text(encoding="utf-8"))
     assert validate_xml_yaml_blackboard_keys(tree, config) == []
+    manifest_data = json.loads(manifest.read_text(encoding="utf-8"))
+    assert manifest_data["task_name"] == "make_sandwich"
+    assert manifest_data["planner"] == "template"
+    assert manifest_data["tree_xml_path"] == str(tree)
+    assert manifest_data["bt_yaml_path"] == str(config)
+    assert "linear_ir_path" not in manifest_data
+    assert "raw_response_path" not in manifest_data
 
 
 def test_cli_output_dir_model_response_writes_plan_tree_config_and_raw_response(tmp_path: Path) -> None:
@@ -70,6 +80,7 @@ def test_cli_output_dir_model_response_writes_plan_tree_config_and_raw_response(
     tree = output_dir / "trees/make_sandwich.xml"
     config = output_dir / "config/make_sandwich_bt.yaml"
     raw_response = output_dir / "raw_model_responses/make_sandwich_raw_response.json"
+    manifest = output_dir / "manifests/make_sandwich_manifest.json"
 
     result = _run_cli_args(
         [
@@ -90,6 +101,7 @@ def test_cli_output_dir_model_response_writes_plan_tree_config_and_raw_response(
     assert f"wrote tree: {tree}" in result.stdout
     assert f"wrote config: {config}" in result.stdout
     assert f"wrote raw response: {raw_response}" in result.stdout
+    assert f"wrote manifest: {manifest}" in result.stdout
     assert yaml.safe_load(plan.read_text(encoding="utf-8"))["task_name"] == "make_sandwich"
     assert raw_response.read_text(encoding="utf-8") == (ASSET_DIR / "make_sandwich_valid.json").read_text(
         encoding="utf-8"
@@ -97,6 +109,11 @@ def test_cli_output_dir_model_response_writes_plan_tree_config_and_raw_response(
     ET.parse(tree)
     yaml.safe_load(config.read_text(encoding="utf-8"))
     assert validate_xml_yaml_blackboard_keys(tree, config) == []
+    manifest_data = json.loads(manifest.read_text(encoding="utf-8"))
+    assert manifest_data["planner"] == "model-response"
+    assert manifest_data["linear_ir_path"] == str(plan)
+    assert manifest_data["raw_response_path"] == str(raw_response)
+    assert len(manifest_data["linear_ir_sha256"]) == 64
 
 
 def test_cli_generates_set_breakfast_table(tmp_path: Path) -> None:

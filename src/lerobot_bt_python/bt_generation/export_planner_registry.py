@@ -6,7 +6,8 @@ import argparse
 import json
 from pathlib import Path
 
-from .planner import TASK_TEMPLATES
+from .manifest import sha256_text
+from .planner import TASK_ALLOWED_VARIANTS, TASK_TEMPLATES
 from .registry import HUMAN_STEP, ROBOT_SKILL, VLM_GATE, Registry, RegistryEntry, load_registry
 
 
@@ -73,6 +74,12 @@ def build_planner_registry_payload(task_name: str, registry: Registry) -> dict:
             }
             for obj in task_objects
         ]
+    allowed_variants = TASK_ALLOWED_VARIANTS.get(task_name, [])
+    if allowed_variants:
+        payload["allowed_variants"] = allowed_variants
+    payload["contract_schema_version"] = 1
+    payload["task_template_hash"] = _stable_json_sha256(canonical_task_sequence)
+    payload["registry_contract_hash"] = _stable_json_sha256(payload)
     return payload
 
 
@@ -106,6 +113,10 @@ def _ordering_constraints(steps: list[dict[str, str]]) -> list[dict[str, str]]:
         {"before": current["name"], "after": following["name"]}
         for current, following in zip(steps, steps[1:])
     ]
+
+
+def _stable_json_sha256(value: object) -> str:
+    return sha256_text(json.dumps(value, sort_keys=True))
 
 
 def main() -> None:

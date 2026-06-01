@@ -9,7 +9,11 @@ from pathlib import Path
 
 import pytest
 
-from lerobot_bt_python.bt_generation.planner import build_linear_plan
+from lerobot_bt_python.bt_generation.planner import (
+    TASK_ALLOWED_VARIANTS,
+    TASK_TEMPLATES,
+    build_linear_plan,
+)
 from lerobot_bt_python.bt_generation.registry import (
     HUMAN_STEP,
     INFINITE_RETRY_ATTEMPTS,
@@ -178,3 +182,39 @@ def test_forbidden_constructs_fail() -> None:
     assert any("forbidden kind 'fallback'" in error for error in errors)
     assert any("forbidden kind 'parallel'" in error for error in errors)
     assert any("forbidden fields ['raw_xml']" in error for error in errors)
+
+
+def test_strict_generated_rejects_extra_fields() -> None:
+    registry = load_registry(REGISTRY_PATH)
+    steps = [dict(step) for step in TASK_TEMPLATES["make_sandwich"]]
+    steps[0]["confidence"] = 0.99
+    plan = {
+        "task_name": "make_sandwich",
+        "comment": "not part of the Linear IR contract",
+        "steps": steps,
+    }
+
+    errors = validate_linear_plan(plan, registry, SANDWICH_EXECUTOR, strict_generated=True)
+
+    assert any("plan contains unsupported strict fields ['comment']" in error for error in errors)
+    assert any(
+        "plan.steps[0] contains unsupported strict fields ['confidence']" in error
+        for error in errors
+    )
+
+
+def test_empty_allowed_variants_do_not_relax_strict_sequence() -> None:
+    registry = load_registry(REGISTRY_PATH)
+    steps = [dict(step) for step in TASK_TEMPLATES["make_coffee"]]
+    steps[1], steps[2] = steps[2], steps[1]
+    plan = {"task_name": "make_coffee", "steps": steps}
+
+    errors = validate_linear_plan(
+        plan,
+        registry,
+        REPO_ROOT / "src/lerobot_bt_python/make_coffee_executor.yaml",
+        strict_generated=True,
+    )
+
+    assert TASK_ALLOWED_VARIANTS == {}
+    assert any("does not match canonical task sequence for 'make_coffee'" in error for error in errors)

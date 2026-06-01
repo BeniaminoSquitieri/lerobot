@@ -38,6 +38,7 @@ from __future__ import annotations
 import argparse
 import importlib
 import os
+import shutil
 import subprocess
 import sys
 from dataclasses import dataclass, field
@@ -61,6 +62,8 @@ ROS2_SETUP_CANDIDATES = [
 
 BT_PYTHON_DIR = SRC_DIR / "lerobot_bt_python"
 BT_CPP_DIR = SRC_DIR / "lerobot_bt_runtime_cpp"
+PLANNER_SERVICE_NAME = "/lerobot_bt/generate_plan"
+PLANNER_SERVICE_TYPE = "lerobot_bt_interfaces/srv/GenerateTaskPlan"
 
 # Known conda/venv environment names (prefix match).
 EXPECTED_CONDA_ENVS = ["lerobot"]
@@ -227,6 +230,101 @@ def _check_ros2_environment(report: PreflightReport) -> None:
                                "'ros2' command not found in PATH"))
     except Exception as e:
         report.add(CheckResult("ros2 CLI works", False, True, str(e)))
+
+
+def _check_plan_service(report: PreflightReport) -> None:
+    """Validate the optional VLM planner ROS service contract."""
+
+    if shutil.which("ros2") is None:
+        report.add(CheckResult(
+            "Planner service: ros2 available",
+            False,
+            True,
+            "ros2 command not found in PATH.",
+            "Source ROS 2 and the built workspace: source /opt/ros/<distro>/setup.bash && source install/setup.bash",
+        ))
+        return
+    report.add(CheckResult("Planner service: ros2 available", True, True))
+
+    try:
+        service_list = subprocess.run(
+            ["ros2", "service", "list"],
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+    except Exception as e:
+        report.add(CheckResult(
+            f"Planner service listed: {PLANNER_SERVICE_NAME}",
+            False,
+            True,
+            str(e),
+            "Start ROS 2 and the planner bridge, then rerun with --check-plan-service.",
+        ))
+        return
+
+    if service_list.returncode != 0:
+        detail = service_list.stderr.strip() or service_list.stdout.strip()
+        report.add(CheckResult(
+            f"Planner service listed: {PLANNER_SERVICE_NAME}",
+            False,
+            True,
+            detail or f"ros2 service list returned {service_list.returncode}.",
+            "Source ROS 2, source install/setup.bash, and start the planner service node.",
+        ))
+        return
+
+    service_names = {line.strip() for line in service_list.stdout.splitlines() if line.strip()}
+    if PLANNER_SERVICE_NAME not in service_names:
+        report.add(CheckResult(
+            f"Planner service listed: {PLANNER_SERVICE_NAME}",
+            False,
+            True,
+            f"Available services: {sorted(service_names)[:10]}",
+            "Start panda_live_viewer or the bridge node exposing /lerobot_bt/generate_plan.",
+        ))
+        return
+    report.add(CheckResult(f"Planner service listed: {PLANNER_SERVICE_NAME}", True, True))
+
+    try:
+        service_type = subprocess.run(
+            ["ros2", "service", "type", PLANNER_SERVICE_NAME],
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+    except Exception as e:
+        report.add(CheckResult(
+            "Planner service type",
+            False,
+            True,
+            str(e),
+            "Confirm the service is still running and the workspace is sourced.",
+        ))
+        return
+
+    if service_type.returncode != 0:
+        detail = service_type.stderr.strip() or service_type.stdout.strip()
+        report.add(CheckResult(
+            "Planner service type",
+            False,
+            True,
+            detail or f"ros2 service type returned {service_type.returncode}.",
+            "Rebuild/source lerobot_bt_interfaces and restart the planner service node.",
+        ))
+        return
+
+    actual_type = service_type.stdout.strip().splitlines()[0] if service_type.stdout.strip() else ""
+    if actual_type != PLANNER_SERVICE_TYPE:
+        report.add(CheckResult(
+            "Planner service type",
+            False,
+            True,
+            f"Expected {PLANNER_SERVICE_TYPE}, got {actual_type!r}.",
+            "Use lerobot_bt_interfaces/srv/GenerateTaskPlan on /lerobot_bt/generate_plan.",
+        ))
+        return
+    report.add(CheckResult("Planner service type", True, True, PLANNER_SERVICE_TYPE))
 
 
 def _check_workspace_build(report: PreflightReport) -> None:
@@ -616,6 +714,10 @@ Examples:
         "--guide-only", action="store_true",
         help="Only print the policy-swap guide and exit."
     )
+    parser.add_argument(
+        "--check-plan-service", action="store_true",
+        help="Also validate the optional /lerobot_bt/generate_plan ROS planner service."
+    )
     args = parser.parse_args()
 
     # Determine tasks to validate
@@ -650,6 +752,8 @@ Examples:
 
         # Optional checks
         _check_policy_checkpoints(report, task)
+        if args.check_plan_service:
+            _check_plan_service(report)
 
         if args.real:
             _check_robot_hardware(report, task)

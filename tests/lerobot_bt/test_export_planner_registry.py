@@ -10,6 +10,8 @@ from pathlib import Path
 import pytest
 
 from lerobot_bt_python.bt_generation.export_planner_registry import build_planner_registry_payload
+from lerobot_bt_python.bt_generation.manifest import sha256_text
+from lerobot_bt_python.bt_generation.planner import TASK_TEMPLATES
 from lerobot_bt_python.bt_generation.registry import load_registry
 
 
@@ -96,6 +98,26 @@ def test_payload_filters_entries_and_keeps_rules_json_serializable() -> None:
     json.dumps(payload)
 
 
+def test_planner_contract_hashes_are_deterministic() -> None:
+    registry = load_registry(REGISTRY_PATH)
+    payload = build_planner_registry_payload("make_sandwich", registry)
+    payload_again = build_planner_registry_payload("make_sandwich", registry)
+
+    assert payload == payload_again
+    assert payload["contract_schema_version"] == 1
+    assert payload["task_template_hash"] == _stable_json_sha256(TASK_TEMPLATES["make_sandwich"])
+    contract_payload = dict(payload)
+    registry_contract_hash = contract_payload.pop("registry_contract_hash")
+    assert registry_contract_hash == _stable_json_sha256(contract_payload)
+
+
+def test_empty_allowed_variants_are_not_exported() -> None:
+    registry = load_registry(REGISTRY_PATH)
+    payload = build_planner_registry_payload("make_sandwich", registry)
+
+    assert "allowed_variants" not in payload
+
+
 def test_export_fails_on_missing_registry_entry() -> None:
     class DummyRegistry:
         objects = {}
@@ -105,3 +127,7 @@ def test_export_fails_on_missing_registry_entry() -> None:
 
     with pytest.raises(ValueError, match="not present in registry"):
         build_planner_registry_payload("make_sandwich", DummyRegistry())  # type: ignore[arg-type]
+
+
+def _stable_json_sha256(value: object) -> str:
+    return sha256_text(json.dumps(value, sort_keys=True))

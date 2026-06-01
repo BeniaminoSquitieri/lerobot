@@ -8,7 +8,8 @@ import sys
 from collections import Counter
 from pathlib import Path
 
-from .planner import build_linear_plan
+from .manifest import build_generation_manifest, write_generation_manifest
+from .planner import TASK_TEMPLATES, build_linear_plan
 from .registry import load_registry, validate_registry
 from .renderer import render_bt_params_yaml, render_xml
 from .static_checks import validate_xml_yaml_blackboard_text
@@ -180,6 +181,20 @@ def main(argv: list[str] | None = None) -> int:
         _write_text(raw_response_output_path, model_response_text)
     _write_text(out_tree, xml_text)
     _write_text(out_config, yaml_text)
+    manifest_output_path = _manifest_output_path(args)
+    if manifest_output_path is not None:
+        manifest = build_generation_manifest(
+            task_name=args.task,
+            planner=args.planner,
+            registry_path=args.registry,
+            executor_yaml_path=args.executor_yaml,
+            tree_xml_path=out_tree,
+            bt_yaml_path=out_config,
+            canonical_task_sequence=[dict(step) for step in TASK_TEMPLATES[args.task]],
+            linear_ir_path=plan_output_path,
+            raw_response_path=raw_response_output_path,
+        )
+        write_generation_manifest(manifest_output_path, manifest)
 
     counts = Counter(step["kind"] for step in plan["steps"])
     print(f"task_name: {plan['task_name']}")
@@ -192,6 +207,8 @@ def main(argv: list[str] | None = None) -> int:
     print(f"wrote config: {out_config}")
     if raw_response_output_path is not None:
         print(f"wrote raw response: {raw_response_output_path}")
+    if manifest_output_path is not None:
+        print(f"wrote manifest: {manifest_output_path}")
     return 0
 
 
@@ -226,6 +243,12 @@ def _raw_response_output_path(args: argparse.Namespace, model_response_text: str
 
     suffix = ".json" if _is_json_document(model_response_text) else ".txt"
     return args.output_dir / "raw_model_responses" / f"{args.task}_raw_response{suffix}"
+
+
+def _manifest_output_path(args: argparse.Namespace) -> Path | None:
+    if args.output_dir is None:
+        return None
+    return args.output_dir / "manifests" / f"{args.task}_manifest.json"
 
 
 def _is_json_document(text: str) -> bool:

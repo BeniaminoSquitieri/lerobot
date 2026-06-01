@@ -58,6 +58,10 @@ TASK_TEMPLATES: dict[str, list[dict[str, str]]] = {
     ],
 }
 
+# Future scaffold for explicitly approved task variants. Empty by default: model
+# generated plans must match TASK_TEMPLATES exactly.
+TASK_ALLOWED_VARIANTS: dict[str, list[dict]] = {}
+
 
 def build_linear_plan(
     task_name: str,
