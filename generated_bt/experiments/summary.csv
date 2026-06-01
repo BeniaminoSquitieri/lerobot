@@ -1,0 +1,7 @@
+task_name,planner_label,condition_label,count_trials,generation_success_rate,runner_success_rate,task_success_rate,annotated_trial_count,parse_failure_count,validation_failure_count,static_check_failure_count,runner_failure_count,top_failure_categories
+make_sandwich,template,offline_template_no_run,2,1.0000,,,0,0,0,0,0,
+make_sandwich,constrained_linear_ir,robot_live,4,0.5000,1.0000,0.3333,3,0,0,0,0,service_unavailable:2
+make_coffee,constrained_linear_ir,robot_live,1,1.0000,1.0000,,0,0,0,0,0,
+set_breakfast_table,constrained_linear_ir,robot_live,1,1.0000,1.0000,,0,0,0,0,0,
+prepare_picnic_bag,constrained_linear_ir,robot_live,1,1.0000,1.0000,,0,0,0,0,0,
+items_in_drawer,constrained_linear_ir,robot_live,1,1.0000,1.0000,,0,0,0,0,0,

@@ -1,0 +1,18 @@
+{
+  "bt_yaml_path": "generated_bt/config/prepare_picnic_bag_bt.yaml",
+  "bt_yaml_sha256": "ed50ddd61d7f66141880253df2555441835fe20a7292fb4cbfbb3949462db746",
+  "canonical_task_sequence_sha256": "6ef4f706710a0888067a0e6fb32cef0f607b88f0fe8740dd2432f5cc563a3e72",
+  "executor_yaml_path": "src/lerobot_bt_python/prepare_picnic_bag_executor.yaml",
+  "executor_yaml_sha256": "b174ebace9bb1346800a56796c7936d964a896ee81f395c2ccc63481a1494f5e",
+  "generated_at_unix_s": 1780329761,
+  "linear_ir_path": "generated_bt/plans/prepare_picnic_bag_linear_ir.json",
+  "linear_ir_sha256": "c832842cc66536823f002ce513b9bbbae4a678b011af7e55563d69320545d3cb",
+  "planner": "ros-service",
+  "raw_response_path": "generated_bt/raw_model_responses/prepare_picnic_bag_raw_response.json",
+  "registry_path": "src/lerobot_bt_python/bt_generation/skills_registry.yaml",
+  "registry_sha256": "bef04beb83f2194db2cb72908fc80f49e7ecf107f8899d37b4b4b249352799a1",
+  "schema_version": 1,
+  "task_name": "prepare_picnic_bag",
+  "tree_xml_path": "generated_bt/trees/prepare_picnic_bag.xml",
+  "tree_xml_sha256": "ab02f7080aec2ccc00f7b13b44b52ad2ea50fed184891258848c631749dc324b"
+}

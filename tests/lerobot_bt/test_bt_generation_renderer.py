@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+import re
 import xml.etree.ElementTree as ET
 
 import yaml
@@ -40,6 +41,44 @@ def test_xml_does_not_generate_parallel_or_fallback() -> None:
 
     assert "Parallel" not in tags
     assert "Fallback" not in tags
+
+
+def test_xml_retry_num_attempts_are_numeric_literals() -> None:
+    xml_text, _ = _sandwich_outputs()
+    root = ET.fromstring(xml_text)
+    retry_nodes = root.findall(".//RetryUntilSuccessful")
+
+    assert retry_nodes
+    assert all(
+        re.fullmatch(r"[0-9]+", node.attrib.get("num_attempts", ""))
+        for node in retry_nodes
+    )
+
+
+def test_xml_retry_num_attempts_do_not_use_blackboard_placeholders() -> None:
+    xml_text, _ = _sandwich_outputs()
+    root = ET.fromstring(xml_text)
+    retry_nodes = root.findall(".//RetryUntilSuccessful")
+
+    assert retry_nodes
+    assert all("{" not in node.attrib.get("num_attempts", "") for node in retry_nodes)
+
+
+def test_xml_place_first_toast_retry_uses_registry_max_attempts_or_default() -> None:
+    xml_text, _ = _sandwich_outputs()
+    root = ET.fromstring(xml_text)
+    registry = load_registry(REGISTRY_PATH)
+
+    place_first_toast_retry = root.find(
+        './/RetryUntilSuccessful[@name="Robot skill: Place first toast"]'
+    )
+    assert place_first_toast_retry is not None
+
+    expected_registry_attempts = registry.robot_skills["place_first_toast"].max_attempts
+    expected_literal_attempts = (
+        str(expected_registry_attempts) if expected_registry_attempts > 0 else "1"
+    )
+    assert place_first_toast_retry.attrib.get("num_attempts") == expected_literal_attempts
 
 
 def test_xml_represents_human_step_explicitly() -> None:

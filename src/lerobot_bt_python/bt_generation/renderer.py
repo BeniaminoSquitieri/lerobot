@@ -27,7 +27,7 @@ def render_xml(plan: dict, registry: Registry) -> str:
     )
 
     for step in plan["steps"]:
-        _append_step_xml(sequence, step)
+        _append_step_xml(sequence, step, registry)
 
     nodes_model = ET.SubElement(root, "TreeNodesModel")
     await_scene = ET.SubElement(nodes_model, "Action", {"ID": "AwaitScene"})
@@ -90,17 +90,18 @@ def param_key(name: str) -> str:
     return key
 
 
-def _append_step_xml(parent: ET.Element, step: dict[str, str]) -> None:
+def _append_step_xml(parent: ET.Element, step: dict[str, str], registry: Registry) -> None:
     kind = step["kind"]
     name = step["name"]
     key = param_key(name)
+    entry = registry.get(kind, name)
 
     retry = ET.SubElement(
         parent,
         "RetryUntilSuccessful",
         {
             "name": _retry_label(kind, name),
-            "num_attempts": f"{{{key}_max_attempts}}",
+            "num_attempts": str(_retry_num_attempts_literal(kind, entry)),
         },
     )
     if kind == ROBOT_SKILL:
@@ -131,6 +132,24 @@ def _append_step_xml(parent: ET.Element, step: dict[str, str]) -> None:
                 "scene_name": f"{{{key}_gate}}",
             },
         )
+
+
+def _retry_num_attempts_literal(kind: str, entry: object) -> int:
+    if kind == ROBOT_SKILL:
+        raw_value = getattr(entry, "max_attempts", None)
+    elif kind == HUMAN_STEP:
+        raw_value = getattr(entry, "max_attempts", None)
+    elif kind == VLM_GATE:
+        raw_value = getattr(entry, "max_attempts", None)
+    else:
+        raw_value = None
+
+    try:
+        attempts = int(raw_value) if raw_value is not None else 1
+    except (TypeError, ValueError):
+        return 1
+
+    return attempts if attempts > 0 else 1
 
 
 def _retry_label(kind: str, name: str) -> str:
