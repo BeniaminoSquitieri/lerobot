@@ -6,16 +6,7 @@
 # The top-level policy_variant is only the default for skills that do not
 # override it.
 
-bt_command_service: "/lerobot_bt/run"
-vlm_state_service: "/lerobot_bt/vlm_state"
-legacy_vlm_result_service: "/lerobot_bt/vlm_result_legacy"
-vlm_request_topic: "/lerobot_bt/vlm_request"
-vlm_result_topic: "/lerobot_bt/vlm_result"
 vlm_timeout_s: 60.0
-
-# Default variant. Per-skill policy_variant can mix any registered LeRobot
-# policy type, e.g. act.
-policy_variant: act
 
 expected_skill_names:
   - insert_next_drawer_item
@@ -46,23 +37,9 @@ robot:
       height: 480
       fps: 30
 
-fps: 10
-display_data: true
-play_sounds: true
-reset_robot_on_startup: true
-reset_robot_before_skill: true
-rename_map: {}
-
-robot_action_processor:
-  steps: []
-robot_observation_processor:
-  steps: []
-
 camera_publish_map:
   wrist: "/panda/camera/front/image_compressed"
   left: "/panda/camera/wrist/image_compressed"
-camera_publish_fps: 10.0
-camera_publish_jpeg_quality: 80
 
 skills:
   - name: insert_next_drawer_item
