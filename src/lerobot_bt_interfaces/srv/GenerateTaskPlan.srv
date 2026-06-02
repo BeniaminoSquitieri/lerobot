@@ -1,3 +1,10 @@
+# @file GenerateTaskPlan.srv
+# @brief Planner-service boundary for runtime BT generation.
+#
+# This service is used during robot-day plan generation before any BT runs.
+# lerobot sends the task name plus a constrained planner-registry JSON payload,
+# and expects back Linear IR JSON only. The reply is still subject to local
+# canonicalization and strict validation before XML/YAML can be produced.
 string task_name
 string planner_registry_json
 string scene_facts_json

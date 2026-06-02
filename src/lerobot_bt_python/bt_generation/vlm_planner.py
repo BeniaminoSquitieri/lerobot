@@ -1,4 +1,11 @@
-"""Constrained model-response planner for Linear IR BT generation."""
+"""Parse and constrain VLM planner responses as Linear IR JSON only.
+
+This module sits at the first ingestion boundary for model-produced plans in
+the real robot generation path. It builds the constrained prompt, rejects XML
+or prose, and canonicalizes accepted responses into Linear IR for validator.py.
+Main inputs are the task contract, registry, and raw model response; main
+output is normalized plan JSON. Do not let executable BT XML cross this file.
+"""
 
 from __future__ import annotations
 

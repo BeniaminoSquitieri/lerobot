@@ -1,4 +1,11 @@
-"""Generate a runtime BT once, then run the existing C++ BT runner."""
+"""Robot-day entry point for one-shot BT generation and optional execution.
+
+This module runs at episode start on the real runtime path. It generates one
+validated BT from a task name and planner source, writes XML/YAML/manifest
+artifacts, and can then launch the thin C++ BehaviorTree.CPP runner. Raw VLM
+output never executes directly here: generation must pass lerobot validation
+before the runner is allowed to load the produced files.
+"""
 
 from __future__ import annotations
 

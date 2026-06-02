@@ -1,4 +1,11 @@
-"""Generation manifest helpers for runtime BT artifacts."""
+"""Provenance and checksum helpers for generated runtime BT artifacts.
+
+This module is robot-day support code used alongside generation, not a control
+decision point. It records hashes, planner provenance, and artifact paths for
+the XML/YAML outputs written at episode start. Main inputs are generated files
+and source-contract metadata; main output is a manifest JSON structure. Do not
+let manifest creation affect validation, rendering, or runner behavior.
+"""
 
 from __future__ import annotations
 

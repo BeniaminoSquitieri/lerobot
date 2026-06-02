@@ -1,4 +1,11 @@
-"""BehaviorTree.CPP XML and ROS2 BT parameter renderers."""
+"""Render validated Linear IR into BT XML and runner params YAML.
+
+This module is used in the real robot generation flow after validation passes.
+Its inputs are a validated Linear IR plan and the capability registry; its
+outputs are robot-owned BehaviorTree.CPP XML and ROS2 parameter YAML consumed
+by the C++ runner. The renderer assumes names, kinds, ordering, and objects are
+already validated. Do not treat raw VLM output as renderable input.
+"""
 
 from __future__ import annotations
 

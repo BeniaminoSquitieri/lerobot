@@ -1,10 +1,11 @@
 # @file items_in_drawer_executor.yaml
-# @brief Real-robot Python execution config for items_in_drawer.xml.
+# @brief Real robot skill-server config for the items_in_drawer task.
 #
-# The executor only needs the repeated insertion skill; human drawer open/close
-# steps are VLM gates in the BT. Each skill can choose its own policy_variant.
-# The top-level policy_variant is only the default for skills that do not
-# override it.
+# Consumed by lerobot_bt_python.server before robot execution starts. It defines
+# the BT service names, verification timeout, required cameras, processor stack,
+# and learned skills used by this task's Python executor. Human drawer
+# open/close phases stay in the BT as verification gates. Do not change service
+# names, policy paths, or timing values casually before robot-day.
 
 vlm_timeout_s: 60.0
 

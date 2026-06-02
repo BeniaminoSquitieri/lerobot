@@ -1,4 +1,12 @@
-"""CLI for runtime BT generation."""
+"""Compile a robot-owned BT artifact set from a task plan candidate.
+
+This module is part of the real robot runtime generation path and is used once
+before execution starts. It orchestrates planner input, strict validation,
+rendering, static XML/YAML checks, and provenance logging. Main inputs are the
+task name, planner mode, registry, and optional executor config; main outputs
+are Linear IR, BT XML, ROS params YAML, and a manifest. Do not let renderer or
+logging bypass validation or alter control decisions.
+"""
 
 from __future__ import annotations
 

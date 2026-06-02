@@ -1,4 +1,11 @@
-"""ROS2 client for the GenerateTaskPlan service."""
+"""ROS2 bridge from lerobot generation to the external planner service.
+
+This module is used only when the real runtime generation path selects
+ros-service planner mode. It sends task and constrained planner-registry JSON
+to /lerobot_bt/generate_plan and returns the service's Linear IR response text
+for robot-side parsing and validation. Do not let this client bypass local
+canonicalization or strict validation of the returned plan.
+"""
 
 from __future__ import annotations
 

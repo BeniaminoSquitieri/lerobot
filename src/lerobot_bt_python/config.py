@@ -1,13 +1,11 @@
-"""@file config.py
-@brief Configuration dataclasses for the LeRobot BT Python execution layer.
+"""Schema for real-robot executor YAML files consumed by server.py.
 
-Each dataclass mirrors the YAML schema used by `server.py` to load the
-runtime configuration. The server reads one root config (see
-`SkillCommandServerConfig`) and uses the contained skill entries to
-drive execution.
-
-The comments below annotate every field and validation to make the contract
-explicit for maintainers and integrators.
+This module belongs to the execution side of the real robot runtime path. It
+defines the dataclass contract for task executor YAMLs that configure service
+names, skill entries, cameras, processors, timeouts, and robot backends before
+the ROS2 skill server starts. Main input is one *_executor.yaml file; main
+output is a validated SkillCommandServerConfig tree. Do not change this schema
+casually, because server.py and robot-day configs depend on it staying aligned.
 """
 
 from collections import Counter

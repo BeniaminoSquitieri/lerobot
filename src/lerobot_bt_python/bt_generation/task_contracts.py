@@ -1,4 +1,12 @@
-"""Repository-owned task contracts for deterministic BT generation."""
+"""Load canonical task-order contracts for runtime BT generation.
+
+This module is part of the real robot generation boundary and is read before
+planning and validation. Its main input is task_templates.yaml; its outputs are
+normalized canonical task sequences and approved variants used across planner,
+validator, and planner-registry export. Do not weaken the schema or reorder the
+canonical sequence implicitly, because downstream strict validation depends on
+these contracts being stable.
+"""
 
 from __future__ import annotations
 

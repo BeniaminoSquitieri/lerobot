@@ -36,7 +36,7 @@ These run, or are directly consumed, during a real robot trial.
 |---|---|---|---|---|---|
 | A | [src/lerobot_bt_python/bt_generation/generate_and_run.py](../src/lerobot_bt_python/bt_generation/generate_and_run.py) | Generate BT once, then launch the C++ runner | Yes | P0 | Robot-day entry point |
 | A | [src/lerobot_bt_python/bt_generation/generate.py](../src/lerobot_bt_python/bt_generation/generate.py) | Orchestrates plan -> validate -> render -> log | Yes | P0 | Core CLI |
-| A | [src/lerobot_bt_python/bt_generation/planner.py](../src/lerobot_bt_python/bt_generation/planner.py) | Builds deterministic Linear IR from the task contract | Yes | P0 | Re-exports task contracts |
+| A | [src/lerobot_bt_python/bt_generation/planner.py](../src/lerobot_bt_python/bt_generation/planner.py) | Template-mode Linear IR builder and compatibility exports for the task contract; in ros-service mode, Linear IR comes from Panda and is validated against the same contract | Yes | P0 | Re-exports task contracts |
 | A | [src/lerobot_bt_python/bt_generation/task_contracts.py](../src/lerobot_bt_python/bt_generation/task_contracts.py) | Loads/validates canonical task templates | Yes | P0 | Source of truth loader |
 | A | [src/lerobot_bt_python/bt_generation/task_templates.yaml](../src/lerobot_bt_python/bt_generation/task_templates.yaml) | Canonical task order data | Yes | P0 | Repo-owned contract |
 | A | [src/lerobot_bt_python/bt_generation/registry.py](../src/lerobot_bt_python/bt_generation/registry.py) | Typed capability registry load/validate | Yes | P0 | Capability boundary |

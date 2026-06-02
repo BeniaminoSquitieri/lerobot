@@ -1,4 +1,12 @@
-"""Typed access and validation for deterministic BT generation registries."""
+"""Capability registry loader for the safe BT generation path.
+
+This module runs on the real robot generation side before validation and
+rendering. It loads the repo-owned skill, human-step, and VLM-gate registry and
+exposes typed entries used by planner.py, validator.py, and renderer.py. Main
+input is skills_registry.yaml; main output is a validated Registry object. Do
+not admit unknown kinds or executor mismatches, because the validator assumes
+this registry is the capability boundary.
+"""
 
 from __future__ import annotations
 

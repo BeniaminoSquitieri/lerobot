@@ -1,4 +1,11 @@
-"""Deterministic task-name to Linear IR planner for BT generation."""
+"""Deterministic Linear IR builder for canonical runtime tasks.
+
+This module is used in the safe generation path when planner mode is template.
+It converts a known task name plus the validated registry into repo-owned
+Linear IR JSON, including required verification gates from the task contract.
+The output is a plan candidate for validator.py, not executable BT XML. Do not
+treat this file as the source of truth for task ordering; task_contracts.py is.
+"""
 
 from __future__ import annotations
 

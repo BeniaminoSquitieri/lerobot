@@ -16,6 +16,8 @@ Flow role:
 3. Return the result to the BT so the tree can continue or retry.
 """
 
+from __future__ import annotations
+
 import json
 import logging
 import time

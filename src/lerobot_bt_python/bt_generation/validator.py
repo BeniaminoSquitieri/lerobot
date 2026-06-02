@@ -1,4 +1,12 @@
-"""Validation for generated Linear IR plans."""
+"""Strict robot-side validation for generated Linear IR plans.
+
+This module is the safety boundary between planner output and executable robot
+artifacts. It runs after template, VLM, or ROS-service planning and before any
+rendering step. Main inputs are Linear IR, the validated registry, and the
+canonical task contracts; main output is a list of validation errors or a plan
+that is safe to compile. Do not weaken strict_generated checks or canonical
+task-sequence enforcement here.
+"""
 
 from __future__ import annotations
 

@@ -1,4 +1,11 @@
-"""Export a filtered planner registry payload for a given task."""
+"""Build the constrained planner payload sent to the Panda planning service.
+
+This module is used in the real runtime generation flow when planner mode is
+ros-service. It filters repo-owned task and registry data into the Linear IR
+contract exposed through /lerobot_bt/generate_plan, including canonical task
+order and approved variants. The output is planner guidance JSON, not an
+executable artifact. Do not expand this payload beyond lerobot-owned contracts.
+"""
 
 from __future__ import annotations
 

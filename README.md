@@ -31,6 +31,7 @@ Use this section when testing runtime BT generation with
 `panda_live_viewer` on branch `after_lorenzo_meeting`. Detailed commands and
 STOP conditions are in
 [docs/runtime_bt_generation_robot_runbook.md](docs/runtime_bt_generation_robot_runbook.md).
+For copy-paste robot-day commands, see [docs/ROBOT_DAY_COMMANDS.md](docs/ROBOT_DAY_COMMANDS.md).
 
 **Rule:** Do not start live VLM planner before dry-run ROS service and
 `--no-run` generation pass.

@@ -6,10 +6,8 @@ custom BT leaves that call the Python skill server.
 
 It does not load LeRobot policies and it does not command the robot directly.
 Those responsibilities belong to `../lerobot_bt_python` and `../lerobot`.
-
-Classification: every file here is part of the real robot runtime path (P0).
-See [../../docs/robot_runtime_code_map.md](../../docs/robot_runtime_code_map.md)
-for the full runtime-vs-test map.
+This package is part of the P0 real robot runtime path; see
+[../../docs/robot_runtime_code_map.md](../../docs/robot_runtime_code_map.md).
 
 ## Main Files
 

@@ -1,4 +1,11 @@
-"""Static consistency checks for generated BT XML and parameter YAML."""
+"""Pre-run consistency checks for generated BT XML and parameter YAML.
+
+This module runs on the real robot generation path after rendering and before
+the runner loads artifacts. It compares blackboard keys referenced in XML with
+the generated bt.* parameters in YAML and reports mismatches early. Main inputs
+are rendered XML and YAML text; main output is a list of static errors. Do not
+skip this boundary when changing renderer output or runner parameter names.
+"""
 
 from __future__ import annotations
 
