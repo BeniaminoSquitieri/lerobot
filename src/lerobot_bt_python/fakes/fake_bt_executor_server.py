@@ -3,6 +3,9 @@
 This module deliberately avoids robot, policy, camera, VLM, and transformer
 imports. The ROS2 server path imports rclpy and generated service bindings only
 inside ``main`` so unit tests can use the pure-Python simulator without ROS2.
+
+Smoke-test only: this is NOT the real robot skill server. The real skill server
+is ``lerobot_bt_python.server``. Do not use this fake on robot day.
 """
 
 from __future__ import annotations

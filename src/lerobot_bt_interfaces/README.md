@@ -6,6 +6,11 @@ BehaviorTree.CPP runner and the Python LeRobot skill server.
 It contains only interface definitions. It should not contain policy loading,
 robot execution, BT XML, VLM business logic, or task-specific configuration.
 
+Classification: every file here is part of the real robot runtime path (P0). It
+is a frozen contract and must not change without coordinated runtime updates.
+See [../../docs/robot_runtime_code_map.md](../../docs/robot_runtime_code_map.md)
+for the full runtime-vs-test map.
+
 ## Who Uses This Package
 
 | Consumer | How it uses the interfaces |

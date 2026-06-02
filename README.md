@@ -47,6 +47,19 @@ Terminal order:
 | T5 | Run `generate_and_run --planner ros-service` without `--no-run` |
 | Later | Restart Panda with `planner_dry_run:=false` only after dry-run service, no-run artifacts, skill server, and runner work |
 
+### Runtime BT code map
+
+Before robot day, read
+[docs/robot_runtime_code_map.md](docs/robot_runtime_code_map.md) to know exactly
+what runs on the real robot versus what is support tooling, fake/smoke-test
+code, or offline evaluation:
+
+- The real runtime path (generation + execution) is the only code that runs on
+  the robot.
+- Fake server, offline smoke scripts, and the validator-ablation tool are listed
+  separately and are safe to ignore for runtime study.
+- Tests are required for confidence but are not part of the runtime path.
+
 ## Quick Start
 
 LeRobot can be installed directly from PyPI.

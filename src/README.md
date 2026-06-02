@@ -17,6 +17,25 @@ has one place to copy from.
 | `lerobot_bt_runtime_cpp/` | C++ BehaviorTree.CPP runner, task XML trees, BT parameter YAML, launch files, and custom BT leaves.                                                                                          |
 | `behaviortree_cpp/`       | Gitlink/reserved checkout for BehaviorTree.CPP. The active runtime expects BehaviorTree.CPP from the ROS/system environment.                                                                 |
 
+### Runtime vs test/offline classification
+
+To know exactly which files run on the real robot versus what is support
+tooling, fake/smoke-test code, or offline evaluation, read
+[../docs/robot_runtime_code_map.md](../docs/robot_runtime_code_map.md). It is the
+single source of truth and assigns each file a study priority (P0 real runtime,
+P1/P2 robot-day support, P3 fake/offline/eval, Ignore for tests/generated
+outputs).
+
+Per-package classification:
+
+| Path | Runtime role | Priority |
+| --- | --- | --- |
+| `lerobot/` | Upstream library consumed by the runtime path | P0 (subset used) |
+| `lerobot_bt_interfaces/` | Frozen service contract, all runtime | P0 |
+| `lerobot_bt_python/` | Mixed: runtime server/executor + generation (P0), support logging (P2), `fakes/` and `bt_generation/eval_ablation.py` (P3) | mixed |
+| `lerobot_bt_runtime_cpp/` | C++ runtime, all runtime | P0 |
+| `behaviortree_cpp/` | Dependency placeholder | P0 (dependency) |
+
 Main runtime boundary:
 
 ```text
