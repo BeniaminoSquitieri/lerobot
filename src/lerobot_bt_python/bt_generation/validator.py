@@ -7,7 +7,6 @@ from typing import Any
 
 import yaml
 
-from .planner import TASK_ALLOWED_VARIANTS, TASK_TEMPLATES
 from .registry import (
     ALLOWED_KINDS,
     HUMAN_STEP,
@@ -18,6 +17,7 @@ from .registry import (
     RegistryEntry,
     is_valid_max_attempts,
 )
+from .task_contracts import TASK_ALLOWED_VARIANTS, TASK_TEMPLATES
 
 FORBIDDEN_STEP_KINDS = {
     "skill",

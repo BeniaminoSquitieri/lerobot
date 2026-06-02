@@ -1,0 +1,74 @@
+task_templates:
+  make_sandwich:
+    - kind: vlm_gate
+      name: initial_scene_ready
+    - kind: robot_skill
+      name: place_first_toast
+    - kind: human_step
+      name: pour_ingredient
+    - kind: vlm_gate
+      name: ingredient_poured
+    - kind: vlm_gate
+      name: second_toast_ready
+    - kind: robot_skill
+      name: place_second_toast
+    - kind: vlm_gate
+      name: make_sandwich.task_complete
+
+  set_breakfast_table:
+    - kind: human_step
+      name: breakfast_table.tablecloth_ready
+    - kind: robot_skill
+      name: place_cereal_box
+    - kind: human_step
+      name: breakfast_table.tea_box_ready
+    - kind: robot_skill
+      name: place_bottle
+    - kind: robot_skill
+      name: place_cup
+    - kind: human_step
+      name: breakfast_table.spoon_ready
+    - kind: robot_skill
+      name: place_bowl
+    - kind: vlm_gate
+      name: breakfast_table.task_complete
+
+  make_coffee:
+    - kind: vlm_gate
+      name: make_coffee.scene_0_ready
+    - kind: human_step
+      name: make_coffee.cup_under_dispenser
+    - kind: robot_skill
+      name: pick_and_insert_capsule
+    - kind: robot_skill
+      name: close_coffee_machine
+    - kind: human_step
+      name: make_coffee.human_press_start_button
+
+  prepare_picnic_bag:
+    - kind: vlm_gate
+      name: prepare_picnic_bag.scene_0_ready
+    - kind: human_step
+      name: prepare_picnic_bag.human_open_bag
+    - kind: human_step
+      name: prepare_picnic_bag.human_insert_monster
+    - kind: robot_skill
+      name: bag_bread
+    - kind: human_step
+      name: prepare_picnic_bag.human_insert_mustard
+    - kind: robot_skill
+      name: bag_pear
+
+  items_in_drawer:
+    - kind: vlm_gate
+      name: items_in_drawer.scene_0_ready
+    - kind: human_step
+      name: items_in_drawer.drawer_open_ready
+    - kind: robot_skill
+      name: insert_next_drawer_item
+    - kind: human_step
+      name: items_in_drawer.drawer_closed
+    - kind: vlm_gate
+      name: items_in_drawer.task_complete
+
+allowed_variants: {}

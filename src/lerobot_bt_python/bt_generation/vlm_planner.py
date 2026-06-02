@@ -6,8 +6,8 @@ import json
 import re
 from typing import Any
 
-from .planner import TASK_TEMPLATES
 from .registry import HUMAN_STEP, ROBOT_SKILL, VLM_GATE, Registry
+from .task_contracts import TASK_TEMPLATES
 
 XML_TAG_RE = re.compile(r"</?\s*[A-Za-z][A-Za-z0-9_:.-]*(?:\s[^<>]*)?/?>")
 FENCED_JSON_RE = re.compile(r"^```([A-Za-z0-9_-]*)[ \t]*\n(.*)\n```[ \t]*$", re.DOTALL)

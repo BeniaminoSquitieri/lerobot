@@ -7,8 +7,8 @@ import json
 from pathlib import Path
 
 from .manifest import sha256_text
-from .planner import TASK_ALLOWED_VARIANTS, TASK_TEMPLATES
 from .registry import HUMAN_STEP, ROBOT_SKILL, VLM_GATE, Registry, RegistryEntry, load_registry
+from .task_contracts import TASK_ALLOWED_VARIANTS, TASK_TEMPLATES
 
 
 DERIVED_CONTRACT_FIELDS = frozenset(

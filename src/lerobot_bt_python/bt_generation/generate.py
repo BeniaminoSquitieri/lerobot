@@ -12,10 +12,11 @@ from pathlib import Path
 from . import env_snapshot
 from . import experiment_log
 from .manifest import build_generation_manifest, write_generation_manifest
-from .planner import TASK_TEMPLATES, build_linear_plan
+from .planner import build_linear_plan
 from .registry import load_registry, validate_registry
 from .renderer import render_bt_params_yaml, render_xml
 from .static_checks import validate_xml_yaml_blackboard_text
+from .task_contracts import TASK_TEMPLATES
 from .validator import validate_linear_plan
 from .vlm_planner import canonicalize_plan, parse_planner_response
 

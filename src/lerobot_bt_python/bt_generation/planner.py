@@ -3,64 +3,7 @@
 from __future__ import annotations
 
 from .registry import HUMAN_STEP, ROBOT_SKILL, VLM_GATE, Registry
-
-
-TASK_TEMPLATES: dict[str, list[dict[str, str]]] = {
-    # The sandwich sources expose place_first_toast/place_second_toast as real
-    # executor skills, while pour_ingredient is an AwaitScene/manual gate.
-    "make_sandwich": [
-        {"kind": VLM_GATE, "name": "initial_scene_ready"},
-        {"kind": ROBOT_SKILL, "name": "place_first_toast"},
-        {"kind": HUMAN_STEP, "name": "pour_ingredient"},
-        {"kind": VLM_GATE, "name": "ingredient_poured"},
-        {"kind": VLM_GATE, "name": "second_toast_ready"},
-        {"kind": ROBOT_SKILL, "name": "place_second_toast"},
-        {"kind": VLM_GATE, "name": "make_sandwich.task_complete"},
-    ],
-    # Existing XML comments and VLM gate names show the human prepares the
-    # tablecloth, tea box, and spoon; robot skills are only those in executor
-    # YAML expected_skill_names/skills.
-    "set_breakfast_table": [
-        {"kind": HUMAN_STEP, "name": "breakfast_table.tablecloth_ready"},
-        {"kind": ROBOT_SKILL, "name": "place_cereal_box"},
-        {"kind": HUMAN_STEP, "name": "breakfast_table.tea_box_ready"},
-        {"kind": ROBOT_SKILL, "name": "place_bottle"},
-        {"kind": ROBOT_SKILL, "name": "place_cup"},
-        {"kind": HUMAN_STEP, "name": "breakfast_table.spoon_ready"},
-        {"kind": ROBOT_SKILL, "name": "place_bowl"},
-        {"kind": VLM_GATE, "name": "breakfast_table.task_complete"},
-    ],
-    # Coffee XML has two human AwaitScene stages and two robot skills.
-    "make_coffee": [
-        {"kind": VLM_GATE, "name": "make_coffee.scene_0_ready"},
-        {"kind": HUMAN_STEP, "name": "make_coffee.cup_under_dispenser"},
-        {"kind": ROBOT_SKILL, "name": "pick_and_insert_capsule"},
-        {"kind": ROBOT_SKILL, "name": "close_coffee_machine"},
-        {"kind": HUMAN_STEP, "name": "make_coffee.human_press_start_button"},
-    ],
-    # Picnic bag XML alternates human bag/item steps with two robot insertions.
-    "prepare_picnic_bag": [
-        {"kind": VLM_GATE, "name": "prepare_picnic_bag.scene_0_ready"},
-        {"kind": HUMAN_STEP, "name": "prepare_picnic_bag.human_open_bag"},
-        {"kind": HUMAN_STEP, "name": "prepare_picnic_bag.human_insert_monster"},
-        {"kind": ROBOT_SKILL, "name": "bag_bread"},
-        {"kind": HUMAN_STEP, "name": "prepare_picnic_bag.human_insert_mustard"},
-        {"kind": ROBOT_SKILL, "name": "bag_pear"},
-    ],
-    # The insertion skill is intentionally retried by RetryUntilSuccessful
-    # until the VLM reports that all drawer items have been inserted.
-    "items_in_drawer": [
-        {"kind": VLM_GATE, "name": "items_in_drawer.scene_0_ready"},
-        {"kind": HUMAN_STEP, "name": "items_in_drawer.drawer_open_ready"},
-        {"kind": ROBOT_SKILL, "name": "insert_next_drawer_item"},
-        {"kind": HUMAN_STEP, "name": "items_in_drawer.drawer_closed"},
-        {"kind": VLM_GATE, "name": "items_in_drawer.task_complete"},
-    ],
-}
-
-# Future scaffold for explicitly approved task variants. Empty by default: model
-# generated plans must match TASK_TEMPLATES exactly.
-TASK_ALLOWED_VARIANTS: dict[str, list[dict]] = {}
+from .task_contracts import TASK_ALLOWED_VARIANTS, TASK_TEMPLATES
 
 
 def build_linear_plan(
