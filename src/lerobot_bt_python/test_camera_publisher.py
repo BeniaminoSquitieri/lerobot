@@ -1,6 +1,8 @@
+import ast
 import importlib
 import sys
 import types
+from pathlib import Path
 
 import numpy as np
 
@@ -145,3 +147,40 @@ def test_build_depth_msg_publishes_lossless_uint16(monkeypatch):
     assert msg.is_bigendian is False
     assert msg.step == camera.depth.strides[0]
     assert msg.data == camera.depth.tobytes()
+
+
+_CORE_REALSENSE = (
+    Path(__file__).resolve().parents[1]
+    / "lerobot"
+    / "cameras"
+    / "realsense"
+    / "camera_realsense.py"
+)
+
+
+def test_core_realsense_exposes_rgbd_accessors():
+    """Regression guard: the republisher depends on these core accessors.
+
+    They were silently dropped once before, which made the depth pipeline
+    fail closed on the real robot (zero poses, no crash). Catch any future
+    removal here without needing hardware or heavy deps.
+    """
+    source = _CORE_REALSENSE.read_text(encoding="utf-8")
+    tree = ast.parse(source)
+    method_names = {
+        node.name
+        for node in ast.walk(tree)
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+    }
+    for required in ("get_color_intrinsics", "read_latest_depth", "read_latest_rgbd"):
+        assert required in method_names, f"core RealSenseCamera lost method: {required}"
+
+
+def test_core_realsense_aligns_depth_to_color():
+    """Regression guard: depth must be aligned to color so a color-frame mask
+    indexes the same pixels in depth. Without rs.align the back-projection is
+    wrong and poses are unusable."""
+    source = _CORE_REALSENSE.read_text(encoding="utf-8")
+    assert "rs.align(rs.stream.color)" in source
+    assert "self.rs_align.process(frame)" in source
+
