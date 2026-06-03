@@ -534,7 +534,121 @@ PYTHON_BIN=python3 scripts/run_icra_runtime_bt_trial.sh items_in_drawer dry_run_
 PYTHON_BIN=python3 scripts/run_icra_runtime_bt_trial.sh items_in_drawer robot_live
 ```
 
+## 11b. Percezione RGB-D opzionale (scene facts + pose 6D)
+
+Questa sezione è opzionale e parallela al flusso BT. Serve solo se vuoi pose 6D
+degli oggetti e `scene_facts` dalla percezione invece dei soli gate VLM.
+
+**Proprietà delle camere:** le RealSense sono aperte **solo** dallo skill server
+(Terminale B). Il server, con `use_depth: true` e i `camera_*_map` valorizzati
+nell'executor YAML, ripubblica automaticamente i frame come topic ROS. Non
+avviare `panda_live_camera` né altri publisher RealSense: aprire lo stesso
+device due volte causa conflitto hardware e frame persi.
+
+### 11b.1 Verifica che lo skill server pubblichi RGB-D
+
+Con Terminale B attivo (sezione 5), da Terminale C:
+
+```bash
+ros2 topic hz /panda/camera/front/image_compressed
+ros2 topic hz /panda/camera/front/depth
+ros2 topic echo --once /panda/camera/front/camera_info
+ros2 topic hz /panda/camera/wrist/image_compressed
+ros2 topic hz /panda/camera/wrist/depth
+ros2 topic echo --once /panda/camera/wrist/camera_info
+```
+
+Atteso:
+
+- Hz stabile e non nullo su image/depth;
+- `camera_info` con `k` non vuoto (fx/fy/ppx/ppy) e `distortion_model: plumb_bob`;
+- depth e color con **stessa width/height** (depth allineata al color). Se le
+  risoluzioni differiscono, l'allineamento `rs.align` nel core non sta girando.
+
+### 11b.2 Verifica le TF statiche base_link -> camera
+
+```bash
+ros2 run tf2_ros tf2_echo base_link panda_front_camera
+ros2 run tf2_ros tf2_echo base_link panda_wrist_camera
+```
+
+Atteso: una trasformata stabile. **Attenzione:** se `camera_static_tf_map` non
+è popolato con la calibrazione hand-eye reale nell'executor YAML, la TF non
+viene pubblicata e la percezione marca le pose come `tf_unavailable`,
+rifiutando le query in robot-frame. Popola `camera_static_tf_map` con la
+calibrazione reale prima di usare le pose per il grasping.
+
+### 11b.3 Avvia il nodo di percezione (panda_live_viewer)
+
+Apri un terminale dedicato:
+
+```bash
+conda activate lerobot
+cd /home/bsquitieri/panda_live_viewer
+
+source /opt/ros/jazzy/setup.bash
+source /home/bsquitieri/lerobot/install/setup.bash
+export PYTHONPATH=/opt/ros/jazzy/lib/python3.12/site-packages:/home/bsquitieri/lerobot/src:$PWD:$PYTHONPATH
+export ROS_DOMAIN_ID=0
+export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
+export CYCLONEDDS_URI=file://$HOME/.ros/cyclonedds.xml
+unset ROS_LOCALHOST_ONLY
+
+python3 -m perception.cli \
+  --ros-args \
+  -p planner_registry_json:='{"objects":[{"canonical_name":"cup","aliases":["mug"]}]}' \
+  -p segmenter_backend:=owlvit \
+  -p require_query_pose_service:=true
+```
+
+Atteso: il nodo logga disponibilità camere/TF e il caricamento del modello
+OWL-ViT. Fallisce subito se `QueryObjectPose.srv` non è stato ribuildato e
+sourcato (rebuild di `lerobot_bt_interfaces`).
+
+Per i soli dry-run del verifier, senza percezione reale, usa
+`-p segmenter_backend:=noop`.
+
+### 11b.4 Verifica gli scene facts
+
+```bash
+ros2 topic echo --once /perception/scene_facts
+```
+
+Atteso: JSON con, per ogni oggetto, `pose` (traslazione + quaternione),
+`covariance`, `pose_confidence`, `pose_residual_m`, `inlier_ratio` e
+`warnings`. Senza detection il fact degrada (disponibilità + warning) invece di
+inventare una posa.
+
+### 11b.5 Interroga una posa via service
+
+```bash
+ros2 service call /perception/query_pose \
+  lerobot_bt_interfaces/srv/QueryObjectPose \
+  "{object_name: 'cup', require_fresh: true, max_age_s: 1.0}"
+```
+
+Atteso: `success: true` con `pose_json`, oppure `success: false` con
+`error_message` chiaro (es. dati stantii o `tf_unavailable`) — mai una posa
+vuota silenziosa.
+
+### 11b.6 Sanity check metrico
+
+- Posiziona l'oggetto a distanza nota; verifica che `pose.translation` in
+  `base_link` coincida con la misura a metro entro pochi centimetri.
+- Per una detection pulita `pose_residual_m` deve essere piccolo e
+  `inlier_ratio` alto; entrambi degradano con viste parziali/occluse.
+- `warnings` deve segnalare le condizioni reali (`insufficient_depth`,
+  `orientation_estimated_pca`, RGB-D/TF stantii) invece di restare vuoto quando
+  i dati sono scarsi.
+
+### 11b.7 Planner + percezione (end-to-end opzionale)
+
+Invia una richiesta `/lerobot_bt/generate_plan` **senza** `scene_facts_json`: il
+planner inietta automaticamente gli ultimi `/perception/scene_facts`. Verifica
+che il piano Linear IR referenzi gli oggetti percepiti.
+
 ## 12. Errori comuni
+
 
 ### `/lerobot_bt/generate_plan` mancante
 
@@ -674,6 +788,63 @@ Non deve comparire:
 num_attempts="{...}"
 ```
 
+### depth assente o pose sempre vuote
+
+Causa:
+
+- `use_depth: true` mancante nell'executor YAML;
+- depth e color con risoluzioni diverse (allineamento `rs.align` non attivo).
+
+Fix:
+
+```bash
+ros2 topic echo --once /panda/camera/front/camera_info
+# confronta width/height di depth e color
+ros2 topic hz /panda/camera/front/depth
+```
+
+Se le risoluzioni differiscono, ricontrolla `use_depth: true` su ogni camera
+nello YAML e ribuilda/riavvia lo skill server.
+
+### `/perception/query_pose` mancante
+
+Causa:
+
+- `QueryObjectPose.srv` non buildato/sourcato.
+
+Fix:
+
+```bash
+cd /home/bsquitieri/lerobot
+colcon build --packages-select lerobot_bt_interfaces --symlink-install
+source install/setup.bash
+```
+
+Poi riavvia il nodo di percezione.
+
+### pose marcate `tf_unavailable`
+
+Causa:
+
+- `camera_static_tf_map` non popolato con la calibrazione hand-eye reale.
+
+Fix:
+
+- popola `camera_static_tf_map` nell'executor YAML con la trasformata
+  `base_link`->camera calibrata, ribuilda/riavvia lo skill server e riverifica
+  con `tf2_echo` (sezione 11b.2).
+
+### device RealSense occupato / frame persi
+
+Causa:
+
+- più di un publisher apre la stessa camera.
+
+Fix:
+
+- assicurati che solo lo skill server (Terminale B) possieda le RealSense;
+- non avviare `panda_live_camera` in parallelo.
+
 ## 13. Ordine sicuro sul robot day
 
 1. Configura CycloneDDS su entrambe le macchine.
@@ -688,3 +859,5 @@ num_attempts="{...}"
 10. Annota il trial.
 11. Genera il report.
 12. Solo dopo, riavvia Panda con `planner_dry_run:=false`.
+13. (Opzionale) Per le pose 6D: verifica i topic RGB-D e le TF (sezione 11b),
+    poi avvia il nodo di percezione e controlla `scene_facts`/`query_pose`.
