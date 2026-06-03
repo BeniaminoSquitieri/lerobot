@@ -647,6 +647,145 @@ Invia una richiesta `/lerobot_bt/generate_plan` **senza** `scene_facts_json`: il
 planner inietta automaticamente gli ultimi `/perception/scene_facts`. Verifica
 che il piano Linear IR referenzi gli oggetti percepiti.
 
+## 11c. Spatial-prior gate (task caffè, shadow mode)
+
+Questa sezione testa il **gate spaziale OOD** per il task caffè
+(`make_coffee`, skill `pick_and_insert_capsule`). Il gate confronta la posizione
+osservata della capsula con un prior gaussiano addestrato dai 50 episodi del
+dataset `Squitieri/put_coffee` e decide PASS / FAIL / ABSTAIN con distanza di
+Mahalanobis. È **complementare e indipendente** dal gate VLM.
+
+Documentazione completa: `docs/spatial_prior_gating.md`.
+
+**Default = `shadow`**: il gate logga il verdetto ma **non blocca mai** lo skill.
+Serve a misurare la distanza reale osservata-vs-prior prima di abilitare il
+blocco. Già configurato in `make_coffee_executor.yaml`.
+
+### 11c.1 Verifica che il prior sia presente e valido
+
+Da un terminale qualsiasi:
+
+```bash
+conda activate lerobot
+cd /home/bsquitieri/lerobot/src
+
+cat lerobot_bt_python/spatial_priors/put_coffee.json | python3 -m json.tool | head -20
+```
+
+Atteso: JSON con `frame_id: base_link`, `n_demos: 50`,
+`mahalanobis_threshold ≈ 3.368`, `mu ≈ [0.684, -0.260, 0.150]`.
+
+### 11c.2 Smoke test del gate (offline, senza robot)
+
+```bash
+conda activate lerobot
+cd /home/bsquitieri/lerobot/src
+
+python3 -m pytest lerobot_bt_python/test_spatial_prior.py -q
+```
+
+Atteso: `27 passed`. Conferma checker, fitter, parser e modi del gate.
+
+### 11c.3 Avvia lo skill server con il gate attivo
+
+Il gate si attiva automaticamente quando avvii lo skill server (Terminale B,
+sezione 5) con l'executor del caffè:
+
+```bash
+# Terminale B — skill server reale, task caffè
+PYTHON_BIN=python3 scripts/run_icra_runtime_bt_trial.sh make_coffee robot_live
+```
+
+oppure direttamente:
+
+```bash
+uv run lerobot-bt-skill-server \
+  --config_path=src/lerobot_bt_python/make_coffee_executor.yaml
+```
+
+All'avvio cerca nel log:
+
+```
+spatial_prior_gate: loaded prior for skill 'pick_and_insert_capsule' ...
+spatial_prior_gate: mode=shadow, querying object poses on '/perception/query_pose'.
+```
+
+Serve anche il nodo di percezione attivo (sezione 11b.3) con l'oggetto
+`coffee_capsule` nel registry, altrimenti il gate si astiene
+(`perception:...`).
+
+### 11c.4 Leggi i verdetti del gate durante l'esecuzione
+
+Quando il BT lancia lo skill `pick_and_insert_capsule`, nel log del Terminale B
+compare una riga greppabile:
+
+```bash
+# Da un terminale che guarda il log dello skill server:
+# (oppure filtra l'output del Terminale B)
+grep "event=spatial_prior_gate" <log dello skill server>
+```
+
+Formato:
+
+```
+event=spatial_prior_gate mode=shadow skill='pick_and_insert_capsule' \
+  object='coffee_capsule' status=PASS reason='in_distribution' \
+  distance=0.84 threshold=3.368 frame='base_link' n_demos=50
+```
+
+Interpretazione:
+
+- `status=PASS` → la capsula è nella regione addestrata.
+- `status=FAIL` → capsula fuori distribuzione (in shadow **non** blocca).
+- `status=ABSTAIN reason=frame_mismatch:...` → la percezione restituisce pose in
+  frame camera: **manca la calibrazione hand-eye**. Popola
+  `camera_static_tf_map` nell'executor YAML (vedi 11b.2) per avere pose in
+  `base_link`.
+- `status=ABSTAIN reason=perception:...` → percezione non disponibile o nessuna
+  posa per `coffee_capsule`.
+
+### 11c.5 Calibrazione dell'offset e soglia
+
+Il prior è la posa EE all'istante di presa (proxy della posizione oggetto): ha
+un **offset costante** rispetto al centroide oggetto della percezione. In shadow:
+
+1. Posiziona la capsula in una posa "buona" (come nei demo) e annota la
+   `distance` loggata.
+2. Se in pose valide la `distance` è sistematicamente alta (es. > soglia per via
+   dell'offset), correggi una delle due:
+   - rifitta/sposta `mu` dell'offset misurato, oppure
+   - alza `mahalanobis_threshold` / usa un `confidence_level` più lasco.
+3. Ripeti finché pose buone → PASS e pose chiaramente sbagliate → FAIL.
+
+### 11c.6 Abilita il blocco (solo dopo calibrazione)
+
+Quando le distanze in shadow sono sensate, passa a enforce nell'executor YAML:
+
+```yaml
+spatial_prior_gate:
+  mode: enforce   # era: shadow
+```
+
+In `enforce` un verdetto FAIL blocca lo skill **prima** del movimento; ABSTAIN
+non blocca mai. Riavvia lo skill server per applicare.
+
+### 11c.7 Rigenera il prior (se cambi dataset)
+
+```bash
+conda activate lerobot
+cd /home/bsquitieri/lerobot/src
+
+python3 -m lerobot_bt_python.fit_spatial_prior \
+  --dataset-repo-id Squitieri/put_coffee \
+  --skill pick_and_insert_capsule \
+  --object coffee_capsule \
+  --output lerobot_bt_python/spatial_priors/put_coffee.json
+```
+
+Scarica solo i parquet di stato + metadati (mai i video). Stampa demo, `mu`,
+std per asse, soglia e tasso di accettazione leave-one-out (un prior unimodale
+sano accetta ~99% dei demo held-out).
+
 ## 12. Errori comuni
 
 
@@ -845,6 +984,21 @@ Fix:
 - assicurati che solo lo skill server (Terminale B) possieda le RealSense;
 - non avviare `panda_live_camera` in parallelo.
 
+### spatial-prior gate sempre ABSTAIN
+
+Causa e fix per `reason`:
+
+- `frame_mismatch:...!=base_link` → manca la calibrazione hand-eye: la
+  percezione restituisce pose in frame camera. Popola `camera_static_tf_map`
+  (sezione 11b.2) e riavvia lo skill server.
+- `perception:no_scene_facts` / `perception:No usable pose...` → nodo di
+  percezione spento o oggetto `coffee_capsule` non rilevato/non nel registry.
+  Avvia la percezione (11b.3) con l'alias corretto.
+- `query_pose_service_unavailable` → il servizio `/perception/query_pose` non è
+  attivo; verifica con `ros2 service list | grep query_pose`.
+- prior non caricato (nessuna riga `loaded prior...` all'avvio) → controlla che
+  `spatial_priors/put_coffee.json` esista e che `mode` non sia `off`.
+
 ## 13. Ordine sicuro sul robot day
 
 1. Configura CycloneDDS su entrambe le macchine.
@@ -861,3 +1015,7 @@ Fix:
 12. Solo dopo, riavvia Panda con `planner_dry_run:=false`.
 13. (Opzionale) Per le pose 6D: verifica i topic RGB-D e le TF (sezione 11b),
     poi avvia il nodo di percezione e controlla `scene_facts`/`query_pose`.
+14. (Opzionale, task caffè) Spatial-prior gate in shadow (sezione 11c): verifica
+    il prior, avvia skill server + percezione, leggi i verdetti
+    `event=spatial_prior_gate`, calibra offset/soglia e solo dopo passa a
+    `enforce`.

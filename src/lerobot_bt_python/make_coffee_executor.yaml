@@ -91,6 +91,33 @@ vlm_gate_min_wait_s: 5.0
 # Set to false only if you're offline and want to use cached models.
 force_download_policy: true
 
+# Deterministic spatial-prior out-of-distribution (OOD) gate.
+# This is independent of and complementary to the VLM gate: it checks whether
+# the object is located where the policy was trained to handle it, using a
+# Gaussian prior fitted offline from the training demonstrations.
+#
+# mode:
+#   off     -> gate fully inert (no effect on the BT).
+#   shadow  -> gate evaluates and logs the verdict but NEVER blocks. Use this
+#              first on the real robot to measure the observed-vs-prior distance
+#              and calibrate the offset/threshold before enforcing.
+#   enforce -> a FAIL (object OOD) blocks the skill; ABSTAIN never blocks.
+#
+# NOTE: Until calibrated hand-eye transforms are supplied (camera_static_tf_map
+# is empty above), the perception node returns camera-frame poses and the gate
+# will ABSTAIN with reason "frame_mismatch". Shadow mode makes this visible.
+spatial_prior_gate:
+  mode: shadow
+  priors_dir: spatial_priors
+  query_pose_service: "/perception/query_pose"
+  query_max_age_s: 2.0
+  require_fresh_pose: true
+  query_timeout_s: 2.0
+  skill_priors:
+    pick_and_insert_capsule: "put_coffee.json"
+  skill_objects:
+    pick_and_insert_capsule: "coffee_capsule"
+
 skills:
   - name: pick_and_insert_capsule
     dataset_repo_id: "scene-transition/pick_and_insert_capsule"

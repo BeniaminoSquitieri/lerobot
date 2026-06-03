@@ -1,0 +1,50 @@
+{
+  "confidence_level": 0.99,
+  "frame_id": "base_link",
+  "mahalanobis_threshold": 3.3682141752187276,
+  "metadata": {
+    "closed_fraction": 0.5,
+    "created_utc": "2026-06-03T14:28:48.077503+00:00",
+    "dataset_fps": 10,
+    "dataset_total_episodes": 50,
+    "generator": "fit_spatial_prior.py",
+    "gripper_index": 6,
+    "leave_one_out_pass_rate": 1.0,
+    "translation_std_m": [
+      0.026065680952014218,
+      0.027596105512653263,
+      0.004786025407332406
+    ]
+  },
+  "min_pose_confidence": 0.0,
+  "mu": [
+    0.6843159461021423,
+    -0.260406693816185,
+    0.15019412219524383
+  ],
+  "n_demos": 50,
+  "notes": "mu/sigma are fitted from the end-effector position at the grasp instant, a PROXY for the object position. Expect a fixed grasp offset relative to a perception object centroid; calibrate in SHADOW mode before enforcing.",
+  "object": "coffee_capsule",
+  "proxy": "grasp_ee_position",
+  "schema_version": 1,
+  "sigma": [
+    [
+      0.0006932854321348947,
+      4.9239988296929565e-05,
+      1.8441567386312143e-05
+    ],
+    [
+      4.9239988296929565e-05,
+      0.0007770867749647877,
+      -2.023702897699251e-05
+    ],
+    [
+      1.8441567386312143e-05,
+      -2.023702897699251e-05,
+      2.3373509387378898e-05
+    ]
+  ],
+  "sigma_regularization_m2": 1e-06,
+  "skill": "pick_and_insert_capsule",
+  "source_dataset": "Squitieri/put_coffee"
+}

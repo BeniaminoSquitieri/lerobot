@@ -62,6 +62,9 @@ These run, or are directly consumed, during a real robot trial.
 | A | [src/lerobot_bt_python/processor_factory.py](../src/lerobot_bt_python/processor_factory.py) | Builds observation/action processor pipelines | Yes | P0 | Safety processors |
 | A | [src/lerobot_bt_python/verification.py](../src/lerobot_bt_python/verification.py) | VLM/gate attempt state machine | Yes | P0 | Verifier state |
 | A | [src/lerobot_bt_python/vlm_protocol.py](../src/lerobot_bt_python/vlm_protocol.py) | Verifier request/result JSON helpers | Yes | P1 | Topic payloads |
+| A | [src/lerobot_bt_python/spatial_prior.py](../src/lerobot_bt_python/spatial_prior.py) | Spatial-prior OOD checker (Mahalanobis) | Yes | P1 | See [spatial_prior_gating.md](./spatial_prior_gating.md) |
+| A | [src/lerobot_bt_python/spatial_prior_gate.py](../src/lerobot_bt_python/spatial_prior_gate.py) | Runtime gate orchestrator (loads priors, queries pose) | Yes | P1 | Shadow/enforce modes |
+| C | [src/lerobot_bt_python/fit_spatial_prior.py](../src/lerobot_bt_python/fit_spatial_prior.py) | Offline fitter: dataset → prior JSON | No | P2 | Run once per skill |
 | A | [src/lerobot_bt_python/camera_publisher.py](../src/lerobot_bt_python/camera_publisher.py) | Publish robot camera frames for verifier | Yes | P1 | Perception bridge |
 | A | [src/lerobot_bt_python/bt_interface_paths.py](../src/lerobot_bt_python/bt_interface_paths.py) | Resolve generated ROS2 bindings on `sys.path` | Yes | P1 | Import fix |
 | A | [src/lerobot_bt_python/*_executor.yaml](../src/lerobot_bt_python/) | Task-specific robot/camera/policy/skill config | Yes | P0 | One per task |

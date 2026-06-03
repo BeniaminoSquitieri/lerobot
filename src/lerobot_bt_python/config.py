@@ -182,6 +182,55 @@ class PrimitiveSkillConfig:
 
 
 @dataclass
+class SpatialPriorGateConfig:
+    """Configuration for the deterministic spatial-prior OOD gate.
+
+    The gate consults a Gaussian prior fitted offline from a skill's training
+    demonstrations to check whether the object the policy is about to manipulate
+    is located where the policy was trained to handle it. It is independent of
+    and complementary to the VLM semantic gate.
+
+    Modes:
+    - "off"     : the gate is fully inert (default; existing flow unchanged).
+    - "shadow"  : the gate evaluates and logs the verdict but never blocks a
+                  skill. Use this on the real robot to measure the observed-vs-
+                  prior distance and calibrate the offset/threshold.
+    - "enforce" : a FAIL verdict (object out-of-distribution) blocks the skill.
+                  ABSTAIN never blocks.
+    """
+    # One of "off", "shadow", "enforce".
+    mode: str = "off"
+    # Directory holding <name>.json prior files. Relative paths resolve against
+    # this package directory; absolute paths are used as-is.
+    priors_dir: str = "spatial_priors"
+    # Map BT skill name -> prior JSON file (relative to priors_dir or absolute).
+    # Skills not listed here are not gated.
+    skill_priors: dict[str, str] = field(default_factory=dict)
+    # Optional map BT skill name -> perception object name to query. When unset
+    # for a skill, the prior's own `object` field is used.
+    skill_objects: dict[str, str] = field(default_factory=dict)
+    # Perception QueryObjectPose service used to read the live object pose.
+    query_pose_service: str = "/perception/query_pose"
+    # Reject cached perception poses older than this many seconds.
+    query_max_age_s: float = 2.0
+    # Whether to require a fresh (non-cached) perception pose.
+    require_fresh_pose: bool = True
+    # Seconds to wait for the perception service to be ready and to respond.
+    query_timeout_s: float = 2.0
+
+    def __post_init__(self) -> None:
+        """@brief Validate the gate mode after YAML parsing."""
+        allowed_modes = {"off", "shadow", "enforce"}
+        if self.mode not in allowed_modes:
+            raise ValueError(
+                f"spatial_prior_gate.mode={self.mode!r} is invalid. "
+                f"Expected one of {sorted(allowed_modes)}."
+            )
+        if self.query_timeout_s <= 0:
+            raise ValueError("spatial_prior_gate.query_timeout_s must be > 0.")
+
+
+@dataclass
 class SkillCommandServerConfig:
     """Top-level configuration for the Python ROS2 skill command server.
 
@@ -267,6 +316,9 @@ class SkillCommandServerConfig:
     # on every server startup, bypassing the local cache. Set to True when
     # you've pushed updated model weights and need the latest version.
     force_download_policy: bool = True
+    # Deterministic spatial-prior OOD gate. Defaults to "off" so existing
+    # deployments are unaffected until explicitly enabled per executor YAML.
+    spatial_prior_gate: SpatialPriorGateConfig = field(default_factory=SpatialPriorGateConfig)
 
     def __post_init__(self) -> None:
         """@brief Validate top-level server invariants after config loading."""

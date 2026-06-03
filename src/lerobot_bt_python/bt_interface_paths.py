@@ -56,3 +56,21 @@ def load_bt_services():
             "Could not import the lerobot_bt_interfaces service bindings. "
             "Source install/local_setup.bash or rebuild lerobot_bt_interfaces."
         ) from import_error
+
+
+def load_query_object_pose_service():
+    """@brief Import the generated `QueryObjectPose` ROS2 service class.
+
+    @return The `QueryObjectPose` service type.
+    @throws ImportError if the workspace has not been built or sourced.
+    """
+    prepend_generated_interface_paths()
+    try:
+        from lerobot_bt_interfaces.srv import QueryObjectPose
+
+        return QueryObjectPose
+    except ImportError as import_error:
+        raise ImportError(
+            "Could not import the lerobot_bt_interfaces QueryObjectPose binding. "
+            "Source install/local_setup.bash or rebuild lerobot_bt_interfaces."
+        ) from import_error

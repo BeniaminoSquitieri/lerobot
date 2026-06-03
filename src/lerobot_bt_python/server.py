@@ -42,12 +42,13 @@ from lerobot.processor.converters import (
 from lerobot.utils.utils import init_logging, log_say
 from lerobot.utils.visualization_utils import init_rerun as init_rerun_viz
 
-from .bt_interface_paths import load_bt_services
+from .bt_interface_paths import load_bt_services, load_query_object_pose_service
 from .camera_publisher import start_camera_publisher
 from .config import SkillCommandServerConfig
 from .executor import CommandResult, SkillRunner
 from .operator_console import print_vlm_request_banner, print_vlm_result_banner
 from .processor_factory import build_robot_processor_pipeline
+from .spatial_prior_gate import ObservedPose, SpatialPriorGate, parse_object_pose_json
 from .verification import (
     VLM_RUNNING,
     VLM_UNKNOWN,
@@ -179,6 +180,69 @@ class SkillCommandServer(Node):
             f"'{cfg.vlm_result_topic}'."
         )
 
+        # Deterministic spatial-prior OOD gate. Inert when mode == "off".
+        self._spatial_prior_gate = SpatialPriorGate(
+            cfg.spatial_prior_gate,
+            package_dir=Path(__file__).resolve().parent,
+            logger=self.get_logger(),
+        )
+        self._query_pose_client = None
+        self._query_pose_service_type = None
+        if self._spatial_prior_gate.enabled:
+            try:
+                self._query_pose_service_type = load_query_object_pose_service()
+                self._query_pose_client = self.create_client(
+                    self._query_pose_service_type,
+                    cfg.spatial_prior_gate.query_pose_service,
+                    callback_group=self._vlm_callback_group,
+                )
+                self.get_logger().info(
+                    "spatial_prior_gate: mode=%s, querying object poses on '%s'."
+                    % (cfg.spatial_prior_gate.mode, cfg.spatial_prior_gate.query_pose_service)
+                )
+            except Exception as exc:  # noqa: BLE001
+                # A missing perception service must not crash the BT server: the
+                # gate degrades to ABSTAIN (it cannot fetch poses) and logs why.
+                self.get_logger().warning(
+                    f"spatial_prior_gate: could not create QueryObjectPose client: {exc}. "
+                    "The gate will ABSTAIN until the perception service is available."
+                )
+
+    def _query_object_pose(self, object_name: str) -> ObservedPose:
+        """@brief pose_provider backed by the perception QueryObjectPose service.
+
+        Returns an ObservedPose with `error` set whenever the perception pose
+        cannot be obtained, so the gate ABSTAINS rather than blocking.
+        """
+        client = self._query_pose_client
+        if client is None or self._query_pose_service_type is None:
+            return ObservedPose(error="query_pose_client_unavailable")
+
+        timeout_s = float(self.cfg.spatial_prior_gate.query_timeout_s)
+        if not client.wait_for_service(timeout_sec=timeout_s):
+            return ObservedPose(error="query_pose_service_unavailable")
+
+        request = self._query_pose_service_type.Request()
+        request.object_name = object_name
+        request.require_fresh = bool(self.cfg.spatial_prior_gate.require_fresh_pose)
+        request.max_age_s = float(self.cfg.spatial_prior_gate.query_max_age_s)
+
+        future = client.call_async(request)
+        deadline = time.monotonic() + timeout_s
+        while not future.done() and time.monotonic() < deadline:
+            time.sleep(0.01)
+        if not future.done():
+            return ObservedPose(error="query_pose_timeout")
+
+        response = future.result()
+        if response is None:
+            return ObservedPose(error="query_pose_no_response")
+        if not bool(getattr(response, "success", False)):
+            reason = str(getattr(response, "error_message", "") or "perception_no_pose")
+            return ObservedPose(error=reason)
+        return parse_object_pose_json(str(getattr(response, "pose_json", "")))
+
+
     def _handle_request(self, request, response):
         """@brief Handle one `RunNamedCommand` service request.
 
@@ -195,6 +259,24 @@ class SkillCommandServer(Node):
 
         try:
             if request.kind == "skill":
+                # Deterministic spatial-prior gate runs first. In SHADOW mode it
+                # only logs; in ENFORCE mode a FAIL (object out-of-distribution)
+                # blocks the skill before any motion. ABSTAIN never blocks.
+                gate_verdict = self._spatial_prior_gate.evaluate(
+                    request.name, self._query_object_pose
+                )
+                if self._spatial_prior_gate.should_block(gate_verdict):
+                    response.success = False
+                    response.status = "FAILURE"
+                    response.elapsed_s = 0.0
+                    response.message = (
+                        f"Spatial-prior gate blocked skill '{request.name}': object "
+                        f"out-of-distribution (reason={gate_verdict.reason}, "
+                        f"distance={gate_verdict.distance:.3f} > "
+                        f"threshold={gate_verdict.threshold:.3f}). Skill not executed."
+                    )
+                    self.get_logger().warning(response.message)
+                    return response
                 # Open a VLM check BEFORE executing the skill so the VLM can
                 # monitor the scene in real-time and return SUCCESS as soon as
                 # the goal is achieved, cutting the skill execution short.
