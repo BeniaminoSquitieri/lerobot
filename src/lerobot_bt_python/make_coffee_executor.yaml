@@ -35,6 +35,7 @@ robot:
       type: intelrealsense
       serial_number_or_name: "909522060544"
       use_depth: true
+      warmup_s: 5
       width: 640
       height: 480
       fps: 30
@@ -42,6 +43,7 @@ robot:
       type: intelrealsense
       serial_number_or_name: "123622270882"
       use_depth: true
+      warmup_s: 5
       width: 640
       height: 480
       fps: 30
@@ -85,7 +87,14 @@ vlm_gate_tasks:
 
 # Minimum wait time (seconds) before VLM checks human gates.
 # Gives the operator time to place objects before the VLM verifies.
-vlm_gate_min_wait_s: 5.0
+vlm_gate_min_wait_s: 10.0
+
+# Re-check cadence (seconds) the VLM verifier should honor while a ROBOT SKILL
+# check stays non-final. 0.0 = re-evaluate the scene as fast as inference
+# allows, so the robot stops the moment the skill is confirmed complete and
+# does not keep rolling out the policy into strange post-task behavior.
+# Human/VLM gates keep the verifier's own (slower) default cadence.
+skill_vlm_check_period_s: 0.0
 
 # Force re-download of policy checkpoints on every server startup.
 # Set to false only if you're offline and want to use cached models.
@@ -122,7 +131,7 @@ skills:
   - name: pick_and_insert_capsule
     dataset_repo_id: "scene-transition/pick_and_insert_capsule"
     metadata_source: robot
-    task: "The coffee capsule has been picked and inserted into the machine."
+    task: "There is no coffee capsule in the scene."
     policy_variant: act
     policy_variants:
       act:
@@ -133,13 +142,13 @@ skills:
         chunk_size: 16
     transition:
       mode: timeout
-      max_duration_s: 60.0
+      max_duration_s: 30.0
     settle_time_s: 0.0
 
   - name: close_coffee_machine
     dataset_repo_id: "Squitieri/act_close_machine"
     metadata_source: robot
-    task: "Verify that the coffee machine lid is fully closed after the capsule was inserted."
+    task: "Verify that the coffee machine lid is fully closed ."
     policy_variant: act
     policy_variants:
       act:
@@ -150,5 +159,5 @@ skills:
         chunk_size: 16
     transition:
       mode: timeout
-      max_duration_s: 30.0
+      max_duration_s: 15.0
     settle_time_s: 0.0

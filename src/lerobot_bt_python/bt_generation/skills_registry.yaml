@@ -19,63 +19,63 @@ robot_skills:
     kind: robot_skill
     executor: robot
     timeout_s: 120.0
-    max_attempts: 1
+    max_attempts: -1
     verify_after: breakfast_table.cereal_box_placed
 
   - name: place_bottle
     kind: robot_skill
     executor: robot
     timeout_s: 120.0
-    max_attempts: 1
+    max_attempts: -1
     verify_after: breakfast_table.bottle_placed
 
   - name: place_cup
     kind: robot_skill
     executor: robot
     timeout_s: 120.0
-    max_attempts: 1
+    max_attempts: -1
     verify_after: breakfast_table.cup_placed
 
   - name: place_bowl
     kind: robot_skill
     executor: robot
     timeout_s: 120.0
-    max_attempts: 1
+    max_attempts: -1
     verify_after: breakfast_table.bowl_placed
 
   - name: pick_and_insert_capsule
     kind: robot_skill
     executor: robot
     timeout_s: 60.0
-    max_attempts: 3
+    max_attempts: -1
     verify_after: null
 
   - name: close_coffee_machine
     kind: robot_skill
     executor: robot
     timeout_s: 10.0
-    max_attempts: 3
+    max_attempts: -1
     verify_after: null
 
   - name: bag_bread
     kind: robot_skill
     executor: robot
     timeout_s: 120.0
-    max_attempts: 3
+    max_attempts: -1
     verify_after: null
 
   - name: bag_pear
     kind: robot_skill
     executor: robot
     timeout_s: 120.0
-    max_attempts: 3
+    max_attempts: -1
     verify_after: null
 
   - name: insert_next_drawer_item
     kind: robot_skill
     executor: robot
     timeout_s: 60.0
-    max_attempts: 3
+    max_attempts: -1
     verify_after: null
 
 human_steps:
@@ -84,7 +84,7 @@ human_steps:
     executor: human
     instruction: "Please pour or place the ingredient for the sandwich."
     timeout_s: 120.0
-    max_attempts: 1
+    max_attempts: -1
     verify_after: null
 
   - name: breakfast_table.tablecloth_ready
@@ -92,7 +92,7 @@ human_steps:
     executor: human
     instruction: "Please spread the white tablecloth on the table."
     timeout_s: 120.0
-    max_attempts: 3
+    max_attempts: -1
     verify_after: null
 
   - name: breakfast_table.tea_box_ready
@@ -100,7 +100,7 @@ human_steps:
     executor: human
     instruction: "Please place the tea box on the table."
     timeout_s: 120.0
-    max_attempts: 3
+    max_attempts: -1
     verify_after: null
 
   - name: breakfast_table.spoon_ready
@@ -108,7 +108,7 @@ human_steps:
     executor: human
     instruction: "Please place the spoon on the table."
     timeout_s: 120.0
-    max_attempts: 3
+    max_attempts: -1
     verify_after: null
 
   - name: make_coffee.cup_under_dispenser
@@ -116,7 +116,7 @@ human_steps:
     executor: human
     instruction: "Please place an empty cup or mug under the coffee dispenser nozzle."
     timeout_s: 60.0
-    max_attempts: 3
+    max_attempts: -1
     verify_after: null
 
   - name: make_coffee.human_press_start_button
@@ -124,7 +124,7 @@ human_steps:
     executor: human
     instruction: "Please press the coffee machine start button."
     timeout_s: 60.0
-    max_attempts: 3
+    max_attempts: -1
     verify_after: null
 
   - name: prepare_picnic_bag.human_open_bag
@@ -132,7 +132,7 @@ human_steps:
     executor: human
     instruction: "Please open and hold the picnic bag."
     timeout_s: 60.0
-    max_attempts: 3
+    max_attempts: -1
     verify_after: null
 
   - name: prepare_picnic_bag.human_insert_monster
@@ -140,7 +140,7 @@ human_steps:
     executor: human
     instruction: "Please insert the Monster drink into the picnic bag."
     timeout_s: 60.0
-    max_attempts: 3
+    max_attempts: -1
     verify_after: null
 
   - name: prepare_picnic_bag.human_insert_mustard
@@ -148,7 +148,7 @@ human_steps:
     executor: human
     instruction: "Please insert the mustard into the picnic bag."
     timeout_s: 60.0
-    max_attempts: 3
+    max_attempts: -1
     verify_after: null
 
   - name: items_in_drawer.drawer_open_ready
@@ -156,7 +156,7 @@ human_steps:
     executor: human
     instruction: "Please open the drawer."
     timeout_s: 60.0
-    max_attempts: 3
+    max_attempts: -1
     verify_after: null
 
   - name: items_in_drawer.drawer_closed
@@ -164,7 +164,7 @@ human_steps:
     executor: human
     instruction: "Please close the drawer."
     timeout_s: 60.0
-    max_attempts: 3
+    max_attempts: -1
     verify_after: null
 
 vlm_gates:
@@ -172,49 +172,49 @@ vlm_gates:
     kind: vlm_gate
     executor: vlm
     timeout_s: 30.0
-    max_attempts: 1
+    max_attempts: -1
     task: "Check that the initial sandwich scene is ready."
 
   - name: first_toast_placed
     kind: vlm_gate
     executor: vlm
     timeout_s: 30.0
-    max_attempts: 1
+    max_attempts: -1
     task: "Check that the first toast is placed correctly."
 
   - name: ingredient_poured
     kind: vlm_gate
     executor: vlm
     timeout_s: 30.0
-    max_attempts: 1
+    max_attempts: -1
     task: "Check that the ingredient has been poured or placed correctly."
 
   - name: second_toast_ready
     kind: vlm_gate
     executor: vlm
     timeout_s: 30.0
-    max_attempts: 1
+    max_attempts: -1
     task: "Check that the second toast is ready for the robot to place."
 
   - name: second_toast_placed
     kind: vlm_gate
     executor: vlm
     timeout_s: 30.0
-    max_attempts: 1
+    max_attempts: -1
     task: "Check that the second toast is placed on top of the sandwich."
 
   - name: make_sandwich.task_complete
     kind: vlm_gate
     executor: vlm
     timeout_s: 30.0
-    max_attempts: 1
+    max_attempts: -1
     task: "Check that the sandwich is complete."
 
   - name: make_coffee.scene_0_ready
     kind: vlm_gate
     executor: vlm
     timeout_s: 60.0
-    max_attempts: 3
+    max_attempts: -1
     task: >-
       Verify that all required objects for the coffee task are present on the
       scene: coffee machine, a coffee capsule in a plate, and an empty cup.
@@ -223,56 +223,56 @@ vlm_gates:
     kind: vlm_gate
     executor: vlm
     timeout_s: 60.0
-    max_attempts: 3
+    max_attempts: -1
     task: "Check that the picnic bag scene is ready with the bag and required items visible."
 
   - name: items_in_drawer.scene_0_ready
     kind: vlm_gate
     executor: vlm
     timeout_s: 60.0
-    max_attempts: 3
+    max_attempts: -1
     task: "Check that the initial drawer workspace is ready."
 
   - name: breakfast_table.cereal_box_placed
     kind: vlm_gate
     executor: vlm
     timeout_s: 30.0
-    max_attempts: 1
+    max_attempts: -1
     task: "Check that the cereal box has been placed on the tablecloth."
 
   - name: breakfast_table.bottle_placed
     kind: vlm_gate
     executor: vlm
     timeout_s: 30.0
-    max_attempts: 1
+    max_attempts: -1
     task: "Check that the bottle has been placed on the tablecloth."
 
   - name: breakfast_table.cup_placed
     kind: vlm_gate
     executor: vlm
     timeout_s: 30.0
-    max_attempts: 1
+    max_attempts: -1
     task: "Check that the cup has been placed on the tablecloth."
 
   - name: breakfast_table.bowl_placed
     kind: vlm_gate
     executor: vlm
     timeout_s: 30.0
-    max_attempts: 1
+    max_attempts: -1
     task: "Check that the bowl has been placed on the tablecloth."
 
   - name: breakfast_table.task_complete
     kind: vlm_gate
     executor: vlm
     timeout_s: 30.0
-    max_attempts: 1
+    max_attempts: -1
     task: "Check that the breakfast table is fully set with all items."
 
   - name: items_in_drawer.task_complete
     kind: vlm_gate
     executor: vlm
     timeout_s: 60.0
-    max_attempts: 3
+    max_attempts: -1
     task: "Check that the drawer task is complete."
 
 objects:

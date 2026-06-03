@@ -282,7 +282,10 @@ class SkillCommandServer(Node):
                 # the goal is achieved, cutting the skill execution short.
                 self.scene_verdict_store.register_skill_name(request.name)
                 vlm_pre_attempt = self.scene_verdict_store.begin_attempt(request.name)
-                self._publish_vlm_request(vlm_pre_attempt)
+                self._publish_vlm_request(
+                    vlm_pre_attempt,
+                    check_period_s=float(getattr(self.cfg, "skill_vlm_check_period_s", 0.0)),
+                )
                 self.get_logger().info(
                     f"Pre-skill VLM check opened for '{request.name}' attempt {vlm_pre_attempt.attempt_id}."
                 )
@@ -347,7 +350,10 @@ class SkillCommandServer(Node):
                 # final scene, not stale pre-skill frames.
                 elif request.kind == "skill":
                     vlm_check_attempt = self.scene_verdict_store.begin_attempt(request.name)
-                    self._publish_vlm_request(vlm_check_attempt)
+                    self._publish_vlm_request(
+                        vlm_check_attempt,
+                        check_period_s=float(getattr(self.cfg, "skill_vlm_check_period_s", 0.0)),
+                    )
                 live_vlm_status = getattr(result, "vlm_status", None)
                 if live_vlm_status:
                     self.scene_verdict_store.report(
@@ -501,8 +507,15 @@ class SkillCommandServer(Node):
             )
         return accepted
 
-    def _publish_vlm_request(self, snapshot) -> None:
-        """@brief Publish a topic event asking a VLM/manual verifier for a verdict."""
+    def _publish_vlm_request(self, snapshot, *, check_period_s=None) -> None:
+        """@brief Publish a topic event asking a VLM/manual verifier for a verdict.
+
+        @param snapshot The VLM check attempt snapshot to advertise.
+        @param check_period_s Optional re-check cadence hint (seconds) the VLM
+            verifier should honor while the status stays non-final. Used to make
+            robot-skill checks re-evaluate the scene much faster than human
+            gates. ``None`` lets the verifier keep its own default cadence.
+        """
         from std_msgs.msg import String  # type: ignore
 
         # Resolve the optional human-readable task description for this skill so
@@ -534,6 +547,8 @@ class SkillCommandServer(Node):
                 "WAIT",
             ],
         }
+        if check_period_s is not None:
+            payload["check_period_s"] = float(check_period_s)
         msg = String()
         msg.data = json.dumps(payload, sort_keys=True)
         self._vlm_request_publisher.publish(msg)

@@ -241,15 +241,29 @@ class RealSenseCamera(Camera):
         self._maybe_setup_ros_publisher()
         self._start_read_thread()
 
-        # NOTE(Steven/Caroline): Enforcing at least one second of warmup as RS cameras need a bit of time before the first read. If we don't wait, the first read from the warmup will raise.
+        # RealSense startup can be bursty: the background read thread may be
+        # alive before the first frame is actually available. Keep polling for
+        # the whole warmup window instead of failing on the first timeout.
         self.warmup_s = max(self.warmup_s, 1)
 
         start_time = time.time()
+        last_timeout_error = None
         while time.time() - start_time < self.warmup_s:
-            self.async_read(timeout_ms=self.warmup_s * 1000)
+            remaining_s = self.warmup_s - (time.time() - start_time)
+            timeout_ms = max(200, min(1000, int(remaining_s * 1000)))
+            try:
+                self.async_read(timeout_ms=timeout_ms)
+            except TimeoutError as exc:
+                last_timeout_error = exc
+                time.sleep(0.1)
+                continue
             time.sleep(0.1)
         with self.frame_lock:
             if self.latest_color_frame is None or self.use_depth and self.latest_depth_frame is None:
+                if last_timeout_error is not None:
+                    raise ConnectionError(
+                        f"{self} failed to capture frames during warmup."
+                    ) from last_timeout_error
                 raise ConnectionError(f"{self} failed to capture frames during warmup.")
 
         logger.info(f"{self} connected.")
