@@ -327,6 +327,27 @@ Atteso:
 - non avvia il runner;
 - stampa un `trial_id`.
 
+I file generati finiscono sotto `generated_bt/`:
+
+- `generated_bt/plans/`
+- `generated_bt/trees/`
+- `generated_bt/config/`
+- `generated_bt/raw_model_responses/`
+- `generated_bt/manifests/`
+
+Se vuoi una cartella temporanea e cleanup automatico a fine comando, usa:
+
+```bash
+python3 -m lerobot_bt_python.bt_generation.generate_and_run \
+  --task make_sandwich \
+  --planner ros-service \
+  --registry src/lerobot_bt_python/bt_generation/skills_registry.yaml \
+  --executor-yaml src/lerobot_bt_python/make_sandwich_executor.yaml \
+  --output-dir /tmp/generated_bt_make_sandwich \
+  --cleanup-output-dir-on-exit \
+  --no-run
+```
+
 Se preferisci bypassare lo shell script e chiamare direttamente il modulo:
 
 ```bash

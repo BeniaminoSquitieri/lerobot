@@ -10,6 +10,7 @@ before the runner is allowed to load the produced files.
 from __future__ import annotations
 
 import argparse
+import atexit
 import shlex
 import shutil
 import subprocess
@@ -71,6 +72,15 @@ def main(argv: list[str] | None = None) -> int:
         help="Generate artifacts and print the runner command without executing ros2.",
     )
     parser.add_argument(
+        "--cleanup-output-dir-on-exit",
+        action="store_true",
+        help=(
+            "Best-effort cleanup of --output-dir when this command exits. "
+            "Useful for temporary robot-day runs where you do not want generated "
+            "BT artifacts to persist."
+        ),
+    )
+    parser.add_argument(
         "--experiment-log",
         type=Path,
         help=(
@@ -100,6 +110,9 @@ def main(argv: list[str] | None = None) -> int:
     condition_label = args.condition_label or "default"
     log_path = experiment_log.resolve_log_path(args.experiment_log, args.output_dir)
     env = _environment_snapshot(argv)
+
+    if args.cleanup_output_dir_on_exit:
+        _register_output_dir_cleanup(args.output_dir)
 
     # Print the trial id up front so an operator can copy it before the run
     # starts (needed later for the annotation step).
@@ -305,6 +318,24 @@ def _environment_snapshot(argv: list[str] | None) -> dict:
             *[str(part) for part in argv],
         ]
     return env_snapshot.build_environment_snapshot(repo_root, command_argv)
+
+
+def _register_output_dir_cleanup(output_dir: Path) -> None:
+    output_dir = output_dir.resolve()
+
+    def _cleanup() -> None:
+        if not output_dir.exists():
+            return
+        # Refuse suspiciously broad deletions.
+        if str(output_dir) in {"/", str(Path.home()), str(Path.cwd())}:
+            print(
+                f"Skipping cleanup of suspicious output dir: {output_dir}",
+                file=sys.stderr,
+            )
+            return
+        shutil.rmtree(output_dir, ignore_errors=True)
+
+    atexit.register(_cleanup)
 
 
 def _format_command(command: list[str]) -> str:
