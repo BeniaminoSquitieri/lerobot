@@ -23,11 +23,52 @@ Atteso:
 - `after_lorenzo_meeting` in `/home/bsquitieri/panda_live_viewer`
 - `jazzy` come ROS distro
 
-## 1. Build e source workspace lerobot
+## 1. Requisito critico: CycloneDDS su entrambe le macchine
+
+**Panda hardware richiede CycloneDDS.** Se una sola shell resta su FastDDS o
+non esporta la configurazione giusta, le due macchine non si scoprono e
+topic/servizi ROS 2 non compaiono in rete.
+
+### 1.1 Crea `~/.ros/cyclonedds.xml` su robot e server GPU
+
+```bash
+mkdir -p ~/.ros
+cat > ~/.ros/cyclonedds.xml << 'EOF'
+<?xml version="1.0" encoding="UTF-8" ?>
+<CycloneDDS xmlns="https://cdds.io/config">
+  <Domain>
+    <General>
+      <AllowMulticast>true</AllowMulticast>
+    </General>
+  </Domain>
+</CycloneDDS>
+EOF
+```
+
+### 1.2 Esporta queste variabili in **ogni** terminale usato
+
+```bash
+export ROS_DOMAIN_ID=0
+export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
+export CYCLONEDDS_URI=file://$HOME/.ros/cyclonedds.xml
+unset ROS_LOCALHOST_ONLY
+```
+
+Errore comune:
+
+- dimenticare questi export in un solo terminale;
+- rilanciare `panda_live_viewer` o `lerobot-bt-skill-server` senza CycloneDDS;
+- controllare i servizi da una shell rimasta su un altro RMW.
+
+## 2. Build e source workspace lerobot
 
 ```bash
 cd /home/bsquitieri/lerobot
 source /opt/ros/jazzy/setup.bash
+export ROS_DOMAIN_ID=0
+export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
+export CYCLONEDDS_URI=file://$HOME/.ros/cyclonedds.xml
+unset ROS_LOCALHOST_ONLY
 colcon build --symlink-install
 source install/setup.bash
 ```
@@ -39,7 +80,7 @@ ros2 interface show lerobot_bt_interfaces/srv/GenerateTaskPlan
 ros2 interface show lerobot_bt_interfaces/srv/RunNamedCommand
 ```
 
-## 2. Terminale A — VLM / Panda server
+## 3. Terminale A — VLM / Panda server
 
 Apri un terminale dedicato e lascialo aperto.
 
@@ -54,6 +95,10 @@ cd /home/bsquitieri/panda_live_viewer
 source /opt/ros/jazzy/setup.bash
 source /home/bsquitieri/lerobot/install/setup.bash
 export PYTHONPATH=/opt/ros/jazzy/lib/python3.12/site-packages:/home/bsquitieri/lerobot/src:$PWD:$PYTHONPATH
+export ROS_DOMAIN_ID=0
+export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
+export CYCLONEDDS_URI=file://$HOME/.ros/cyclonedds.xml
+unset ROS_LOCALHOST_ONLY
 
 python3 -u -m vlm_live.cli \
   --ros-args \
@@ -78,6 +123,10 @@ cd /home/bsquitieri/panda_live_viewer
 source /opt/ros/jazzy/setup.bash
 source /home/bsquitieri/lerobot/install/setup.bash
 export PYTHONPATH=/opt/ros/jazzy/lib/python3.12/site-packages:/home/bsquitieri/lerobot/src:$PWD:$PYTHONPATH
+export ROS_DOMAIN_ID=0
+export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
+export CYCLONEDDS_URI=file://$HOME/.ros/cyclonedds.xml
+unset ROS_LOCALHOST_ONLY
 
 python3 -u -m vlm_live.cli \
   --ros-args \
@@ -93,7 +142,75 @@ Usalo solo dopo questi tre passaggi:
 - BT generation dry-run OK;
 - `robot_live` con planner dry-run OK.
 
-## 3. Terminale B — Skill server reale
+## 4. Verifica discovery cross-machine
+
+Prima di avviare i trial, verifica che robot e server GPU si vedano davvero via
+ROS 2.
+
+Sul robot:
+
+```bash
+ros2 topic list | grep -E "lerobot_bt|panda"
+```
+
+Sul server GPU:
+
+```bash
+ros2 topic list | grep -E "lerobot_bt|panda"
+```
+
+Gli stessi topic principali devono comparire su entrambe le macchine.
+
+Se i topic o servizi non compaiono ma sospetti che la discovery stia comunque
+funzionando, riavvia il daemon ROS 2 nella shell di controllo:
+
+```bash
+ros2 daemon stop
+ros2 daemon start
+ros2 service list | grep lerobot_bt
+ros2 topic list | grep lerobot_bt
+```
+
+### Ping rapido topic robot -> server
+
+Sul robot:
+
+```bash
+ros2 topic pub /lerobot_bt/vlm_request std_msgs/msg/String '{"data":"{\"skill_name\":\"ping\"}"}' -1
+```
+
+Sul server GPU, apri un altro terminale e controlla:
+
+```bash
+ros2 topic echo /lerobot_bt/vlm_request
+```
+
+Se il messaggio non compare sul server:
+
+- ricontrolla gli export CycloneDDS in **tutte** le shell;
+- riavvia i processi dopo aver cambiato RMW;
+- non procedere con `dry_run_no_run` finche' il ping non passa.
+
+### Sanity check del planner service
+
+Prima di lanciare la generazione vera, puoi verificare che il service remoto
+risponda davvero a una chiamata ROS 2:
+
+```bash
+ros2 service call /lerobot_bt/generate_plan lerobot_bt_interfaces/srv/GenerateTaskPlan \
+"{task_name: 'make_sandwich', planner_registry_json: '{\"task_name\":\"make_sandwich\",\"canonical_task_sequence\":[]}', scene_facts_json: ''}"
+```
+
+Atteso:
+
+- il server remoto logga la richiesta;
+- la chiamata ritorna un errore applicativo tipo
+  `canonical_task_sequence must be a non-empty list.`
+
+Questo errore e' **buono**: significa che il service risponde e che il problema
+non e' piu' DDS/discovery ma solo il payload di test volutamente incompleto.
+
+## 5. Terminale B — Skill server reale
 
 Apri un secondo terminale dedicato e lascialo aperto.
 
@@ -106,6 +223,10 @@ cd /home/bsquitieri/lerobot
 source /opt/ros/jazzy/setup.bash
 source install/setup.bash
 export PYTHONPATH=/opt/ros/jazzy/lib/python3.12/site-packages:$PWD/src:$PYTHONPATH
+export ROS_DOMAIN_ID=0
+export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
+export CYCLONEDDS_URI=file://$HOME/.ros/cyclonedds.xml
+unset ROS_LOCALHOST_ONLY
 
 uv run lerobot-bt-skill-server \
   --config_path=src/lerobot_bt_python/make_sandwich_executor.yaml
@@ -122,10 +243,20 @@ cd /home/bsquitieri/lerobot
 source /opt/ros/jazzy/setup.bash
 source install/setup.bash
 export PYTHONPATH=/opt/ros/jazzy/lib/python3.12/site-packages:$PWD/src:$PYTHONPATH
+export ROS_DOMAIN_ID=0
+export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
+export CYCLONEDDS_URI=file://$HOME/.ros/cyclonedds.xml
+unset ROS_LOCALHOST_ONLY
 
-PYTHONPATH=src python3 -m lerobot_bt_python.server \
+export PYTHONPATH=$PWD/src:$PYTHONPATH
+
+python3 -m lerobot_bt_python.server \
   --config_path=src/lerobot_bt_python/make_sandwich_executor.yaml
 ```
+
+**Importante:** non usare `PYTHONPATH=src python3 -m ...`.
+Quella forma puo' shadoware `lerobot_bt_interfaces` generato da ROS e far
+fallire import come `GenerateTaskPlan`.
 
 Altri task:
 
@@ -136,7 +267,7 @@ uv run lerobot-bt-skill-server --config_path=src/lerobot_bt_python/prepare_picni
 uv run lerobot-bt-skill-server --config_path=src/lerobot_bt_python/items_in_drawer_executor.yaml
 ```
 
-## 4. Terminale C — Check servizi ROS
+## 6. Terminale C — Check servizi ROS
 
 Apri un terzo terminale. Userai questo terminale per tutti i test BT.
 
@@ -146,6 +277,10 @@ cd /home/bsquitieri/lerobot
 
 source /opt/ros/jazzy/setup.bash
 source install/setup.bash
+export ROS_DOMAIN_ID=0
+export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
+export CYCLONEDDS_URI=file://$HOME/.ros/cyclonedds.xml
+unset ROS_LOCALHOST_ONLY
 
 ros2 service list | grep /lerobot_bt
 ros2 service type /lerobot_bt/generate_plan
@@ -166,7 +301,7 @@ lerobot_bt_interfaces/srv/GenerateTaskPlan
 lerobot_bt_interfaces/srv/RunNamedCommand
 ```
 
-## 5. Terminale C — Primo test: genera senza eseguire
+## 7. Terminale C — Primo test: genera senza eseguire
 
 Questo è il primo trial da lanciare.
 
@@ -177,6 +312,10 @@ cd /home/bsquitieri/lerobot
 source /opt/ros/jazzy/setup.bash
 source install/setup.bash
 export PYTHONPATH=/opt/ros/jazzy/lib/python3.12/site-packages:$PWD/src:$PYTHONPATH
+export ROS_DOMAIN_ID=0
+export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
+export CYCLONEDDS_URI=file://$HOME/.ros/cyclonedds.xml
+unset ROS_LOCALHOST_ONLY
 
 PYTHON_BIN=python3 scripts/run_icra_runtime_bt_trial.sh make_sandwich dry_run_no_run
 ```
@@ -188,9 +327,31 @@ Atteso:
 - non avvia il runner;
 - stampa un `trial_id`.
 
-## 6. Terminale C — Secondo test: esegui BT sul robot
+Se preferisci bypassare lo shell script e chiamare direttamente il modulo:
 
-Solo dopo che la sezione 5 passa e lo skill server è attivo.
+```bash
+cd /home/bsquitieri/lerobot
+source /opt/ros/jazzy/setup.bash
+source install/setup.bash
+export ROS_DOMAIN_ID=0
+export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
+export CYCLONEDDS_URI=file://$HOME/.ros/cyclonedds.xml
+unset ROS_LOCALHOST_ONLY
+
+python3 -m lerobot_bt_python.bt_generation.generate_and_run \
+  --task make_sandwich \
+  --planner ros-service \
+  --registry src/lerobot_bt_python/bt_generation/skills_registry.yaml \
+  --executor-yaml src/lerobot_bt_python/make_sandwich_executor.yaml \
+  --output-dir generated_bt \
+  --no-run
+```
+
+Anche qui: non anteporre `PYTHONPATH=src` al comando.
+
+## 8. Terminale C — Secondo test: esegui BT sul robot
+
+Solo dopo che la sezione 7 passa e lo skill server è attivo.
 
 ```bash
 conda activate lerobot
@@ -199,6 +360,10 @@ cd /home/bsquitieri/lerobot
 source /opt/ros/jazzy/setup.bash
 source install/setup.bash
 export PYTHONPATH=/opt/ros/jazzy/lib/python3.12/site-packages:$PWD/src:$PYTHONPATH
+export ROS_DOMAIN_ID=0
+export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
+export CYCLONEDDS_URI=file://$HOME/.ros/cyclonedds.xml
+unset ROS_LOCALHOST_ONLY
 
 PYTHON_BIN=python3 scripts/run_icra_runtime_bt_trial.sh make_sandwich robot_live
 ```
@@ -221,7 +386,7 @@ DoSkill(place_second_toast)
 AwaitScene(make_sandwich.task_complete)
 ```
 
-## 7. Annotare il trial
+## 9. Annotare il trial
 
 Il comando precedente stampa un `trial_id` reale, per esempio:
 
@@ -301,7 +466,7 @@ python3 scripts/annotate_runtime_bt_trial.py \
   --notes "verifier stayed RUNNING although scene appeared ready"
 ```
 
-## 8. Report e bundle
+## 10. Report e bundle
 
 Report:
 
@@ -330,7 +495,7 @@ python3 scripts/bundle_runtime_bt_trial.py \
   --out generated_bt/experiments/bundles/"$TRIAL_ID".tar.gz
 ```
 
-## 9. Comandi equivalenti per altri task
+## 11. Comandi equivalenti per altri task
 
 ```bash
 cd /home/bsquitieri/lerobot
@@ -348,7 +513,7 @@ PYTHON_BIN=python3 scripts/run_icra_runtime_bt_trial.sh items_in_drawer dry_run_
 PYTHON_BIN=python3 scripts/run_icra_runtime_bt_trial.sh items_in_drawer robot_live
 ```
 
-## 10. Errori comuni
+## 12. Errori comuni
 
 ### `/lerobot_bt/generate_plan` mancante
 
@@ -356,6 +521,7 @@ Causa:
 
 - Panda VLM server non attivo;
 - oppure Terminale A non ha fatto `source /home/bsquitieri/lerobot/install/setup.bash`.
+- oppure una o piu' shell non stanno usando CycloneDDS.
 
 Fix:
 
@@ -364,6 +530,14 @@ ros2 service list | grep generate_plan
 ```
 
 Se manca, riavvia Terminale A in dry-run.
+
+Se il service esiste sul server GPU ma non compare sul robot:
+
+```bash
+ros2 daemon stop
+ros2 daemon start
+ros2 service list | grep lerobot_bt
+```
 
 ### `/lerobot_bt/run` mancante
 
@@ -394,6 +568,77 @@ Fix:
 export PYTHONPATH=/opt/ros/jazzy/lib/python3.12/site-packages:$PYTHONPATH
 ```
 
+Nota:
+
+- durante le prove e' emerso che il messaggio
+  `rclpy is required for ROS planning but is not installed`
+  puo' essere fuorviante;
+- spesso il problema reale e' l'import del service ROS generato, non `rclpy`.
+
+Verifica rapida:
+
+```bash
+python3 - <<'PY'
+import rclpy
+from lerobot_bt_interfaces.srv import GenerateTaskPlan
+print("OK", rclpy.__file__, GenerateTaskPlan)
+PY
+```
+
+Se `GenerateTaskPlan` fallisce, rebuilda le interfacce.
+
+### `GenerateTaskPlan` non importabile
+
+Causa:
+
+- `lerobot_bt_interfaces` non buildato correttamente;
+- oppure `PYTHONPATH=src python3 ...` ha shadowato il package installato.
+
+Fix:
+
+```bash
+cd /home/bsquitieri/lerobot
+rm -rf build/lerobot_bt_interfaces install/lerobot_bt_interfaces log
+colcon build --packages-select lerobot_bt_interfaces --symlink-install
+source install/setup.bash
+```
+
+Verifica:
+
+```bash
+python3 - <<'PY'
+from lerobot_bt_interfaces.srv import GenerateTaskPlan
+print("OK", GenerateTaskPlan)
+PY
+```
+
+Se passa, rilancia la generazione senza usare `PYTHONPATH=src python3 -m ...`.
+
+### Nessun topic/servizio visibile tra robot e server GPU
+
+Causa:
+
+- `RMW_IMPLEMENTATION` diverso tra le macchine;
+- `CYCLONEDDS_URI` non esportato in una shell;
+- processo avviato prima degli export corretti.
+
+Fix:
+
+```bash
+echo $RMW_IMPLEMENTATION
+echo $CYCLONEDDS_URI
+ros2 topic list | grep -E "lerobot_bt|panda"
+```
+
+Atteso:
+
+```text
+rmw_cyclonedds_cpp
+file://$HOME/.ros/cyclonedds.xml
+```
+
+Se non coincide su tutte le shell, chiudi e riapri i processi.
+
 ### errore RetryNode `num_attempts`
 
 Atteso: XML con interi letterali.
@@ -408,15 +653,17 @@ Non deve comparire:
 num_attempts="{...}"
 ```
 
-## 11. Ordine sicuro sul robot day
+## 13. Ordine sicuro sul robot day
 
-1. Build e source di `lerobot`.
-2. Avvia Panda con `planner_dry_run:=true`.
-3. Avvia lo skill server reale.
-4. Controlla i servizi ROS.
-5. Lancia `dry_run_no_run`.
-6. Annota il trial.
-7. Lancia `robot_live` con planner dry-run.
+1. Configura CycloneDDS su entrambe le macchine.
+2. Build e source di `lerobot`.
+3. Avvia Panda con `planner_dry_run:=true`.
+4. Verifica discovery cross-machine e ping topic.
+5. Avvia lo skill server reale.
+6. Controlla i servizi ROS.
+7. Lancia `dry_run_no_run`.
 8. Annota il trial.
-9. Genera il report.
-10. Solo dopo, riavvia Panda con `planner_dry_run:=false`.
+9. Lancia `robot_live` con planner dry-run.
+10. Annota il trial.
+11. Genera il report.
+12. Solo dopo, riavvia Panda con `planner_dry_run:=false`.

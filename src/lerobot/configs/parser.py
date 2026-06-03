@@ -15,6 +15,7 @@ import importlib
 import inspect
 import pkgutil
 import sys
+import typing
 from argparse import ArgumentError
 from collections.abc import Callable, Iterable, Sequence
 from functools import wraps
@@ -207,7 +208,10 @@ def wrap(config_path: Path | None = None) -> Callable[[F], F]:
         @wraps(fn)
         def wrapper_inner(*args: Any, **kwargs: Any) -> Any:
             argspec = inspect.getfullargspec(fn)
-            argtype = argspec.annotations[argspec.args[0]]
+            # Resolve postponed annotations produced by
+            # `from __future__ import annotations` before handing the type to
+            # draccus. Otherwise the first argument annotation may be a string.
+            argtype = typing.get_type_hints(fn)[argspec.args[0]]
             if len(args) > 0 and type(args[0]) is argtype:
                 cfg = args[0]
                 args = args[1:]

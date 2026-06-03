@@ -23,9 +23,16 @@ def request_plan_from_ros_service(
     try:
         import rclpy
         from rclpy.node import Node
+    except ImportError as exc:
+        raise RuntimeError("rclpy is required for ROS planning but could not be imported.") from exc
+
+    try:
         from lerobot_bt_interfaces.srv import GenerateTaskPlan
     except ImportError as exc:
-        raise RuntimeError("rclpy is required for ROS planning but is not installed.") from exc
+        raise RuntimeError(
+            "ROS planning service interface lerobot_bt_interfaces/srv/GenerateTaskPlan "
+            "could not be imported. Rebuild/source lerobot_bt_interfaces."
+        ) from exc
 
     class MinimalClient(Node):
         def __init__(self) -> None:
@@ -54,8 +61,12 @@ def request_plan_from_ros_service(
             client.destroy_node()
         rclpy.shutdown()
 
+    if client is not None and client.future is not None and client.future.exception() is not None:
+        raise RuntimeError(f"ROS service call failed: {client.future.exception()}")
     if not resp:
-        raise RuntimeError("No response from ROS service.")
+        raise RuntimeError(
+            f"No response from ROS service {service_name} within {timeout_s}s."
+        )
     if not resp.success:
         raise RuntimeError(f"ROS planning failed: {resp.error_message}")
     if not resp.plan_json:
