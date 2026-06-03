@@ -44,6 +44,20 @@ def _read_latest_depth(camera: Any, max_age_ms: int) -> Any | None:
         return None
 
 
+def _read_rgbd(camera: Any, timeout_ms: int, max_age_ms: int) -> tuple[Any | None, Any | None]:
+    try:
+        frame = camera.async_read(timeout_ms=timeout_ms)
+    except Exception:
+        return None, None
+    if hasattr(camera, "read_latest_rgbd"):
+        try:
+            color_frame, depth_frame = camera.read_latest_rgbd(max_age_ms=max_age_ms)
+            return color_frame, depth_frame
+        except Exception:
+            return frame, None
+    return frame, _read_latest_depth(camera, max_age_ms=max_age_ms)
+
+
 def _camera_intrinsics(camera: Any) -> dict[str, Any] | None:
     if not hasattr(camera, "get_color_intrinsics"):
         return None
@@ -226,6 +240,12 @@ def start_camera_publisher(
         logging.info("Publishing camera '%s' -> %s", bt_cam_name, ros_topic)
         if depth_topic:
             logging.info("Publishing camera '%s' depth -> %s", bt_cam_name, depth_topic)
+            camera = robot.cameras[bt_cam_name]
+            if not bool(getattr(camera, "use_depth", False)):
+                logging.warning(
+                    "Depth topic configured for camera '%s' but the camera does not expose use_depth=true.",
+                    bt_cam_name,
+                )
         if camera_info_topic:
             logging.info("Publishing camera '%s' CameraInfo -> %s", bt_cam_name, camera_info_topic)
 
@@ -248,7 +268,11 @@ def start_camera_publisher(
                     camera = robot.cameras[bt_cam_name]
                     # Short timeout so the publisher never blocks the policy
                     # control loop that also reads from the same camera.
-                    frame = camera.async_read(timeout_ms=50)
+                    frame, depth = _read_rgbd(
+                        camera,
+                        timeout_ms=50,
+                        max_age_ms=max(int(period_s * 2000), 100),
+                    )
                     if frame is None:
                         continue
                     _, jpeg_bytes = cv2.imencode(".jpg", cv2.cvtColor(frame, cv2.COLOR_RGB2BGR), encode_params)
@@ -260,7 +284,6 @@ def start_camera_publisher(
                     spec.image.publish(msg)
 
                     if spec.depth is not None:
-                        depth = _read_latest_depth(camera, max_age_ms=max(int(period_s * 2000), 100))
                         depth_msg = _build_depth_msg(depth, msg.header.stamp, spec.frame_id)
                         if depth_msg is not None:
                             spec.depth.publish(depth_msg)

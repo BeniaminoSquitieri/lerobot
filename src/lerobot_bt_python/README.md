@@ -107,9 +107,11 @@ camera_static_tf_map:
   left:
     parent_frame_id: "base_link"
     child_frame_id: "panda_front_camera"
-    translation: [0.0, 0.0, 0.0]
-    rotation_xyzw: [0.0, 0.0, 0.0, 1.0]
+    translation: [CALIBRATED_X, CALIBRATED_Y, CALIBRATED_Z]
+    rotation_xyzw: [CALIBRATED_QX, CALIBRATED_QY, CALIBRATED_QZ, CALIBRATED_QW]
 ```
 
 Enable `use_depth: true` on the relevant RealSense camera before expecting a
-depth topic. Depth is not JPEG-compressed.
+depth topic. Depth is not JPEG-compressed. Do not use an identity static TF
+unless hand-eye calibration really says the camera frame is identical to
+`base_link`; incorrect TF makes downstream grasp poses unsafe.

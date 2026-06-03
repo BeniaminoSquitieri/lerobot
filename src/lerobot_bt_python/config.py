@@ -314,6 +314,53 @@ class SkillCommandServerConfig:
                 "The robot config is missing required camera entries: "
                 f"{missing_cameras}. Available cameras: {sorted(cameras)}."
             )
+        camera_map_fields = {
+            "camera_publish_map": self.camera_publish_map,
+            "camera_depth_publish_map": self.camera_depth_publish_map,
+            "camera_info_publish_map": self.camera_info_publish_map,
+            "camera_frame_id_map": self.camera_frame_id_map,
+            "camera_static_tf_map": self.camera_static_tf_map,
+        }
+        for field_name, mapping in camera_map_fields.items():
+            unknown = sorted(set(mapping) - set(cameras))
+            if unknown:
+                raise ValueError(
+                    f"{field_name} references unknown cameras {unknown}. "
+                    f"Available cameras: {sorted(cameras)}."
+                )
+        depth_cameras = set(self.camera_depth_publish_map)
+        info_cameras = set(self.camera_info_publish_map)
+        if depth_cameras or info_cameras:
+            if depth_cameras != info_cameras:
+                raise ValueError(
+                    "camera_depth_publish_map and camera_info_publish_map must cover the same cameras "
+                    "for RGB-D perception."
+                )
+            missing_rgb_publishers = sorted(depth_cameras - set(self.camera_publish_map))
+            if missing_rgb_publishers:
+                raise ValueError(
+                    "RGB-D camera entries must also be present in camera_publish_map: "
+                    f"{missing_rgb_publishers}."
+                )
+            depth_disabled = sorted(
+                name for name in depth_cameras if not bool(getattr(cameras[name], "use_depth", False))
+            )
+            if depth_disabled:
+                raise ValueError(
+                    "Depth publishing requires use_depth=true for cameras: "
+                    f"{depth_disabled}."
+                )
+        for camera_name, tf_config in self.camera_static_tf_map.items():
+            translation = tf_config.get("translation", [])
+            rotation = tf_config.get("rotation_xyzw", [])
+            if len(translation) != 3:
+                raise ValueError(
+                    f"camera_static_tf_map[{camera_name!r}].translation must have exactly 3 values."
+                )
+            if len(rotation) != 4:
+                raise ValueError(
+                    f"camera_static_tf_map[{camera_name!r}].rotation_xyzw must have exactly 4 values."
+                )
         # Validate the frame rate is positive.
         if self.fps <= 0:
             raise ValueError("fps must be > 0.")
