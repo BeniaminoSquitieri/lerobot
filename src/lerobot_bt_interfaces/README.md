@@ -14,7 +14,7 @@ This package is part of the P0 real robot runtime path; see
 | --- | --- |
 | `../lerobot_bt_runtime_cpp` | Calls `RunNamedCommand` from BT leaves and polls `GetSkillVerification` while waiting for scene verdicts. |
 | `../lerobot_bt_python` | Implements the services in `server.py` and accepts legacy verifier reports through `ReportSkillVerification`. |
-| External verifier tools | May publish topic JSON directly, or use the legacy report service when compatibility is needed. |
+| External verifier/perception tools | May publish topic JSON directly, use the legacy report service, or answer pose queries through `QueryObjectPose`. |
 
 ## Services
 
@@ -56,6 +56,23 @@ Legacy external verifier -> Python server update path.
 
 Prefer publishing JSON to `/lerobot_bt/vlm_result` for new integrations. Keep
 this service compatible while legacy clients exist.
+
+### `QueryObjectPose.srv`
+
+Perception/gate request for the latest object pose fact.
+
+Request:
+
+- `object_name`: canonical planner-registry object name.
+- `require_fresh`: reject cached poses older than `max_age_s`.
+- `max_age_s`: freshness budget in seconds.
+
+Response:
+
+- `success`: true only when `pose_json` has a usable pose.
+- `pose_json`: JSON scene-fact object with pose, covariance, confidence, frame,
+  stamp, and warnings.
+- `error_message`: failure detail when the pose is absent, stale, or uncertain.
 
 ## Commands
 

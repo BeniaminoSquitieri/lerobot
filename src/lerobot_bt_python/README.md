@@ -79,3 +79,37 @@ example, `make_sandwich_executor.yaml` uses
 
 Commands for starting the skill server, publishing manual VLM verdicts,
 preflight, and tests are centralized in `../README.md`.
+
+## RGB-D Perception Publishing
+
+`camera_publisher.py` can now publish the perception prerequisites described by
+the Panda viewer:
+
+- RGB as `sensor_msgs/CompressedImage` from `camera_publish_map`.
+- Aligned depth as lossless `sensor_msgs/Image` (`16UC1` when RealSense provides
+  millimeter depth) from `camera_depth_publish_map`.
+- Color/depth intrinsics as `sensor_msgs/CameraInfo` from
+  `camera_info_publish_map`.
+- Optional static camera transforms from `camera_static_tf_map`.
+
+Example YAML shape:
+
+```yaml
+camera_publish_map:
+  left: "/panda/camera/front/image_compressed"
+camera_depth_publish_map:
+  left: "/panda/camera/front/depth"
+camera_info_publish_map:
+  left: "/panda/camera/front/camera_info"
+camera_frame_id_map:
+  left: "panda_front_camera"
+camera_static_tf_map:
+  left:
+    parent_frame_id: "base_link"
+    child_frame_id: "panda_front_camera"
+    translation: [0.0, 0.0, 0.0]
+    rotation_xyzw: [0.0, 0.0, 0.0, 1.0]
+```
+
+Enable `use_depth: true` on the relevant RealSense camera before expecting a
+depth topic. Depth is not JPEG-compressed.

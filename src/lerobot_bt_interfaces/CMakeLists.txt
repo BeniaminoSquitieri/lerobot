@@ -23,6 +23,7 @@ rosidl_generate_interfaces(${PROJECT_NAME}
   "srv/GetSkillVerification.srv"
   "srv/ReportSkillVerification.srv"
   "srv/GenerateTaskPlan.srv"
+  "srv/QueryObjectPose.srv"
 )
 
 # Downstream ROS2 packages need runtime access to the generated type support.

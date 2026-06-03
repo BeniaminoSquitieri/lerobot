@@ -240,6 +240,16 @@ class SkillCommandServerConfig:
     # directly (which would conflict with the BT server's own camera usage).
     # Example: {"wrist": "/panda/camera/wrist/image_compressed", "left": "/panda/camera/front/image_compressed"}
     camera_publish_map: dict[str, str] = field(default_factory=dict)
+    # Optional depth topics for the same cameras. Depth is published as
+    # sensor_msgs/Image with lossless 16UC1 millimeter data when available.
+    camera_depth_publish_map: dict[str, str] = field(default_factory=dict)
+    # Optional CameraInfo topics for the color/depth-aligned stream.
+    camera_info_publish_map: dict[str, str] = field(default_factory=dict)
+    # Optional ROS frame_id override per BT camera name.
+    camera_frame_id_map: dict[str, str] = field(default_factory=dict)
+    # Optional static transforms per BT camera name. Each entry supports:
+    # parent_frame_id, child_frame_id, translation [x,y,z], rotation_xyzw [x,y,z,w].
+    camera_static_tf_map: dict[str, dict] = field(default_factory=dict)
     # Frame rate (Hz) for the camera publishing thread. 0 disables publishing.
     camera_publish_fps: float = 10.0
     # JPEG quality (0-100) for published camera frames.

@@ -1,0 +1,13 @@
+# Canonical object name from the planner registry, e.g. "toast" or "cup".
+string object_name
+# When true, the perception node should reject cached poses older than max_age_s.
+bool require_fresh
+# Maximum accepted age for cached poses when require_fresh is true.
+float32 max_age_s
+---
+# True only when pose_json contains a usable pose in the robot/world frame.
+bool success
+# JSON object with pose, covariance, confidence, frame_id, stamp, and warnings.
+string pose_json
+# Human-readable failure reason when success is false.
+string error_message
