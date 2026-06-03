@@ -81,20 +81,26 @@ camera_publish_jpeg_quality: 80
 # VLM gate descriptions (for AwaitScene nodes that have no policy config).
 # These are used as the `task` field in VLM requests so the VLM knows what to check.
 vlm_gate_tasks:
-  make_coffee.scene_0_ready: "Verify that all required objects for the coffee task are present on the scene: coffee machine, a coffee capsule in a plate, and an empty cup."
-  make_coffee.cup_under_dispenser: "Check if an empty cup or mug has been placed under the coffee dispenser nozzle."
+  make_coffee.scene_0_ready: "Verify that all required objects for the coffee task are present on the scene: the coffee machine, a coffee capsule in a white plate, and an empty cup. The cup is an orange cup and may appear small, tilted, partially occluded, or near the edge of a view; consider the cup present if you can see it in EITHER camera view."
+  make_coffee.cup_under_dispenser: "Check if the empty cup (an orange cup) has been placed in the coffee machine's dispensing area, i.e. under or against the machine where the coffee will pour. Because of the camera angle the cup may look slightly offset to the side; answer SUCCESS as long as the orange cup is at/under the coffee machine base (in front of or beneath the dispenser), even if not perfectly centered under the nozzle. Answer RUNNING only if the orange cup is clearly far away on the table or still held by the gripper."
   make_coffee.human_press_start_button: "Check if the coffee machine is running and extraction has started (button pressed, water flowing)."
 
 # Minimum wait time (seconds) before VLM checks human gates.
 # Gives the operator time to place objects before the VLM verifies.
-vlm_gate_min_wait_s: 10.0
+# 0.0 = check immediately and re-check as fast as inference allows, so the
+# gate unblocks the instant the operator finishes.
+vlm_gate_min_wait_s: 0.0
 
 # Re-check cadence (seconds) the VLM verifier should honor while a ROBOT SKILL
 # check stays non-final. 0.0 = re-evaluate the scene as fast as inference
 # allows, so the robot stops the moment the skill is confirmed complete and
 # does not keep rolling out the policy into strange post-task behavior.
-# Human/VLM gates keep the verifier's own (slower) default cadence.
 skill_vlm_check_period_s: 0.0
+
+# Re-check cadence (seconds) for HUMAN/VLM gates while the check stays
+# non-final. 0.0 = re-evaluate the scene as fast as inference allows, so the
+# gate unblocks the moment the operator finishes placing objects.
+gate_vlm_check_period_s: 0.0
 
 # Force re-download of policy checkpoints on every server startup.
 # Set to false only if you're offline and want to use cached models.

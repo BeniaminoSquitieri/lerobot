@@ -344,7 +344,10 @@ class SkillCommandServer(Node):
                             f"Gate '{request.name}': waiting {gate_wait_s:.1f}s for human operator..."
                         )
                         time.sleep(gate_wait_s)
-                    self._publish_vlm_request(vlm_check_attempt)
+                    self._publish_vlm_request(
+                        vlm_check_attempt,
+                        check_period_s=float(getattr(self.cfg, "gate_vlm_check_period_s", 0.0)),
+                    )
                 # For skills, the pre-skill VLM check was a warm-up. After the
                 # skill finishes, open a fresh attempt so the VLM sees the
                 # final scene, not stale pre-skill frames.

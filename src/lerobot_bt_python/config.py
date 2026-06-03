@@ -312,6 +312,14 @@ class SkillCommandServerConfig:
     # human gate (AwaitScene). This gives the operator time to place or
     # adjust objects before the VLM starts checking the scene.
     vlm_gate_min_wait_s: float = 5.0
+    # Re-check cadence for robot skills. 0.0 means the VLM should re-evaluate
+    # the scene as fast as inference allows; human gates keep the verifier
+    # default cadence unless they override it per request.
+    skill_vlm_check_period_s: float = 0.0
+    # Re-check cadence for human/VLM gates (AwaitScene). 0.0 means the VLM
+    # should re-evaluate the scene as fast as inference allows, so a gate
+    # unblocks the instant the operator finishes placing objects.
+    gate_vlm_check_period_s: float = 0.0
     # If True, force re-download of policy checkpoints from HuggingFace Hub
     # on every server startup, bypassing the local cache. Set to True when
     # you've pushed updated model weights and need the latest version.
