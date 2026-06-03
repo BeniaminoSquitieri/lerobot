@@ -87,17 +87,20 @@ robot_observation_processor:
 # simultaneously publishes frames on these ROS topics so the VLM can
 # subscribe without conflicting with the server.
 camera_publish_map:
-  wrist: "/panda/camera/front/image_compressed"
-  left: "/panda/camera/wrist/image_compressed"
+  wrist: "/panda/camera/wrist/image_compressed"
+  left: "/panda/camera/front/image_compressed"
 camera_depth_publish_map:
-  wrist: "/panda/camera/front/depth"
-  left: "/panda/camera/wrist/depth"
+  wrist: "/panda/camera/wrist/depth"
+  left: "/panda/camera/front/depth"
 camera_info_publish_map:
-  wrist: "/panda/camera/front/camera_info"
-  left: "/panda/camera/wrist/camera_info"
+  wrist: "/panda/camera/wrist/camera_info"
+  left: "/panda/camera/front/camera_info"
 camera_frame_id_map:
-  wrist: "panda_front_camera"
-  left: "panda_wrist_camera"
+  wrist: "panda_wrist_camera"
+  left: "panda_front_camera"
+# Add calibrated hand-eye transforms in camera_static_tf_map before using
+# object poses for grasping. Without real base_link->camera calibration, the
+# perception node marks poses tf_unavailable and rejects robot-frame queries.
 camera_publish_fps: 10.0
 camera_publish_jpeg_quality: 80
 

@@ -527,6 +527,19 @@ def run(cfg: SkillCommandServerConfig) -> None:
     init_logging()
     logging.info(pformat(asdict(cfg)))
 
+    depth_enabled_cameras = [
+        name
+        for name, camera_cfg in getattr(cfg.robot, "cameras", {}).items()
+        if bool(getattr(camera_cfg, "use_depth", False))
+    ]
+    if depth_enabled_cameras and not cfg.camera_static_tf_map:
+        logging.warning(
+            "Depth-enabled cameras are configured (%s) but camera_static_tf_map is empty. "
+            "Perception poses will remain in camera frame and robot-frame pose queries will be "
+            "rejected as tf_unavailable until calibrated hand-eye transforms are supplied.",
+            ", ".join(sorted(depth_enabled_cameras)),
+        )
+
     logging.info("Initializing ROS2 client library.")
     if not rclpy.ok():
         rclpy.init()

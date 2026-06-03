@@ -170,7 +170,6 @@ class RealSenseCamera(Camera):
 
         self.rs_pipeline: rs.pipeline | None = None
         self.rs_profile: rs.pipeline_profile | None = None
-        self.rs_align: Any | None = None
         self._ros_pub = None
         self._ros_topic_name: str | None = None
 
@@ -232,8 +231,6 @@ class RealSenseCamera(Camera):
             ) from e
 
         self._configure_capture_settings()
-        if self.use_depth:
-            self.rs_align = rs.align(rs.stream.color)
         self._maybe_setup_ros_publisher()
         self._start_read_thread()
 
@@ -488,9 +485,6 @@ class RealSenseCamera(Camera):
         if not ret or frame is None:
             raise RuntimeError(f"{self} read failed (status={ret}).")
 
-        if self.use_depth and self.rs_align is not None:
-            frame = self.rs_align.process(frame)
-
         return frame
 
     @check_if_not_connected
@@ -570,38 +564,13 @@ class RealSenseCamera(Camera):
             )
 
         processed_image = image
-        if not depth_frame and self.color_mode == ColorMode.BGR:
+        if self.color_mode == ColorMode.BGR:
             processed_image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
 
         if self.rotation in [cv2.ROTATE_90_CLOCKWISE, cv2.ROTATE_90_COUNTERCLOCKWISE, cv2.ROTATE_180]:
             processed_image = cv2.rotate(processed_image, self.rotation)
 
         return processed_image
-
-    @check_if_not_connected
-    def get_color_intrinsics(self) -> dict[str, Any]:
-        """Return color-stream intrinsics in a ROS CameraInfo-friendly shape."""
-        if self.rs_profile is None:
-            raise RuntimeError(f"{self}: rs_profile must be initialized before use.")
-
-        stream = self.rs_profile.get_stream(rs.stream.color).as_video_stream_profile()
-        intrinsics = stream.get_intrinsics()
-        distortion_model = str(intrinsics.model).lower()
-        if "brown" in distortion_model or "plumb" in distortion_model:
-            ros_distortion_model = "plumb_bob"
-        else:
-            ros_distortion_model = "plumb_bob"
-
-        return {
-            "width": int(intrinsics.width),
-            "height": int(intrinsics.height),
-            "fx": float(intrinsics.fx),
-            "fy": float(intrinsics.fy),
-            "ppx": float(intrinsics.ppx),
-            "ppy": float(intrinsics.ppy),
-            "distortion_model": ros_distortion_model,
-            "distortion_coefficients": [float(value) for value in intrinsics.coeffs],
-        }
 
     def _read_loop(self) -> None:
         """
@@ -676,6 +645,7 @@ class RealSenseCamera(Camera):
             self.latest_timestamp = None
             self.new_frame_event.clear()
 
+    # NOTE(Steven): Missing implementation for depth for now
     @check_if_not_connected
     def async_read(self, timeout_ms: float = 200) -> NDArray[Any]:
         """
@@ -718,6 +688,7 @@ class RealSenseCamera(Camera):
 
         return frame
 
+    # NOTE(Steven): Missing implementation for depth for now
     @check_if_not_connected
     def read_latest(self, max_age_ms: int = 500) -> NDArray[Any]:
         """Return the most recent (color) frame captured immediately (Peeking).
@@ -753,51 +724,6 @@ class RealSenseCamera(Camera):
 
         return frame
 
-    @check_if_not_connected
-    def read_latest_depth(self, max_age_ms: int = 500) -> NDArray[Any]:
-        """Return the latest aligned depth frame without waiting for hardware."""
-        if not self.use_depth:
-            raise RuntimeError(f"Depth stream is not enabled for {self}.")
-        if self.thread is None or not self.thread.is_alive():
-            raise RuntimeError(f"{self} read thread is not running.")
-
-        with self.frame_lock:
-            depth_frame = self.latest_depth_frame
-            timestamp = self.latest_timestamp
-
-        if depth_frame is None or timestamp is None:
-            raise RuntimeError(f"{self} has not captured a depth frame yet.")
-
-        age_ms = (time.perf_counter() - timestamp) * 1e3
-        if age_ms > max_age_ms:
-            raise TimeoutError(
-                f"{self} latest depth frame is too old: {age_ms:.1f} ms (max allowed: {max_age_ms} ms)."
-            )
-
-        return depth_frame
-
-    @check_if_not_connected
-    def read_latest_rgbd(self, max_age_ms: int = 500) -> tuple[NDArray[Any], NDArray[Any] | None]:
-        """Return the latest color frame and aligned depth frame from the same buffer."""
-        if self.thread is None or not self.thread.is_alive():
-            raise RuntimeError(f"{self} read thread is not running.")
-
-        with self.frame_lock:
-            color_frame = self.latest_color_frame
-            depth_frame = self.latest_depth_frame
-            timestamp = self.latest_timestamp
-
-        if color_frame is None or timestamp is None:
-            raise RuntimeError(f"{self} has not captured any frames yet.")
-
-        age_ms = (time.perf_counter() - timestamp) * 1e3
-        if age_ms > max_age_ms:
-            raise TimeoutError(
-                f"{self} latest RGB-D frame is too old: {age_ms:.1f} ms (max allowed: {max_age_ms} ms)."
-            )
-
-        return color_frame, depth_frame
-
     def disconnect(self) -> None:
         """
         Disconnects from the camera, stops the pipeline, and cleans up resources.
@@ -820,7 +746,6 @@ class RealSenseCamera(Camera):
             self.rs_pipeline.stop()
             self.rs_pipeline = None
             self.rs_profile = None
-            self.rs_align = None
 
         with self.frame_lock:
             self.latest_color_frame = None
