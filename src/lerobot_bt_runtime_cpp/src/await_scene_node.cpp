@@ -214,8 +214,17 @@ BT::NodeStatus MergedRunAndVerifyNode::onRunning()
   // --- Phase 2: polling VLM verdict ------------------------------------
   // Comment: evaluates a condition and chooses the branch to run.
   if (!vlm_pending_) {
+    // No request is in flight: wait until the throttle window elapses, then
+    // dispatch the next poll. The gate therefore keeps watching forever
+    // (e.g. until a human completes the scene) without flooding the server.
+    // Comment: evaluates a condition and chooses the branch to run.
+    if (ros_node_->now() >= vlm_next_request_time_) {
+      // Comment: executes this BT logic statement in C++.
+      startVlmRequest();
+    // Comment: closes the current C++ code block.
+    }
     // Comment: returns the value or status to the caller.
-    return BT::NodeStatus::FAILURE;
+    return BT::NodeStatus::RUNNING;
   // Comment: closes the current C++ code block.
   }
   // Comment: evaluates a condition and chooses the branch to run.
@@ -302,13 +311,18 @@ BT::NodeStatus MergedRunAndVerifyNode::handleVlmResponse(
   // Comment: evaluates a condition and chooses the branch to run.
   if (response->status == "FAILURE") {
     // Comment: writes a diagnostic message to the ROS2 logger.
-    RCLCPP_ERROR(ros_node_->get_logger(),
-                 // Comment: executes this BT logic statement in C++.
-                 "VLM check '%s' FAILURE (attempt %d): %s",
-                 // Comment: executes this BT logic statement in C++.
-                 check_name_.c_str(), response->attempt_id, response->message.c_str());
+    RCLCPP_WARN(ros_node_->get_logger(),
+                // Comment: executes this BT logic statement in C++.
+                "VLM check '%s' FAILURE (attempt %d): %s -- keeping the gate "
+                "open and polling again instead of failing the tree.",
+                // Comment: executes this BT logic statement in C++.
+                check_name_.c_str(), response->attempt_id, response->message.c_str());
+    // Comment: schedules the next VLM request after the throttle window so the
+    // gate keeps waiting until the scene condition is eventually satisfied.
+    vlm_next_request_time_ =
+      ros_node_->now() + rclcpp::Duration::from_seconds(vlm_poll_period_s_);
     // Comment: returns the value or status to the caller.
-    return BT::NodeStatus::FAILURE;
+    return BT::NodeStatus::RUNNING;
   // Comment: closes the current C++ code block.
   }
 
@@ -325,8 +339,10 @@ BT::NodeStatus MergedRunAndVerifyNode::handleVlmResponse(
                  check_name_.c_str(), response->attempt_id,
                  // Comment: executes this BT logic statement in C++.
                  response->status.c_str(), response->message.c_str());
-    // Comment: executes this BT logic statement in C++.
-    startVlmRequest();
+    // Comment: schedules the next poll after the throttle window instead of
+    // re-requesting on every tick.
+    vlm_next_request_time_ =
+      ros_node_->now() + rclcpp::Duration::from_seconds(vlm_poll_period_s_);
     // Comment: returns the value or status to the caller.
     return BT::NodeStatus::RUNNING;
   // Comment: closes the current C++ code block.

@@ -45,8 +45,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--plan-service-timeout-s",
         type=float,
-        default=30.0,
-        help="Timeout (seconds) for ROS2 planning service.",
+        default=0.0,
+        help="Timeout (seconds) for ROS2 planning service. Use 0 to wait indefinitely.",
     )
     parser.add_argument(
         "--scene-facts-file",

@@ -152,6 +152,14 @@ protected:
   bool cmd_pending_{false};
   // Comment: executes this BT logic statement in C++.
   bool vlm_pending_{false};
+  // Minimum delay between two VLM state requests so the gate polls calmly
+  // (e.g. while waiting for a human to finish setting up the scene) instead of
+  // hammering the VLM server on every BT tick.
+  // Comment: executes this BT logic statement in C++.
+  double vlm_poll_period_s_{2.0};
+  // Earliest time at which the next VLM request may be dispatched.
+  // Comment: executes this BT logic statement in C++.
+  rclcpp::Time vlm_next_request_time_{0, 0, RCL_ROS_TIME};
 
 // Comment: changes the visibility of the class members.
 private:

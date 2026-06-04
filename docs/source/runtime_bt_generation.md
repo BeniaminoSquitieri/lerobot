@@ -141,7 +141,7 @@ The `ros-service` planner mode enables live integration with a remote `panda_liv
 ```bash
 --planner ros-service
 --plan-service-name /lerobot_bt/generate_plan
---plan-service-timeout-s 30.0
+--plan-service-timeout-s 0
 --scene-facts-file optional_scene_facts.json
 ```
 

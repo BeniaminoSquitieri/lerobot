@@ -355,6 +355,16 @@ int main(int argc, char** argv)
       groot_publisher = std::make_unique<GrootPublisherT>(tree, static_cast<unsigned>(groot_port));
       // Comment: writes a diagnostic message to the ROS2 logger.
       RCLCPP_INFO(node->get_logger(), "Groot publisher enabled on port %d.", groot_port);
+      // Comment: prints copy/paste instructions so the user can attach Groot2.
+      RCLCPP_INFO(
+        // Comment: executes this BT logic statement in C++.
+        node->get_logger(),
+        // Comment: executes this BT logic statement in C++.
+        "To watch the tree live: open the Groot2 desktop app -> 'Monitor' mode "
+        "-> Connect, then enter Server IP '127.0.0.1' (or this machine's IP for "
+        "a remote viewer) and Port '%d'.",
+        // Comment: executes this BT logic statement in C++.
+        groot_port);
 // Comment: uses the fallback branch of the compilation configuration.
 #else
       // Comment: assigns or initializes a value used by the BT runtime.

@@ -194,7 +194,7 @@ service for Linear IR JSON:
 ```bash
 --planner ros-service
 --plan-service-name /lerobot_bt/generate_plan
---plan-service-timeout-s 30.0
+--plan-service-timeout-s 0
 ```
 
 `lerobot` sends the task name, optional scene facts, and a filtered planner
