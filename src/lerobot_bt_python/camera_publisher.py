@@ -20,6 +20,9 @@ if TYPE_CHECKING:
     from lerobot.robots.custom_manipulator.custom_manipulator import CustomManipulator
 
 
+_INTRINSICS_WARNING_EMITTED = False
+
+
 @dataclass(frozen=True)
 class _CameraPublishers:
     image: Any
@@ -63,7 +66,15 @@ def _camera_intrinsics(camera: Any) -> dict[str, Any] | None:
         return None
     try:
         intrinsics = camera.get_color_intrinsics()
-    except Exception:
+    except Exception as exc:
+        global _INTRINSICS_WARNING_EMITTED
+        if not _INTRINSICS_WARNING_EMITTED:
+            logging.warning(
+                "Camera intrinsics unavailable; CameraInfo will not be published: %s: %s",
+                type(exc).__name__,
+                exc,
+            )
+            _INTRINSICS_WARNING_EMITTED = True
         return None
     return intrinsics if isinstance(intrinsics, dict) else None
 
