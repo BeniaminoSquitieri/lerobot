@@ -18,7 +18,7 @@ def request_plan_from_ros_service(
     *,
     service_name: str = "/lerobot_bt/generate_plan",
     scene_facts: dict | None = None,
-    timeout_s: float = 30.0,
+    timeout_s: float = 120.0,
 ) -> str:
     try:
         import rclpy
