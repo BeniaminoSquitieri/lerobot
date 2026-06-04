@@ -396,3 +396,13 @@ Expected output (greppable `event=spatial_prior_gate` lines):
 
 The script exits non-zero if any verdict or block decision is unexpected. The
 same three scenarios are also asserted as pytest cases in `test_spatial_prior.py`.
+
+### Where to run the tests (local robot vs GPU server)
+
+The gate's offline tests (`test_spatial_prior.py`, `test_camera_publisher.py`,
+`smoke_spatial_prior_gate.py`) need **no robot and no GPU**, so run them on
+**both** the local robot machine and the GPU server after a `git pull`. The
+hardware end-to-end path (cameras, TF, `scene_facts`, `query_pose`, gate in
+`shadow`) runs on the **local robot machine** (camera owner); the live VLM
+verifier runs on the **GPU server**. The full local-vs-server test matrix is
+documented in `panda_live_viewer/README.md` → "Testing: where each test runs".
