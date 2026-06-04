@@ -1,4 +1,4 @@
-# Comandi demo finale
+# Comandi robot day
 
 Usa questo file dall'alto verso il basso. Copia/incolla i comandi così come sono.
 
@@ -12,16 +12,14 @@ git branch --show-current
 
 cd /home/panda-admin/users/sben/panda_live_viewer
 git branch --show-current
-
-source /opt/ros/jazzy/setup.bash
-echo $ROS_DISTRO
 ```
 
 Atteso:
 
 - `codex/perception-rgbd-publisher` in `/home/panda-admin/users/sben/lerobot`
 - `codex/perception-scene-facts-node` in `/home/panda-admin/users/sben/panda_live_viewer`
-- `jazzy` come ROS distro
+
+Nota: ROS Jazzy è embedded nell'ambiente conda `lerobot_ben`, non in `/opt/ros/jazzy`.
 
 ## 1. Requisito critico: CycloneDDS su entrambe le macchine
 
@@ -64,7 +62,6 @@ Errore comune:
 
 ```bash
 cd /home/panda-admin/users/sben/lerobot
-source /opt/ros/jazzy/setup.bash
 export ROS_DOMAIN_ID=0
 export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
 export CYCLONEDDS_URI=file://$HOME/.ros/cyclonedds.xml
@@ -86,15 +83,14 @@ Apri un terminale dedicato e lascialo aperto.
 
 ### A1. Dry-run planner mode, consigliato per primo
 
-Questo deve essere il primo modo usato alla demo finale.
+Questo deve essere il primo modo usato sul robot day.
 
 ```bash
 conda activate lerobot_ben
 cd /home/panda-admin/users/sben/panda_live_viewer
 
-source /opt/ros/jazzy/setup.bash
 source /home/panda-admin/users/sben/lerobot/install/setup.bash
-export PYTHONPATH=/opt/ros/jazzy/lib/python3.12/site-packages:/home/panda-admin/users/sben/lerobot/src:$PWD:$PYTHONPATH
+export PYTHONPATH=/home/panda-admin/users/sben/lerobot/src:$PWD:$PYTHONPATH
 export ROS_DOMAIN_ID=0
 export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
 export CYCLONEDDS_URI=file://$HOME/.ros/cyclonedds.xml
@@ -120,9 +116,8 @@ Atteso:
 conda activate lerobot_ben
 cd /home/panda-admin/users/sben/panda_live_viewer
 
-source /opt/ros/jazzy/setup.bash
 source /home/panda-admin/users/sben/lerobot/install/setup.bash
-export PYTHONPATH=/opt/ros/jazzy/lib/python3.12/site-packages:/home/panda-admin/users/sben/lerobot/src:$PWD:$PYTHONPATH
+export PYTHONPATH=/home/panda-admin/users/sben/lerobot/src:$PWD:$PYTHONPATH
 export ROS_DOMAIN_ID=0
 export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
 export CYCLONEDDS_URI=file://$HOME/.ros/cyclonedds.xml
@@ -220,13 +215,32 @@ Comando per `make_coffee`:
 conda activate lerobot_ben
 cd /home/panda-admin/users/sben/lerobot
 
-source /opt/ros/jazzy/setup.bash
 source install/setup.bash
-export PYTHONPATH=/opt/ros/jazzy/lib/python3.12/site-packages:$PWD/src:$PYTHONPATH
+export PYTHONPATH=$PWD/src:$PYTHONPATH
 export ROS_DOMAIN_ID=0
 export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
 export CYCLONEDDS_URI=file://$HOME/.ros/cyclonedds.xml
 unset ROS_LOCALHOST_ONLY
+
+  --config_path=src/lerobot_bt_python/make_coffee_executor.yaml
+```
+
+Fallback senza `uv`:
+
+Usalo solo se `uv` non è disponibile e l'ambiente Python ha già tutte le dipendenze richieste.
+
+```bash
+conda activate lerobot_ben
+cd /home/panda-admin/users/sben/lerobot
+
+source install/setup.bash
+export PYTHONPATH=$PWD/src:$PYTHONPATH
+export ROS_DOMAIN_ID=0
+export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
+export CYCLONEDDS_URI=file://$HOME/.ros/cyclonedds.xml
+unset ROS_LOCALHOST_ONLY
+
+export PYTHONPATH=$PWD/src:$PYTHONPATH
 
 python3 -m lerobot_bt_python.server \
   --config_path=src/lerobot_bt_python/make_coffee_executor.yaml
@@ -239,9 +253,6 @@ fallire import come `GenerateTaskPlan`.
 Altri task:
 
 ```bash
-python3 -m lerobot_bt_python.server --config_path=src/lerobot_bt_python/set_breakfast_table_executor.yaml
-python3 -m lerobot_bt_python.server --config_path=src/lerobot_bt_python/prepare_picnic_bag_executor.yaml
-python3 -m lerobot_bt_python.server --config_path=src/lerobot_bt_python/items_in_drawer_executor.yaml
 ```
 
 ## 6. Terminale C — Check servizi ROS
@@ -252,7 +263,6 @@ Apri un terzo terminale. Userai questo terminale per tutti i test BT.
 conda activate lerobot_ben
 cd /home/panda-admin/users/sben/lerobot
 
-source /opt/ros/jazzy/setup.bash
 source install/setup.bash
 export ROS_DOMAIN_ID=0
 export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
@@ -286,9 +296,8 @@ Questo è il primo trial da lanciare.
 conda activate lerobot_ben
 cd /home/panda-admin/users/sben/lerobot
 
-source /opt/ros/jazzy/setup.bash
 source install/setup.bash
-export PYTHONPATH=/opt/ros/jazzy/lib/python3.12/site-packages:$PWD/src:$PYTHONPATH
+export PYTHONPATH=$PWD/src:$PYTHONPATH
 export ROS_DOMAIN_ID=0
 export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
 export CYCLONEDDS_URI=file://$HOME/.ros/cyclonedds.xml
@@ -329,7 +338,6 @@ Se preferisci bypassare lo shell script e chiamare direttamente il modulo:
 
 ```bash
 cd /home/panda-admin/users/sben/lerobot
-source /opt/ros/jazzy/setup.bash
 source install/setup.bash
 export ROS_DOMAIN_ID=0
 export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
@@ -355,9 +363,8 @@ Solo dopo che la sezione 7 passa e lo skill server è attivo.
 conda activate lerobot_ben
 cd /home/panda-admin/users/sben/lerobot
 
-source /opt/ros/jazzy/setup.bash
 source install/setup.bash
-export PYTHONPATH=/opt/ros/jazzy/lib/python3.12/site-packages:$PWD/src:$PYTHONPATH
+export PYTHONPATH=$PWD/src:$PYTHONPATH
 export ROS_DOMAIN_ID=0
 export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
 export CYCLONEDDS_URI=file://$HOME/.ros/cyclonedds.xml
@@ -563,9 +570,8 @@ Apri un terminale dedicato:
 conda activate lerobot_ben
 cd /home/panda-admin/users/sben/panda_live_viewer
 
-source /opt/ros/jazzy/setup.bash
 source /home/panda-admin/users/sben/lerobot/install/setup.bash
-export PYTHONPATH=/opt/ros/jazzy/lib/python3.12/site-packages:/home/panda-admin/users/sben/lerobot/src:$PWD:$PYTHONPATH
+export PYTHONPATH=/home/panda-admin/users/sben/lerobot/src:$PWD:$PYTHONPATH
 export ROS_DOMAIN_ID=0
 export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
 export CYCLONEDDS_URI=file://$HOME/.ros/cyclonedds.xml
@@ -676,7 +682,6 @@ PYTHON_BIN=python3 scripts/run_demo_bt_trial.sh make_coffee robot_live
 oppure direttamente:
 
 ```bash
-python3 -m lerobot_bt_python.server \
   --config_path=src/lerobot_bt_python/make_coffee_executor.yaml
 ```
 
@@ -816,7 +821,7 @@ Fix:
 Fix:
 
 ```bash
-export PYTHONPATH=/opt/ros/jazzy/lib/python3.12/site-packages:$PYTHONPATH
+
 ```
 
 Nota:
@@ -976,7 +981,7 @@ Causa e fix per `reason`:
 - prior non caricato (nessuna riga `loaded prior...` all'avvio) → controlla che
   `spatial_priors/put_coffee.json` esista e che `mode` non sia `off`.
 
-## 13. Ordine sicuro alla demo finale
+## 13. Ordine sicuro sul robot day
 
 1. Configura CycloneDDS su entrambe le macchine.
 2. Build e source di `lerobot`.
