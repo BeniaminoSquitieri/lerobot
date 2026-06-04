@@ -1,4 +1,4 @@
-# Comandi robot day
+# Comandi demo finale
 
 Usa questo file dall'alto verso il basso. Copia/incolla i comandi così come sono.
 
@@ -7,10 +7,10 @@ Usa questo file dall'alto verso il basso. Copia/incolla i comandi così come son
 Controlla repo, branch e ROS:
 
 ```bash
-cd /home/bsquitieri/lerobot
+cd /home/panda-admin/users/sben/lerobot
 git branch --show-current
 
-cd /home/bsquitieri/panda_live_viewer
+cd /home/panda-admin/users/sben/panda_live_viewer
 git branch --show-current
 
 source /opt/ros/jazzy/setup.bash
@@ -19,8 +19,8 @@ echo $ROS_DISTRO
 
 Atteso:
 
-- `runtime-bt-generation-mvp-c` in `/home/bsquitieri/lerobot`
-- `after_lorenzo_meeting` in `/home/bsquitieri/panda_live_viewer`
+- `codex/perception-rgbd-publisher` in `/home/panda-admin/users/sben/lerobot`
+- `codex/perception-scene-facts-node` in `/home/panda-admin/users/sben/panda_live_viewer`
 - `jazzy` come ROS distro
 
 ## 1. Requisito critico: CycloneDDS su entrambe le macchine
@@ -63,7 +63,7 @@ Errore comune:
 ## 2. Build e source workspace lerobot
 
 ```bash
-cd /home/bsquitieri/lerobot
+cd /home/panda-admin/users/sben/lerobot
 source /opt/ros/jazzy/setup.bash
 export ROS_DOMAIN_ID=0
 export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
@@ -86,15 +86,15 @@ Apri un terminale dedicato e lascialo aperto.
 
 ### A1. Dry-run planner mode, consigliato per primo
 
-Questo deve essere il primo modo usato sul robot day.
+Questo deve essere il primo modo usato alla demo finale.
 
 ```bash
-conda activate lerobot
-cd /home/bsquitieri/panda_live_viewer
+conda activate lerobot_ben
+cd /home/panda-admin/users/sben/panda_live_viewer
 
 source /opt/ros/jazzy/setup.bash
-source /home/bsquitieri/lerobot/install/setup.bash
-export PYTHONPATH=/opt/ros/jazzy/lib/python3.12/site-packages:/home/bsquitieri/lerobot/src:$PWD:$PYTHONPATH
+source /home/panda-admin/users/sben/lerobot/install/setup.bash
+export PYTHONPATH=/opt/ros/jazzy/lib/python3.12/site-packages:/home/panda-admin/users/sben/lerobot/src:$PWD:$PYTHONPATH
 export ROS_DOMAIN_ID=0
 export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
 export CYCLONEDDS_URI=file://$HOME/.ros/cyclonedds.xml
@@ -105,7 +105,7 @@ python3 -u -m vlm_live.cli \
   -p planner_dry_run:=true \
   -p lazy_load_model:=true \
   -p require_generate_plan_service:=true \
-  -p verifier_experiment_log_path:=/home/bsquitieri/lerobot/generated_bt/experiments/verifier_events.jsonl
+  -p verifier_experiment_log_path:=/home/panda-admin/users/sben/lerobot/generated_bt/experiments/verifier_events.jsonl
 ```
 
 Atteso:
@@ -117,12 +117,12 @@ Atteso:
 ### A2. Live VLM planner mode, solo dopo che il dry-run funziona
 
 ```bash
-conda activate lerobot
-cd /home/bsquitieri/panda_live_viewer
+conda activate lerobot_ben
+cd /home/panda-admin/users/sben/panda_live_viewer
 
 source /opt/ros/jazzy/setup.bash
-source /home/bsquitieri/lerobot/install/setup.bash
-export PYTHONPATH=/opt/ros/jazzy/lib/python3.12/site-packages:/home/bsquitieri/lerobot/src:$PWD:$PYTHONPATH
+source /home/panda-admin/users/sben/lerobot/install/setup.bash
+export PYTHONPATH=/opt/ros/jazzy/lib/python3.12/site-packages:/home/panda-admin/users/sben/lerobot/src:$PWD:$PYTHONPATH
 export ROS_DOMAIN_ID=0
 export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
 export CYCLONEDDS_URI=file://$HOME/.ros/cyclonedds.xml
@@ -133,7 +133,7 @@ python3 -u -m vlm_live.cli \
   -p planner_dry_run:=false \
   -p lazy_load_model:=true \
   -p require_generate_plan_service:=true \
-  -p verifier_experiment_log_path:=/home/bsquitieri/lerobot/generated_bt/experiments/verifier_events.jsonl
+  -p verifier_experiment_log_path:=/home/panda-admin/users/sben/lerobot/generated_bt/experiments/verifier_events.jsonl
 ```
 
 Usalo solo dopo questi tre passaggi:
@@ -198,7 +198,7 @@ risponda davvero a una chiamata ROS 2:
 
 ```bash
 ros2 service call /lerobot_bt/generate_plan lerobot_bt_interfaces/srv/GenerateTaskPlan \
-"{task_name: 'make_sandwich', planner_registry_json: '{\"task_name\":\"make_sandwich\",\"canonical_task_sequence\":[]}', scene_facts_json: ''}"
+"{task_name: 'make_coffee', planner_registry_json: '{\"task_name\":\"make_coffee\",\"canonical_task_sequence\":[]}', scene_facts_json: ''}"
 ```
 
 Atteso:
@@ -214,11 +214,11 @@ non e' piu' DDS/discovery ma solo il payload di test volutamente incompleto.
 
 Apri un secondo terminale dedicato e lascialo aperto.
 
-Comando per `make_sandwich`:
+Comando per `make_coffee`:
 
 ```bash
-conda activate lerobot
-cd /home/bsquitieri/lerobot
+conda activate lerobot_ben
+cd /home/panda-admin/users/sben/lerobot
 
 source /opt/ros/jazzy/setup.bash
 source install/setup.bash
@@ -227,31 +227,9 @@ export ROS_DOMAIN_ID=0
 export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
 export CYCLONEDDS_URI=file://$HOME/.ros/cyclonedds.xml
 unset ROS_LOCALHOST_ONLY
-
-uv run lerobot-bt-skill-server \
-  --config_path=src/lerobot_bt_python/make_sandwich_executor.yaml
-```
-
-Fallback senza `uv`:
-
-Usalo solo se `uv` non è disponibile e l'ambiente Python ha già tutte le dipendenze richieste.
-
-```bash
-conda activate lerobot
-cd /home/bsquitieri/lerobot
-
-source /opt/ros/jazzy/setup.bash
-source install/setup.bash
-export PYTHONPATH=/opt/ros/jazzy/lib/python3.12/site-packages:$PWD/src:$PYTHONPATH
-export ROS_DOMAIN_ID=0
-export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
-export CYCLONEDDS_URI=file://$HOME/.ros/cyclonedds.xml
-unset ROS_LOCALHOST_ONLY
-
-export PYTHONPATH=$PWD/src:$PYTHONPATH
 
 python3 -m lerobot_bt_python.server \
-  --config_path=src/lerobot_bt_python/make_sandwich_executor.yaml
+  --config_path=src/lerobot_bt_python/make_coffee_executor.yaml
 ```
 
 **Importante:** non usare `PYTHONPATH=src python3 -m ...`.
@@ -261,10 +239,9 @@ fallire import come `GenerateTaskPlan`.
 Altri task:
 
 ```bash
-uv run lerobot-bt-skill-server --config_path=src/lerobot_bt_python/make_coffee_executor.yaml
-uv run lerobot-bt-skill-server --config_path=src/lerobot_bt_python/set_breakfast_table_executor.yaml
-uv run lerobot-bt-skill-server --config_path=src/lerobot_bt_python/prepare_picnic_bag_executor.yaml
-uv run lerobot-bt-skill-server --config_path=src/lerobot_bt_python/items_in_drawer_executor.yaml
+python3 -m lerobot_bt_python.server --config_path=src/lerobot_bt_python/set_breakfast_table_executor.yaml
+python3 -m lerobot_bt_python.server --config_path=src/lerobot_bt_python/prepare_picnic_bag_executor.yaml
+python3 -m lerobot_bt_python.server --config_path=src/lerobot_bt_python/items_in_drawer_executor.yaml
 ```
 
 ## 6. Terminale C — Check servizi ROS
@@ -272,8 +249,8 @@ uv run lerobot-bt-skill-server --config_path=src/lerobot_bt_python/items_in_draw
 Apri un terzo terminale. Userai questo terminale per tutti i test BT.
 
 ```bash
-conda activate lerobot
-cd /home/bsquitieri/lerobot
+conda activate lerobot_ben
+cd /home/panda-admin/users/sben/lerobot
 
 source /opt/ros/jazzy/setup.bash
 source install/setup.bash
@@ -306,8 +283,8 @@ lerobot_bt_interfaces/srv/RunNamedCommand
 Questo è il primo trial da lanciare.
 
 ```bash
-conda activate lerobot
-cd /home/bsquitieri/lerobot
+conda activate lerobot_ben
+cd /home/panda-admin/users/sben/lerobot
 
 source /opt/ros/jazzy/setup.bash
 source install/setup.bash
@@ -317,7 +294,7 @@ export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
 export CYCLONEDDS_URI=file://$HOME/.ros/cyclonedds.xml
 unset ROS_LOCALHOST_ONLY
 
-PYTHON_BIN=python3 scripts/run_icra_runtime_bt_trial.sh make_sandwich dry_run_no_run
+PYTHON_BIN=python3 scripts/run_demo_bt_trial.sh make_coffee dry_run_no_run
 ```
 
 Atteso:
@@ -339,11 +316,11 @@ Se vuoi una cartella temporanea e cleanup automatico a fine comando, usa:
 
 ```bash
 python3 -m lerobot_bt_python.bt_generation.generate_and_run \
-  --task make_sandwich \
+  --task make_coffee \
   --planner ros-service \
   --registry src/lerobot_bt_python/bt_generation/skills_registry.yaml \
-  --executor-yaml src/lerobot_bt_python/make_sandwich_executor.yaml \
-  --output-dir /tmp/generated_bt_make_sandwich \
+  --executor-yaml src/lerobot_bt_python/make_coffee_executor.yaml \
+  --output-dir /tmp/generated_bt_make_coffee \
   --cleanup-output-dir-on-exit \
   --no-run
 ```
@@ -351,7 +328,7 @@ python3 -m lerobot_bt_python.bt_generation.generate_and_run \
 Se preferisci bypassare lo shell script e chiamare direttamente il modulo:
 
 ```bash
-cd /home/bsquitieri/lerobot
+cd /home/panda-admin/users/sben/lerobot
 source /opt/ros/jazzy/setup.bash
 source install/setup.bash
 export ROS_DOMAIN_ID=0
@@ -360,10 +337,10 @@ export CYCLONEDDS_URI=file://$HOME/.ros/cyclonedds.xml
 unset ROS_LOCALHOST_ONLY
 
 python3 -m lerobot_bt_python.bt_generation.generate_and_run \
-  --task make_sandwich \
+  --task make_coffee \
   --planner ros-service \
   --registry src/lerobot_bt_python/bt_generation/skills_registry.yaml \
-  --executor-yaml src/lerobot_bt_python/make_sandwich_executor.yaml \
+  --executor-yaml src/lerobot_bt_python/make_coffee_executor.yaml \
   --output-dir generated_bt \
   --no-run
 ```
@@ -375,8 +352,8 @@ Anche qui: non anteporre `PYTHONPATH=src` al comando.
 Solo dopo che la sezione 7 passa e lo skill server è attivo.
 
 ```bash
-conda activate lerobot
-cd /home/bsquitieri/lerobot
+conda activate lerobot_ben
+cd /home/panda-admin/users/sben/lerobot
 
 source /opt/ros/jazzy/setup.bash
 source install/setup.bash
@@ -386,7 +363,7 @@ export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
 export CYCLONEDDS_URI=file://$HOME/.ros/cyclonedds.xml
 unset ROS_LOCALHOST_ONLY
 
-PYTHON_BIN=python3 scripts/run_icra_runtime_bt_trial.sh make_sandwich robot_live
+PYTHON_BIN=python3 scripts/run_demo_bt_trial.sh make_coffee robot_live
 ```
 
 Atteso:
@@ -404,7 +381,7 @@ AwaitScene(pour_ingredient)
 AwaitScene(ingredient_poured)
 AwaitScene(second_toast_ready)
 DoSkill(place_second_toast)
-AwaitScene(make_sandwich.task_complete)
+AwaitScene(make_coffee.task_complete)
 ```
 
 ## 9. Annotare il trial
@@ -412,7 +389,7 @@ AwaitScene(make_sandwich.task_complete)
 Il comando precedente stampa un `trial_id` reale, per esempio:
 
 ```text
-trial_id: make_sandwich__ros-service__20260601T160013__8f93444d
+trial_id: make_coffee__ros-service__20260601T160013__8f93444d
 ```
 
 Non copiare la parola `trial_id:`. Copia il valore reale dopo `trial_id:`.
@@ -420,9 +397,9 @@ Non copiare la parola `trial_id:`. Copia il valore reale dopo `trial_id:`.
 Esempio successo:
 
 ```bash
-cd /home/bsquitieri/lerobot
+cd /home/panda-admin/users/sben/lerobot
 
-TRIAL_ID=make_sandwich__ros-service__20260601T160013__8f93444d
+TRIAL_ID=make_coffee__ros-service__20260601T160013__8f93444d
 
 python3 scripts/annotate_runtime_bt_trial.py \
   --jsonl generated_bt/experiments/trials.jsonl \
@@ -438,7 +415,7 @@ Esempio fallimento: service unavailable.
 Sostituisci `replace_with_real_trial_id` con il valore reale appena stampato.
 
 ```bash
-cd /home/bsquitieri/lerobot
+cd /home/panda-admin/users/sben/lerobot
 
 TRIAL_ID=replace_with_real_trial_id
 
@@ -456,7 +433,7 @@ Esempio fallimento: skill failed.
 Sostituisci `replace_with_real_trial_id` con il valore reale appena stampato.
 
 ```bash
-cd /home/bsquitieri/lerobot
+cd /home/panda-admin/users/sben/lerobot
 
 TRIAL_ID=replace_with_real_trial_id
 
@@ -474,7 +451,7 @@ Esempio fallimento: verifier false negative.
 Sostituisci `replace_with_real_trial_id` con il valore reale appena stampato.
 
 ```bash
-cd /home/bsquitieri/lerobot
+cd /home/panda-admin/users/sben/lerobot
 
 TRIAL_ID=replace_with_real_trial_id
 
@@ -492,13 +469,13 @@ python3 scripts/annotate_runtime_bt_trial.py \
 Report:
 
 ```bash
-cd /home/bsquitieri/lerobot
+cd /home/panda-admin/users/sben/lerobot
 
 python3 scripts/summarize_runtime_bt_experiments.py
 
-python3 scripts/make_icra_runtime_bt_report.py \
+python3 scripts/make_demo_bt_report.py \
   --experiments-dir generated_bt/experiments \
-  --out-md generated_bt/experiments/icra_report.md
+  --out-md generated_bt/experiments/demo_report.md
 ```
 
 Bundle:
@@ -506,7 +483,7 @@ Bundle:
 Sostituisci `replace_with_real_trial_id` con il valore reale appena stampato.
 
 ```bash
-cd /home/bsquitieri/lerobot
+cd /home/panda-admin/users/sben/lerobot
 
 TRIAL_ID=replace_with_real_trial_id
 
@@ -519,19 +496,19 @@ python3 scripts/bundle_runtime_bt_trial.py \
 ## 11. Comandi equivalenti per altri task
 
 ```bash
-cd /home/bsquitieri/lerobot
+cd /home/panda-admin/users/sben/lerobot
 
-PYTHON_BIN=python3 scripts/run_icra_runtime_bt_trial.sh make_coffee dry_run_no_run
-PYTHON_BIN=python3 scripts/run_icra_runtime_bt_trial.sh make_coffee robot_live
+PYTHON_BIN=python3 scripts/run_demo_bt_trial.sh make_coffee dry_run_no_run
+PYTHON_BIN=python3 scripts/run_demo_bt_trial.sh make_coffee robot_live
 
-PYTHON_BIN=python3 scripts/run_icra_runtime_bt_trial.sh set_breakfast_table dry_run_no_run
-PYTHON_BIN=python3 scripts/run_icra_runtime_bt_trial.sh set_breakfast_table robot_live
+PYTHON_BIN=python3 scripts/run_demo_bt_trial.sh set_breakfast_table dry_run_no_run
+PYTHON_BIN=python3 scripts/run_demo_bt_trial.sh set_breakfast_table robot_live
 
-PYTHON_BIN=python3 scripts/run_icra_runtime_bt_trial.sh prepare_picnic_bag dry_run_no_run
-PYTHON_BIN=python3 scripts/run_icra_runtime_bt_trial.sh prepare_picnic_bag robot_live
+PYTHON_BIN=python3 scripts/run_demo_bt_trial.sh prepare_picnic_bag dry_run_no_run
+PYTHON_BIN=python3 scripts/run_demo_bt_trial.sh prepare_picnic_bag robot_live
 
-PYTHON_BIN=python3 scripts/run_icra_runtime_bt_trial.sh items_in_drawer dry_run_no_run
-PYTHON_BIN=python3 scripts/run_icra_runtime_bt_trial.sh items_in_drawer robot_live
+PYTHON_BIN=python3 scripts/run_demo_bt_trial.sh items_in_drawer dry_run_no_run
+PYTHON_BIN=python3 scripts/run_demo_bt_trial.sh items_in_drawer robot_live
 ```
 
 ## 11b. Percezione RGB-D opzionale (scene facts + pose 6D)
@@ -583,12 +560,12 @@ calibrazione reale prima di usare le pose per il grasping.
 Apri un terminale dedicato:
 
 ```bash
-conda activate lerobot
-cd /home/bsquitieri/panda_live_viewer
+conda activate lerobot_ben
+cd /home/panda-admin/users/sben/panda_live_viewer
 
 source /opt/ros/jazzy/setup.bash
-source /home/bsquitieri/lerobot/install/setup.bash
-export PYTHONPATH=/opt/ros/jazzy/lib/python3.12/site-packages:/home/bsquitieri/lerobot/src:$PWD:$PYTHONPATH
+source /home/panda-admin/users/sben/lerobot/install/setup.bash
+export PYTHONPATH=/opt/ros/jazzy/lib/python3.12/site-packages:/home/panda-admin/users/sben/lerobot/src:$PWD:$PYTHONPATH
 export ROS_DOMAIN_ID=0
 export RMW_IMPLEMENTATION=rmw_cyclonedds_cpp
 export CYCLONEDDS_URI=file://$HOME/.ros/cyclonedds.xml
@@ -666,8 +643,8 @@ blocco. Già configurato in `make_coffee_executor.yaml`.
 Da un terminale qualsiasi:
 
 ```bash
-conda activate lerobot
-cd /home/bsquitieri/lerobot/src
+conda activate lerobot_ben
+cd /home/panda-admin/users/sben/lerobot/src
 
 cat lerobot_bt_python/spatial_priors/put_coffee.json | python3 -m json.tool | head -20
 ```
@@ -678,8 +655,8 @@ Atteso: JSON con `frame_id: base_link`, `n_demos: 50`,
 ### 11c.2 Smoke test del gate (offline, senza robot)
 
 ```bash
-conda activate lerobot
-cd /home/bsquitieri/lerobot/src
+conda activate lerobot_ben
+cd /home/panda-admin/users/sben/lerobot/src
 
 python3 -m pytest lerobot_bt_python/test_spatial_prior.py -q
 ```
@@ -693,13 +670,13 @@ sezione 5) con l'executor del caffè:
 
 ```bash
 # Terminale B — skill server reale, task caffè
-PYTHON_BIN=python3 scripts/run_icra_runtime_bt_trial.sh make_coffee robot_live
+PYTHON_BIN=python3 scripts/run_demo_bt_trial.sh make_coffee robot_live
 ```
 
 oppure direttamente:
 
 ```bash
-uv run lerobot-bt-skill-server \
+python3 -m lerobot_bt_python.server \
   --config_path=src/lerobot_bt_python/make_coffee_executor.yaml
 ```
 
@@ -772,8 +749,8 @@ non blocca mai. Riavvia lo skill server per applicare.
 ### 11c.7 Rigenera il prior (se cambi dataset)
 
 ```bash
-conda activate lerobot
-cd /home/bsquitieri/lerobot/src
+conda activate lerobot_ben
+cd /home/panda-admin/users/sben/lerobot/src
 
 python3 -m lerobot_bt_python.fit_spatial_prior \
   --dataset-repo-id Squitieri/put_coffee \
@@ -794,7 +771,7 @@ sano accetta ~99% dei demo held-out).
 Causa:
 
 - Panda VLM server non attivo;
-- oppure Terminale A non ha fatto `source /home/bsquitieri/lerobot/install/setup.bash`.
+- oppure Terminale A non ha fatto `source /home/panda-admin/users/sben/lerobot/install/setup.bash`.
 - oppure una o piu' shell non stanno usando CycloneDDS.
 
 Fix:
@@ -871,7 +848,7 @@ Causa:
 Fix:
 
 ```bash
-cd /home/bsquitieri/lerobot
+cd /home/panda-admin/users/sben/lerobot
 rm -rf build/lerobot_bt_interfaces install/lerobot_bt_interfaces log
 colcon build --packages-select lerobot_bt_interfaces --symlink-install
 source install/setup.bash
@@ -918,7 +895,7 @@ Se non coincide su tutte le shell, chiudi e riapri i processi.
 Atteso: XML con interi letterali.
 
 ```bash
-grep -n "RetryUntilSuccessful" generated_bt/trees/make_sandwich.xml
+grep -n "RetryUntilSuccessful" generated_bt/trees/make_coffee.xml
 ```
 
 Non deve comparire:
@@ -954,7 +931,7 @@ Causa:
 Fix:
 
 ```bash
-cd /home/bsquitieri/lerobot
+cd /home/panda-admin/users/sben/lerobot
 colcon build --packages-select lerobot_bt_interfaces --symlink-install
 source install/setup.bash
 ```
@@ -999,7 +976,7 @@ Causa e fix per `reason`:
 - prior non caricato (nessuna riga `loaded prior...` all'avvio) → controlla che
   `spatial_priors/put_coffee.json` esista e che `mode` non sia `off`.
 
-## 13. Ordine sicuro sul robot day
+## 13. Ordine sicuro alla demo finale
 
 1. Configura CycloneDDS su entrambe le macchine.
 2. Build e source di `lerobot`.
