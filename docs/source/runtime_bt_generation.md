@@ -444,6 +444,18 @@ XML/YAML blackboard consistency, and safety checks:
 conda run -n lerobot python -m pytest tests/lerobot_bt -svv
 ```
 
+If you run tests from inside `tests/lerobot_bt`, point `PYTHONPATH` to
+`src/` explicitly:
+
+```bash
+cd ~/lerobot/tests/lerobot_bt
+PYTHONPATH="$PWD/../../src:$PYTHONPATH" python -m pytest . -q
+```
+
+Do not use `PYTHONPATH="$PWD/../.."` from that directory: it resolves to
+`~/lerobot/tests` (not `~/lerobot/src`) and causes
+`ModuleNotFoundError: No module named 'lerobot_bt_python'`.
+
 Generate a sandwich BT:
 
 ```bash
