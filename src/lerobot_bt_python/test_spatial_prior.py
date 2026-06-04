@@ -248,6 +248,75 @@ def test_parse_object_pose_json_handles_invalid_json():
     assert observed.error is not None and observed.error.startswith("invalid_json")
 
 
+def test_parse_object_pose_json_accepts_dict_translation():
+    """Perception serializes translation as a {x,y,z} dict, not a list.
+
+    Regression guard: the gate must extract a real pose from the actual
+    QueryObjectPose payload format produced by
+    bt_planning.scene_facts.build_object_pose_fact.
+    """
+    payload = json.dumps({
+        "name": "coffee_capsule",
+        "present": True,
+        "frame_id": "base_link",
+        "pose": {
+            "translation": {"x": 0.684, "y": -0.260, "z": 0.150},
+            "quaternion_xyzw": {"x": 0.0, "y": 0.0, "z": 0.0, "w": 1.0},
+        },
+        "pose_confidence": 0.62,
+    })
+    observed = parse_object_pose_json(payload)
+    assert observed.error is None
+    assert observed.frame_id == "base_link"
+    assert observed.confidence == pytest.approx(0.62)
+    assert np.allclose(observed.translation, [0.684, -0.260, 0.150])
+
+
+def test_gate_passes_on_real_perception_payload_in_base_link():
+    """End-to-end: real dict-translation payload near the prior mean -> PASS."""
+    gate = _gate("enforce")
+
+    def perception_pose(_name):
+        payload = json.dumps({
+            "name": "coffee_capsule",
+            "present": True,
+            "frame_id": "base_link",
+            "pose": {
+                "translation": {"x": 0.684, "y": -0.260, "z": 0.150},
+                "quaternion_xyzw": {"x": 0.0, "y": 0.0, "z": 0.0, "w": 1.0},
+            },
+            "pose_confidence": 0.9,
+        })
+        return parse_object_pose_json(payload)
+
+    verdict = gate.evaluate("pick_and_insert_capsule", perception_pose)
+    assert verdict.status == PASS
+    assert gate.should_block(verdict) is False
+
+
+def test_gate_abstains_on_camera_frame_perception_payload():
+    """A camera-frame payload (no hand-eye calibration) -> ABSTAIN frame_mismatch."""
+    gate = _gate("enforce")
+
+    def camera_pose(_name):
+        payload = json.dumps({
+            "name": "coffee_capsule",
+            "present": True,
+            "frame_id": "panda_front_camera",
+            "pose": {
+                "translation": {"x": 0.02, "y": -0.01, "z": 0.70},
+                "quaternion_xyzw": {"x": 0.0, "y": 0.0, "z": 0.0, "w": 1.0},
+            },
+            "pose_confidence": 0.9,
+        })
+        return parse_object_pose_json(payload)
+
+    verdict = gate.evaluate("pick_and_insert_capsule", camera_pose)
+    assert verdict.status == ABSTAIN
+    assert "frame" in verdict.reason
+    assert gate.should_block(verdict) is False
+
+
 # --------------------------------------------------------------------------- #
 # Gate orchestrator (modes)
 # --------------------------------------------------------------------------- #

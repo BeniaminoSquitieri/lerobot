@@ -630,6 +630,22 @@ Invia una richiesta `/lerobot_bt/generate_plan` **senza** `scene_facts_json`: il
 planner inietta automaticamente gli ultimi `/perception/scene_facts`. Verifica
 che il piano Linear IR referenzi gli oggetti percepiti.
 
+### 11b.8 Arricchimento VLM con scene_facts (sola lettura)
+
+Il verificatore VLM può **opzionalmente** includere nel prompt le pose metriche
+degli oggetti misurate dalla percezione, solo come contesto spaziale:
+
+- se `/perception/scene_facts` è attivo, `VlmNode` formatta gli oggetti presenti
+  (es. `- coffee_capsule: [0.684, -0.260, 0.150] m in base_link, confidence 0.62`)
+  e li inietta nel prompt del verificatore;
+- è **a senso unico** percezione → VLM: il VLM *legge* le pose ma **non produce
+  mai coordinate**; la percezione resta l'unica sorgente delle pose;
+- senza `scene_facts` il prompt è identico a prima (nessuna regressione).
+
+Per verificare: con la percezione attiva, nel log del VLM il prompt mostra il
+blocco `Perception scene facts (...)`; spegnendo la percezione il blocco sparisce
+e il comportamento torna quello base.
+
 ## 11c. Spatial-prior gate (task caffè, shadow mode)
 
 Questa sezione testa il **gate spaziale OOD** per il task caffè
@@ -660,14 +676,34 @@ Atteso: JSON con `frame_id: base_link`, `n_demos: 50`,
 
 ### 11c.2 Smoke test del gate (offline, senza robot)
 
+Due modi, entrambi senza robot/GPU. **Importante:** attiva l'env conda
+(`conda activate lerobot`) prima di lanciare, altrimenti l'import di `config.py`
+fallisce con un errore di `libstdc++`/`CXXABI`.
+
+Script standalone con i tre verdetti e log greppabili:
+
 ```bash
-conda activate lerobot_ben
+conda activate lerobot
+cd /home/panda-admin/users/sben/lerobot
+
+python3 scripts/smoke_spatial_prior_gate.py
+```
+
+Atteso: tre righe `event=spatial_prior_gate` con `status=PASS` (in-distribution,
+base_link), `status=FAIL` (OOD, base_link, blocca in enforce), `status=ABSTAIN`
+(`frame_mismatch`, frame camera = nessuna calibrazione), e `SMOKE TEST PASSED`.
+
+Suite pytest completa:
+
+```bash
+conda activate lerobot
 cd /home/panda-admin/users/sben/lerobot/src
 
 python3 -m pytest lerobot_bt_python/test_spatial_prior.py -q
 ```
 
-Atteso: `27 passed`. Conferma checker, fitter, parser e modi del gate.
+Atteso: `30 passed`. Conferma checker, fitter, parser (formato dict `{x,y,z}`
+reale della percezione), modi del gate e i casi end-to-end PASS/ABSTAIN.
 
 ### 11c.3 Avvia lo skill server con il gate attivo
 
@@ -738,6 +774,27 @@ un **offset costante** rispetto al centroide oggetto della percezione. In shadow
    - rifitta/sposta `mu` dell'offset misurato, oppure
    - alza `mahalanobis_threshold` / usa un `confidence_level` più lasco.
 3. Ripeti finché pose buone → PASS e pose chiaramente sbagliate → FAIL.
+
+#### Calibrazione hand-eye (`camera_static_tf_map`)
+
+Se vedi `status=ABSTAIN reason=frame_mismatch:...`, manca la trasformata
+base→camera. **Non inventare numeri.** Raccogli 4+ corrispondenze (stesso punto
+in frame camera da `/perception/query_pose` e in `base_link` dal tool-tip),
+salvale in un JSON e genera il blocco YAML pronto da incollare:
+
+```bash
+conda activate lerobot
+python3 panda_live_viewer/scripts/calibrate_camera_extrinsics.py \
+  --input corr.json --output cam_tf.yaml
+```
+
+Lo script stampa l'RMS del fit (avvisa se > 20 mm). Incolla il blocco
+`camera_static_tf_map` in `make_coffee_executor.yaml` (al posto del placeholder
+commentato accanto a `camera_frame_id_map`) e riavvia lo skill server. Dettagli:
+`docs/spatial_prior_gating.md` sezione 10.
+
+> Senza calibrazione reale il gate resta in ABSTAIN: è il comportamento corretto
+> e sicuro, non un errore.
 
 ### 11c.6 Abilita il blocco (solo dopo calibrazione)
 

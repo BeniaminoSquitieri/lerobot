@@ -10,7 +10,8 @@ vlm_state_service: "/lerobot_bt/vlm_state"
 legacy_vlm_result_service: "/lerobot_bt/vlm_result_legacy"
 vlm_request_topic: "/lerobot_bt/vlm_request"
 vlm_result_topic: "/lerobot_bt/vlm_result"
-vlm_timeout_s: 60.0
+# 0 disables the per-attempt VLM check timeout (gate waits indefinitely for SUCCESS).
+vlm_timeout_s: 0.0
 
 # Default variant. Per-skill policy_variant can mix any registered LeRobot
 # policy type, e.g. act.
@@ -75,6 +76,26 @@ camera_frame_id_map:
 # Add calibrated hand-eye transforms in camera_static_tf_map before using
 # object poses for grasping. Without real base_link->camera calibration, the
 # perception node marks poses tf_unavailable and rejects robot-frame queries.
+#
+# HOW TO CALIBRATE (eye-to-hand, fixed camera):
+#   1. Run perception with target_frame_id:=panda_front_camera and collect, for
+#      4+ non-coplanar points, the object position in the camera frame
+#      (/perception/query_pose) paired with the robot tool-tip position in
+#      base_link when touching that point.
+#   2. python3 panda_live_viewer/scripts/calibrate_camera_extrinsics.py \
+#          --input corr.json --output cam_tf.yaml
+#   3. Replace the PLACEHOLDER below with the printed block and restart the
+#      server. Until then the spatial-prior gate stays in ABSTAIN (frame_mismatch),
+#      which is the correct, safe behavior.
+#
+# PLACEHOLDER ONLY -- these are NOT calibrated values. Do NOT enforce the gate
+# with these. Uncomment and replace with the real calibration output:
+# camera_static_tf_map:
+#   left:
+#     parent_frame_id: base_link
+#     child_frame_id: panda_front_camera
+#     translation: [0.0, 0.0, 0.0]          # <-- REPLACE with calibrated values
+#     rotation_xyzw: [0.0, 0.0, 0.0, 1.0]   # <-- REPLACE with calibrated values
 camera_publish_fps: 10.0
 camera_publish_jpeg_quality: 80
 

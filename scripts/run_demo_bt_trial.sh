@@ -23,6 +23,11 @@ REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 PYTHON_BIN="${PYTHON_BIN:-python3}"
 read -r -a PYTHON_CMD <<< "${PYTHON_BIN}"
 
+# Centralised ROS 2 + CycloneDDS env (ROS_DOMAIN_ID / RMW_IMPLEMENTATION /
+# CYCLONEDDS_URI) so trials work without manual exports on every machine.
+# shellcheck disable=SC1091
+[ -f "${REPO_ROOT}/ros_env.sh" ] && source "${REPO_ROOT}/ros_env.sh"
+
 usage() {
   echo "Usage: scripts/run_icra_runtime_bt_trial.sh <task> <dry_run_no_run|robot_live>" >&2
   echo "  tasks: make_sandwich make_coffee set_breakfast_table prepare_picnic_bag items_in_drawer" >&2

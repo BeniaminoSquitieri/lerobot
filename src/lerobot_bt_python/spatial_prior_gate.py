@@ -21,7 +21,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Any, Callable, Optional
+from typing import Any, Callable, Mapping, Optional
 
 from .config import SpatialPriorGateConfig
 from .spatial_prior import ABSTAIN, FAIL, PASS, SpatialPrior, SpatialPriorVerdict
@@ -72,7 +72,15 @@ def parse_object_pose_json(pose_json: str) -> ObservedPose:
     translation = None
     if isinstance(pose, dict):
         raw = pose.get("translation")
-        if isinstance(raw, (list, tuple)) and len(raw) == 3:
+        # The perception node serializes translation as a dict {x, y, z} (see
+        # bt_planning.scene_facts.build_object_pose_fact); older/test payloads
+        # may use a [x, y, z] list. Accept both so the gate gets a real pose.
+        if isinstance(raw, Mapping):
+            try:
+                translation = [float(raw["x"]), float(raw["y"]), float(raw["z"])]
+            except (KeyError, TypeError, ValueError):
+                translation = None
+        elif isinstance(raw, (list, tuple)) and len(raw) == 3:
             try:
                 translation = [float(v) for v in raw]
             except (TypeError, ValueError):

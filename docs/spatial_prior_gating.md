@@ -181,7 +181,7 @@ All paths under `lerobot/src/lerobot_bt_python/` unless noted.
 | `fit_spatial_prior.py` | Offline CLI fitter: dataset → grasp positions → Gaussian → prior JSON, with leave-one-out sanity check. | new |
 | `spatial_prior_gate.py` | Runtime orchestrator: loads priors, parses perception `pose_json`, evaluates per skill, decides `should_block`. ROS-agnostic (pose provider injected). | new |
 | `spatial_priors/put_coffee.json` | Fitted prior for `pick_and_insert_capsule` (50 demos). | new |
-| `test_spatial_prior.py` | 27 unit tests (checker, fitter, parser, gate modes). | new |
+| `test_spatial_prior.py` | 30 unit tests (checker, fitter, parser, gate modes, end-to-end real-payload PASS/ABSTAIN). | new |
 | `config.py` | Added `SpatialPriorGateConfig` + `SkillCommandServerConfig.spatial_prior_gate` (defaults to `off`). | changed |
 | `bt_interface_paths.py` | Added `load_query_object_pose_service()`. | changed |
 | `server.py` | Build the gate, create a `QueryObjectPose` client when enabled, add `_query_object_pose` pose provider, evaluate the gate before each skill (block only in `enforce`). | changed |
@@ -246,7 +246,8 @@ are never pulled.
    - If you see `status=ABSTAIN reason=frame_mismatch...`, the hand-eye
      calibration is missing — perception is returning camera-frame poses.
      **Populate `camera_static_tf_map`** with calibrated base→camera transforms
-     so perception lifts poses into `base_link`.
+     so perception lifts poses into `base_link`. See Section 10 for the helper
+     script and the exact procedure.
 4. With poses in `base_link`, the shadow logs show real `distance` values.
    Account for the **grasp offset** (Section 2): the observed object-centroid
    distance will be biased relative to the grasp-EE prior. Two options:
@@ -292,3 +293,106 @@ are never pulled.
 - `close_coffee_machine` is intentionally **not** gated yet (task focuses on
   `put_coffee` first). The same pipeline applies to its dataset
   (`Squitieri/close_machine_fixed`) when needed.
+
+---
+
+## 10. Hand-eye calibration: populating `camera_static_tf_map`
+
+The single source of truth for the camera extrinsic is the executor YAML key
+`camera_static_tf_map`. When populated, `camera_publisher` broadcasts a static
+`base_link → <camera>` TF; the perception node's TF listener consumes it and
+lifts object poses into `base_link`. **Until it is populated, the gate correctly
+ABSTAINS with `frame_mismatch` — this is the safe, intended behaviour.**
+
+> Do **not** invent extrinsic numbers. An uncalibrated `camera_static_tf_map`
+> produces base-frame poses that look valid but are wrong, which would let the
+> gate PASS/FAIL on garbage. ABSTAIN is preferable to a fabricated transform.
+
+A clearly-marked **placeholder** block (zeros, commented out) lives in
+`make_coffee_executor.yaml` next to `camera_frame_id_map` so the schema is
+obvious. Replace it only with real calibration output.
+
+### Procedure (eye-to-hand / statically mounted camera)
+
+1. Launch perception with `target_frame_id` set to the **camera** frame so the
+   query service reports poses in the camera frame:
+   ```bash
+   ros2 run perception perception_node --ros-args -p target_frame_id:=panda_front_camera
+   ```
+2. For 4+ non-coplanar points, record the **same** physical point twice:
+   - camera frame: the translation from `/perception/query_pose`;
+   - base frame: the robot tool-tip position in `base_link` when touching it.
+   Save the pairs in a JSON file:
+   ```json
+   {
+     "camera_name": "left",
+     "parent_frame_id": "base_link",
+     "child_frame_id": "panda_front_camera",
+     "correspondences": [
+       {"camera": [x, y, z], "base": [X, Y, Z]}
+     ]
+   }
+   ```
+3. Solve and emit a ready-to-paste YAML block (rigid Kabsch/Umeyama fit; prints
+   the residual RMS and warns if > 20 mm):
+   ```bash
+   python3 panda_live_viewer/scripts/calibrate_camera_extrinsics.py \
+     --input corr.json --output cam_tf.yaml
+   ```
+4. Paste the printed `camera_static_tf_map` block into `make_coffee_executor.yaml`
+   (replacing the placeholder) and restart the skill server. Perception now lifts
+   poses to `base_link` and the gate stops abstaining with `frame_mismatch`.
+
+### Perception `pose_json` format (parser note)
+
+The perception node serializes `pose.translation` as a **dict** `{x, y, z}` (see
+`bt_planning.scene_facts.build_object_pose_fact`). `parse_object_pose_json` in
+`spatial_prior_gate.py` accepts **both** the dict form and a legacy `[x, y, z]`
+list, so the gate receives a real pose instead of silently abstaining with
+`no_translation`. This is covered by `test_spatial_prior.py`
+(`test_parse_object_pose_json_accepts_dict_translation` plus the end-to-end
+PASS/ABSTAIN tests).
+
+---
+
+## 11. VLM scene-facts enrichment (one-way perception → VLM)
+
+The VLM verifier prompt may **optionally** include the metric object poses
+measured by perception, purely as read-only spatial context:
+
+- `vlm_live/prompt.py::format_scene_context` renders present objects with poses
+  from the cached `scene_facts` envelope (e.g.
+  `- coffee_capsule: [0.684, -0.260, 0.150] m in base_link, confidence 0.62`).
+- `vlm_live/node.py::_run_vlm` injects this string into the request as
+  `scene_context` before `build_prompt`.
+- `build_prompt` adds a `Perception scene facts (...)` block **only** when
+  `scene_context` is present, so without perception the prompt is byte-for-byte
+  unchanged (no regression).
+
+This is strictly **one-way**: the VLM *reads* poses to ground its judgement but
+**never produces coordinates**. Perception remains the single source of truth
+for object poses. Covered by `tests/test_vlm_status_protocol.py`
+(`SceneContextEnrichmentTests`).
+
+---
+
+## 12. Offline smoke test (no ROS, no GPU, no robot)
+
+`scripts/smoke_spatial_prior_gate.py` builds the real gate from the bundled
+prior and feeds three synthetic perception payloads to exercise every verdict:
+
+```bash
+conda activate lerobot
+cd ~/lerobot
+python3 scripts/smoke_spatial_prior_gate.py
+```
+
+Expected output (greppable `event=spatial_prior_gate` lines):
+
+- PASS — in-distribution capsule pose in `base_link` near the prior mean (never blocks);
+- FAIL — far OOD pose in `base_link` (blocks only in `enforce`);
+- ABSTAIN — capsule pose still in the camera frame, i.e. no calibration
+  (`frame_mismatch`, never blocks).
+
+The script exits non-zero if any verdict or block decision is unexpected. The
+same three scenarios are also asserted as pytest cases in `test_spatial_prior.py`.
