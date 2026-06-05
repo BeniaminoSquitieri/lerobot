@@ -229,7 +229,6 @@ def _success_verifications() -> dict[str, list[str]]:
         "first_toast_placed",
         "pour_ingredient",
         "ingredient_poured",
-        "second_toast_ready",
         "place_second_toast",
         "second_toast_placed",
         "make_sandwich.task_complete",

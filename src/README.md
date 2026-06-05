@@ -317,8 +317,9 @@ Example from `make_sandwich`:
 initial_scene_ready          -> vlm_gate
 place_first_toast            -> robot_skill
 pour_ingredient              -> human_step
-second_toast_ready           -> vlm_gate
+ingredient_poured            -> vlm_gate
 place_second_toast           -> robot_skill
+second_toast_placed          -> vlm_gate
 make_sandwich.task_complete  -> vlm_gate
 ```
 

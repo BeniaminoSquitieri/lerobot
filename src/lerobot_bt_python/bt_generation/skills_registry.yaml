@@ -189,13 +189,6 @@ vlm_gates:
     max_attempts: -1
     task: "Check that the ingredient has been poured or placed correctly."
 
-  - name: second_toast_ready
-    kind: vlm_gate
-    executor: vlm
-    timeout_s: 30.0
-    max_attempts: -1
-    task: "Check that the second toast is ready for the robot to place."
-
   - name: second_toast_placed
     kind: vlm_gate
     executor: vlm

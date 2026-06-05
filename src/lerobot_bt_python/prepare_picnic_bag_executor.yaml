@@ -13,6 +13,9 @@ vlm_result_topic: "/lerobot_bt/vlm_result"
 # 0 disables the per-attempt VLM check timeout (gate waits indefinitely for SUCCESS).
 vlm_timeout_s: 0.0
 
+auto_shutdown_success_names:
+  - bag_pear
+
 # Default variant. Per-skill policy_variant can mix any registered LeRobot
 # policy type, e.g. act.
 policy_variant: act

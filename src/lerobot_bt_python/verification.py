@@ -21,14 +21,19 @@ VLM_UNKNOWN = "UNKNOWN"
 
 VLM_TERMINAL_STATUSES = {
     VLM_SUCCESS,
-    VLM_FAILURE,
 }
 
 VLM_WAITING_STATUSES = {
     VLM_RUNNING,
+    VLM_FAILURE,
 }
 
 _ALLOWED_VLM_STATUSES = VLM_TERMINAL_STATUSES | {VLM_RUNNING}
+_ALLOWED_VLM_STATUSES = {
+    VLM_RUNNING,
+    VLM_SUCCESS,
+    VLM_FAILURE,
+}
 
 
 @dataclass(frozen=True)
@@ -128,7 +133,13 @@ class SceneVerdictStore:
         message: str = "",
         attempt_id: int = 0,
     ) -> VlmCheckUpdate:
-        """@brief Apply an external VLM result to the latest open attempt."""
+        """@brief Apply an external VLM result to the latest open attempt.
+
+        FAILURE is intentionally not terminal for a live gate attempt: the BT
+        keeps polling after a failed scene check, so later verifier updates
+        must still be able to turn the same attempt into SUCCESS once the scene
+        becomes valid.
+        """
         if status not in _ALLOWED_VLM_STATUSES:
             raise ValueError(
                 f"Unsupported VLM status '{status}'. Expected one of {sorted(_ALLOWED_VLM_STATUSES)}."

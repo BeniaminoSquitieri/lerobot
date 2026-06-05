@@ -308,6 +308,10 @@ class SkillCommandServerConfig:
     # This map lets you provide a VLM prompt per gate, e.g.:
     #   {"make_coffee.scene_0_ready": "Check if the coffee machine area is clear and ready."}
     vlm_gate_tasks: dict[str, str] = field(default_factory=dict)
+    # BT leaf names whose verified SUCCESS means the whole BT has completed.
+    # Entries may be VLM gates or robot skills, depending on the final leaf in
+    # that task's tree. When empty, the server falls back to "*.task_complete".
+    auto_shutdown_success_names: list[str] = field(default_factory=list)
     # Minimum seconds to wait before sending the first VLM request for a
     # human gate (AwaitScene). This gives the operator time to place or
     # adjust objects before the VLM starts checking the scene.
@@ -350,6 +354,16 @@ class SkillCommandServerConfig:
         )
         if duplicate_expected_names:
             raise ValueError(f"Duplicate expected_skill_names entries: {duplicate_expected_names}.")
+        duplicate_shutdown_names = sorted(
+            name for name, count in Counter(self.auto_shutdown_success_names).items() if count > 1
+        )
+        if duplicate_shutdown_names:
+            raise ValueError(f"Duplicate auto_shutdown_success_names entries: {duplicate_shutdown_names}.")
+        empty_shutdown_names = [
+            index for index, name in enumerate(self.auto_shutdown_success_names) if not str(name).strip()
+        ]
+        if empty_shutdown_names:
+            raise ValueError(f"auto_shutdown_success_names entries at indexes {empty_shutdown_names} are empty.")
         if not self.policy_variant:
             raise ValueError("policy_variant must not be empty.")
         for skill in self.skills:

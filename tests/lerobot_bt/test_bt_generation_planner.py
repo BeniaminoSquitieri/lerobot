@@ -78,7 +78,7 @@ def test_robot_postcondition_gates_are_not_default_because_do_skill_verifies() -
     plan = build_linear_plan("make_sandwich", registry)
 
     assert {"kind": VLM_GATE, "name": "first_toast_placed"} not in plan["steps"]
-    assert {"kind": VLM_GATE, "name": "second_toast_placed"} not in plan["steps"]
+    assert {"kind": VLM_GATE, "name": "second_toast_placed"} in plan["steps"]
 
 
 def test_robot_postcondition_gates_can_be_requested_explicitly() -> None:

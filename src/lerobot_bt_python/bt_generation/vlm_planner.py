@@ -85,7 +85,7 @@ def build_planner_prompt(
                 "- place_second_toast = robot_skill",
                 "- pour_ingredient = human_step",
                 "- ingredient_poured = vlm_gate",
-                "- second_toast_ready = vlm_gate",
+                "- second_toast_placed = vlm_gate",
                 "- make_sandwich.task_complete = vlm_gate",
             ]
         )

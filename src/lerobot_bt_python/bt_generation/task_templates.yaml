@@ -8,10 +8,10 @@ task_templates:
       name: pour_ingredient
     - kind: vlm_gate
       name: ingredient_poured
-    - kind: vlm_gate
-      name: second_toast_ready
     - kind: robot_skill
       name: place_second_toast
+    - kind: vlm_gate
+      name: second_toast_placed
     - kind: vlm_gate
       name: make_sandwich.task_complete
 

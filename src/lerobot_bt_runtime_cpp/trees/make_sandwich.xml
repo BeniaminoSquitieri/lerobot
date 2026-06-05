@@ -3,7 +3,7 @@
   @brief Active sandwich behavior tree with two real BC skills and manual/VLM gates.
 
   1. wait for initial scene → 2. place first toast → 3. human pours →
-  4. human positions second toast → 5. place second toast → 6. final check.
+  4. place second toast → 5. verify second toast placement → 6. final check.
 
   Every stage is a single merged leaf (AwaitScene or DoSkill) that combines
   the action with VLM verification.
@@ -23,12 +23,12 @@
         <AwaitScene name="Check pouring is complete" scene_name="{pour_ingredient_gate}"/>
       </RetryUntilSuccessful>
 
-      <RetryUntilSuccessful name="Second toast ready" num_attempts="{second_toast_ready_max_attempts}">
-        <AwaitScene name="Check second toast is ready" scene_name="{second_toast_ready_gate}"/>
-      </RetryUntilSuccessful>
-
       <RetryUntilSuccessful name="Place second toast" num_attempts="{place_second_toast_max_attempts}">
         <DoSkill name="Place second toast" skill_name="{place_second_toast_skill}" timeout_s="{place_second_toast_timeout_s}"/>
+      </RetryUntilSuccessful>
+
+      <RetryUntilSuccessful name="Second toast placed" num_attempts="{second_toast_placed_max_attempts}">
+        <AwaitScene name="Check second toast is placed" scene_name="{second_toast_placed_gate}"/>
       </RetryUntilSuccessful>
 
       <RetryUntilSuccessful name="Sandwich ready" num_attempts="{task_complete_max_attempts}">

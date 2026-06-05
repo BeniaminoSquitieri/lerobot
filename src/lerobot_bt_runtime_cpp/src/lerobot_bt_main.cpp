@@ -289,11 +289,11 @@ int main(int argc, char** argv)
   // Comment: executes this BT logic statement in C++.
   declareOrGetParameter<std::string>(node, "bt.pour_ingredient_gate", "pour_ingredient");
   // Comment: executes this BT logic statement in C++.
-  declareOrGetParameter<std::string>(node, "bt.second_toast_ready_gate", "second_toast_ready");
-  // Comment: executes this BT logic statement in C++.
   declareOrGetParameter<std::string>(node, "bt.place_second_toast_skill", "place_second_toast");
   // Comment: executes this BT logic statement in C++.
   declareOrGetParameter<double>(node, "bt.place_second_toast_timeout_s", 30.0);
+  // Comment: executes this BT logic statement in C++.
+  declareOrGetParameter<std::string>(node, "bt.second_toast_placed_gate", "second_toast_placed");
 
   // ---- Merged leaves: one node = action + VLM verification ------------
   // These replace the old OpenVLMGate + WaitForVLMVerdict and

@@ -322,14 +322,14 @@ def _validate_make_sandwich_strict_rules(plan: dict, steps: list[Any]) -> list[s
             errors.append("make_sandwich step 'place_first_toast' must be a robot_skill.")
         if name == "place_second_toast" and kind != ROBOT_SKILL:
             errors.append("make_sandwich step 'place_second_toast' must be a robot_skill.")
-        if name == "place_second_toast" and not _has_prior_gate(
+        if name == "place_second_toast" and not _has_later_gate_before_task_end(
             normalized_steps,
             index,
-            "second_toast_ready",
+            "second_toast_placed",
         ):
             errors.append(
-                "make_sandwich robot_skill 'place_second_toast' must be preceded by "
-                "vlm_gate 'second_toast_ready'."
+                "make_sandwich robot_skill 'place_second_toast' must be followed later by "
+                "vlm_gate 'second_toast_placed' before task completion."
             )
         if name == "pour_ingredient" and not _has_later_gate_before_task_end(
             normalized_steps,
@@ -342,15 +342,6 @@ def _validate_make_sandwich_strict_rules(plan: dict, steps: list[Any]) -> list[s
             )
 
     return errors
-
-
-def _has_prior_gate(steps: list[dict[str, Any]], before_index: int, name: str) -> bool:
-    return any(
-        step.get("kind") == VLM_GATE and step.get("name") == name
-        for step in steps[:before_index]
-    )
-
-
 def _has_later_gate_before_task_end(steps: list[dict[str, Any]], after_index: int, name: str) -> bool:
     for step in steps[after_index + 1 :]:
         if step.get("kind") == VLM_GATE and step.get("name") == "make_sandwich.task_complete":

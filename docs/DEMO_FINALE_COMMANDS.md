@@ -386,7 +386,7 @@ AwaitScene(initial_scene_ready)
 DoSkill(place_first_toast)
 AwaitScene(pour_ingredient)
 AwaitScene(ingredient_poured)
-AwaitScene(second_toast_ready)
+AwaitScene(second_toast_placed)
 DoSkill(place_second_toast)
 AwaitScene(make_coffee.task_complete)
 ```

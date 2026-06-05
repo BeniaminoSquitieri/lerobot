@@ -74,12 +74,7 @@ rename_map: {}
 
 # Robot-side processors used before sending actions / after reading observations.
 robot_action_processor:
-  steps:
-    - registry_name: cartesian_action_safety_processor
-      config:
-        max_translation_m: 0.015
-        max_rotation_rad: 0.12
-        mode: error
+  steps: []
 robot_observation_processor:
   steps: []
 
@@ -88,16 +83,16 @@ robot_observation_processor:
 # simultaneously publishes frames on these ROS topics so the VLM can
 # subscribe without conflicting with the server.
 camera_publish_map:
-  wrist: "/panda/camera/wrist/image_compressed"
+  # wrist: "/panda/camera/wrist/image_compressed"
   left: "/panda/camera/front/image_compressed"
 camera_depth_publish_map:
-  wrist: "/panda/camera/wrist/depth"
+  # wrist: "/panda/camera/wrist/depth"
   left: "/panda/camera/front/depth"
 camera_info_publish_map:
-  wrist: "/panda/camera/wrist/camera_info"
+  # wrist: "/panda/camera/wrist/camera_info"
   left: "/panda/camera/front/camera_info"
 camera_frame_id_map:
-  wrist: "panda_wrist_camera"
+  # wrist: "panda_wrist_camera"
   left: "panda_front_camera"
 # Add calibrated hand-eye transforms in camera_static_tf_map before using
 # object poses for grasping. Without real base_link->camera calibration, the
@@ -107,13 +102,17 @@ camera_publish_jpeg_quality: 80
 
 # VLM gate descriptions used by generated AwaitScene nodes and manual steps.
 vlm_gate_tasks:
-  initial_scene_ready: "Check that the initial sandwich scene is ready."
-  first_toast_placed: "Check that the first toast is placed correctly."
-  pour_ingredient: "Ask the human to pour or place the sandwich ingredient."
-  ingredient_poured: "Check that the ingredient has been poured or placed correctly."
-  second_toast_ready: "Check that the second toast is ready for the robot to place."
-  second_toast_placed: "Check that the second toast is placed on top of the sandwich."
-  make_sandwich.task_complete: "Check that the sandwich is complete."
+  initial_scene_ready: "Check that a bread slice is visible on the blue cutting board together with a read plate."
+  place_first_toast: "Check whether the first toast has been placed on the red plate. Return SUCCESS as soon as the toast is clearly visible on the red plate, even if the robot gripper is still nearby or still releasing it. Return RUNNING only if the toast is not yet on the red plate."
+  first_toast_placed: "Check that the first toast is placed in the red plate."
+  pour_ingredient: "Ask the human to place the yellow substance (likely mustard) on the toast."
+  ingredient_poured: "Check that the ingredient has been poured."
+  place_second_toast: "Check whether the second toast has been placed on top of the sandwich. Return SUCCESS as soon as the second toast is clearly on top of the first toast on the red plate, even if the gripper is still nearby or still releasing it. Return RUNNING only if the second toast is not yet in that final position."
+  second_toast_placed: "Check that the second toast is placed on top of the first one."
+  make_sandwich.task_complete: "Check that the second toast has been placed on top of the bread with mustard in the red plate"
+
+auto_shutdown_success_names:
+  - make_sandwich.task_complete
 
 # Learned primitives.
 # Each entry points to policy metadata and exposes mixed inference variants.

@@ -31,8 +31,8 @@ def test_make_sandwich_payload_contains_canonical_task_sequence() -> None:
         {"kind": "robot_skill", "name": "place_first_toast"},
         {"kind": "human_step", "name": "pour_ingredient"},
         {"kind": "vlm_gate", "name": "ingredient_poured"},
-        {"kind": "vlm_gate", "name": "second_toast_ready"},
         {"kind": "robot_skill", "name": "place_second_toast"},
+        {"kind": "vlm_gate", "name": "second_toast_placed"},
         {"kind": "vlm_gate", "name": "make_sandwich.task_complete"},
     ]
 
@@ -66,9 +66,9 @@ def test_ordering_constraints_are_adjacent_step_pairs() -> None:
         {"before": "initial_scene_ready", "after": "place_first_toast"},
         {"before": "place_first_toast", "after": "pour_ingredient"},
         {"before": "pour_ingredient", "after": "ingredient_poured"},
-        {"before": "ingredient_poured", "after": "second_toast_ready"},
-        {"before": "second_toast_ready", "after": "place_second_toast"},
-        {"before": "place_second_toast", "after": "make_sandwich.task_complete"},
+        {"before": "ingredient_poured", "after": "place_second_toast"},
+        {"before": "place_second_toast", "after": "second_toast_placed"},
+        {"before": "second_toast_placed", "after": "make_sandwich.task_complete"},
     ]
 
 
@@ -84,7 +84,7 @@ def test_payload_filters_entries_and_keeps_rules_json_serializable() -> None:
     assert {
         "initial_scene_ready",
         "ingredient_poured",
-        "second_toast_ready",
+        "second_toast_placed",
         "make_sandwich.task_complete",
     }.issubset({entry["name"] for entry in payload["vlm_gates"]})
     for rule in [

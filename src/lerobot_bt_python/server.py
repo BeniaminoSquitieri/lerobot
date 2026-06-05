@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import json
 import logging
+import threading
 import time
 from dataclasses import asdict
 from pathlib import Path
@@ -50,6 +51,7 @@ from .operator_console import print_vlm_request_banner, print_vlm_result_banner
 from .processor_factory import build_robot_processor_pipeline
 from .spatial_prior_gate import ObservedPose, SpatialPriorGate, parse_object_pose_json
 from .verification import (
+    VLM_SUCCESS,
     VLM_RUNNING,
     VLM_UNKNOWN,
     VLM_WAITING_STATUSES,
@@ -136,6 +138,7 @@ class SkillCommandServer(Node):
         self.scene_verdict_store = scene_verdict_store
         self._command_callback_group = MutuallyExclusiveCallbackGroup()
         self._vlm_callback_group = ReentrantCallbackGroup()
+        self._auto_shutdown_success_names = set(cfg.auto_shutdown_success_names)
 
         # ROS2 entrypoints used by the BT runtime and verifier-facing topics.
         bt_command_service_type, vlm_state_service_type, legacy_vlm_result_service_type = load_bt_services()
@@ -171,6 +174,9 @@ class SkillCommandServer(Node):
             10,
             callback_group=self._vlm_callback_group,
         )
+        self._shutdown_requested = False
+        self._shutdown_reason = ""
+        self._shutdown_lock = threading.Lock()
         self.get_logger().info(
             "Serving BT commands on "
             f"'{cfg.bt_command_service}', VLM state service on "
@@ -282,6 +288,10 @@ class SkillCommandServer(Node):
                 # the goal is achieved, cutting the skill execution short.
                 self.scene_verdict_store.register_skill_name(request.name)
                 vlm_pre_attempt = self.scene_verdict_store.begin_attempt(request.name)
+                self.skill_runner.begin_live_vlm_skill(
+                    request.name,
+                    attempt_id=vlm_pre_attempt.attempt_id,
+                )
                 self._publish_vlm_request(
                     vlm_pre_attempt,
                     check_period_s=float(getattr(self.cfg, "skill_vlm_check_period_s", 0.0)),
@@ -297,6 +307,7 @@ class SkillCommandServer(Node):
                     robot_action_processor=self.robot_action_processor,
                     robot_observation_processor=self.robot_observation_processor,
                     timeout_override_s=request.timeout_s,
+                    live_vlm_attempt_id=vlm_pre_attempt.attempt_id,
                 )
             elif request.kind == VLM_GATE_KIND:
                 # Human/VLM gate: open an attempt but do not resolve it.
@@ -309,6 +320,8 @@ class SkillCommandServer(Node):
             else:
                 result = None
         except Exception as exc:  # noqa: BLE001
+            if getattr(request, "kind", "") == "skill":
+                self.skill_runner.clear_live_vlm_skill(request.name)
             response.success = False
             response.status = "ERROR"
             response.elapsed_s = 0.0
@@ -329,6 +342,7 @@ class SkillCommandServer(Node):
 
         if request.kind in {"skill", VLM_GATE_KIND} and result.success:
             try:
+                live_vlm_status = getattr(result, "vlm_status", None)
                 # For skills, the VLM check was already opened before execution
                 # (see pre-skill block above). Only open a new attempt for gates.
                 if request.kind == VLM_GATE_KIND:
@@ -350,14 +364,18 @@ class SkillCommandServer(Node):
                     )
                 # For skills, the pre-skill VLM check was a warm-up. After the
                 # skill finishes, open a fresh attempt so the VLM sees the
-                # final scene, not stale pre-skill frames.
+                # final scene, not stale pre-skill frames. If the live verifier
+                # already stopped the rollout with a terminal verdict, reuse the
+                # pre-skill attempt instead of opening a brand-new attempt that
+                # would immediately start re-checking a task that is already done.
+                elif request.kind == "skill" and live_vlm_status:
+                    vlm_check_attempt = vlm_pre_attempt
                 elif request.kind == "skill":
                     vlm_check_attempt = self.scene_verdict_store.begin_attempt(request.name)
                     self._publish_vlm_request(
                         vlm_check_attempt,
                         check_period_s=float(getattr(self.cfg, "skill_vlm_check_period_s", 0.0)),
                     )
-                live_vlm_status = getattr(result, "vlm_status", None)
                 if live_vlm_status:
                     self.scene_verdict_store.report(
                         skill_name=request.name,
@@ -433,6 +451,11 @@ class SkillCommandServer(Node):
                 f"VLM check for skill '{snapshot.skill_name}' attempt {snapshot.attempt_id} "
                 f"is {snapshot.status}."
             )
+        elif self._should_auto_shutdown_after_vlm_success(snapshot.skill_name, snapshot.status):
+            self._request_shutdown(
+                "Final BT leaf succeeded "
+                f"('{snapshot.skill_name}' attempt {snapshot.attempt_id}); shutting down server."
+            )
         return response
 
     def _handle_legacy_vlm_result(self, request, response):
@@ -479,8 +502,10 @@ class SkillCommandServer(Node):
         response.accepted = bool(update.accepted)
         response.applied_attempt_id = 0 if update.snapshot is None else int(update.snapshot.attempt_id)
         response.message = update.message
-        log_fn = self.get_logger().info if update.accepted else self.get_logger().warning
-        log_fn(response.message)
+        if update.accepted:
+            self.get_logger().info(response.message)
+        else:
+            self.get_logger().warning(response.message)
         return response
 
     def _try_report_active_skill_vlm_result(
@@ -521,16 +546,16 @@ class SkillCommandServer(Node):
         """
         from std_msgs.msg import String  # type: ignore
 
-        # Resolve the optional human-readable task description for this skill so
-        # the VLM prompt can include semantic context about what to verify.
-        # Check two sources: PrimitiveSkillConfig.task for BC skills, and
-        # vlm_gate_tasks for VLM-only gates (AwaitScene nodes).
+        # Resolve the human-readable verification description for this request.
+        # Prefer explicit VLM verification prompts from executor YAML because
+        # BC skill `.task` text often describes the action ("pick the toast")
+        # rather than the visual success condition ("toast is on red plate").
+        # Fall back to PrimitiveSkillConfig.task only when no VLM-specific
+        # override exists for this skill/gate name.
         skill_cfg = self.skill_runner.skill_configs.get(snapshot.skill_name)
-        task_desc = ""
-        if skill_cfg is not None and getattr(skill_cfg, "task", None):
+        task_desc = self.cfg.vlm_gate_tasks.get(snapshot.skill_name, "").strip()
+        if not task_desc and skill_cfg is not None and getattr(skill_cfg, "task", None):
             task_desc = skill_cfg.task.strip()
-        if not task_desc:
-            task_desc = self.cfg.vlm_gate_tasks.get(snapshot.skill_name, "")
 
         payload = {
             "event": "vlm_check_requested",
@@ -608,10 +633,36 @@ class SkillCommandServer(Node):
             )
             return
 
-        log_fn = self.get_logger().info if update.accepted else self.get_logger().warning
-        log_fn(update.message)
+        if update.accepted:
+            self.get_logger().info(update.message)
+        else:
+            self.get_logger().warning(update.message)
 
         print_vlm_result_banner(skill_name=skill_name, status=status, message=message)
+
+    def _should_auto_shutdown_after_vlm_success(self, skill_name: str, status: str) -> bool:
+        """@brief True when the BT has reached a configured terminal leaf."""
+        if status != VLM_SUCCESS:
+            return False
+        if self._auto_shutdown_success_names:
+            return skill_name in self._auto_shutdown_success_names
+        return skill_name.endswith(".task_complete")
+
+    def _request_shutdown(self, reason: str) -> None:
+        """@brief Record a shutdown request exactly once and log the trigger."""
+        with self._shutdown_lock:
+            if self._shutdown_requested:
+                return
+            self._shutdown_requested = True
+            self._shutdown_reason = reason
+        self.get_logger().info(reason)
+
+    def consume_shutdown_request(self) -> str | None:
+        """@brief Return the pending shutdown reason, if any."""
+        with self._shutdown_lock:
+            if not self._shutdown_requested:
+                return None
+            return self._shutdown_reason
 
 
 @parser.wrap(config_path=DEFAULT_CONFIG_PATH)
@@ -726,7 +777,12 @@ def run(cfg: SkillCommandServerConfig) -> None:
             )
 
         try:
-            ros_executor.spin()
+            while rclpy.ok():
+                ros_executor.spin_once(timeout_sec=0.2)
+                shutdown_reason = server_node.consume_shutdown_request()
+                if shutdown_reason:
+                    logging.info("Stopping skill command server: %s", shutdown_reason)
+                    break
         finally:
             if _camera_pub_stop is not None:
                 _camera_pub_stop()

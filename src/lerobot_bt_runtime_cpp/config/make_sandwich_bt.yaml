@@ -15,10 +15,10 @@ lerobot_bt_runner:
       place_first_toast_max_attempts: 3
       pour_ingredient_gate: "pour_ingredient"
       pour_ingredient_max_attempts: 3
-      second_toast_ready_gate: "second_toast_ready"
-      second_toast_ready_max_attempts: 3
       place_second_toast_skill: "place_second_toast"
       place_second_toast_timeout_s: 30.0
       place_second_toast_max_attempts: 3
+      second_toast_placed_gate: "second_toast_placed"
+      second_toast_placed_max_attempts: 3
       task_complete_gate: "make_sandwich.task_complete"
       task_complete_max_attempts: 3

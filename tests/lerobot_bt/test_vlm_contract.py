@@ -10,7 +10,9 @@ from types import SimpleNamespace
 import pytest
 
 from lerobot_bt_python.verification import (
+    VLM_FAILURE,
     VLM_RUNNING,
+    VLM_SUCCESS,
     SceneVerdictStore,
 )
 
@@ -190,6 +192,54 @@ def test_running_status_on_timeout():
     late_but_not_timed_out = registry.get_latest("test_skill")
     assert late_but_not_timed_out is not None
     assert late_but_not_timed_out.status == VLM_RUNNING
+
+
+def test_failure_can_transition_to_success_within_same_attempt() -> None:
+    registry = SceneVerdictStore(known_skill_names={"test_skill"})
+    opened = registry.begin_attempt("test_skill")
+
+    failed = registry.report(
+        skill_name="test_skill",
+        attempt_id=opened.attempt_id,
+        status=VLM_FAILURE,
+        message="not ready yet",
+    )
+    assert failed.accepted
+    assert failed.snapshot is not None
+    assert failed.snapshot.status == VLM_FAILURE
+
+    succeeded = registry.report(
+        skill_name="test_skill",
+        attempt_id=opened.attempt_id,
+        status=VLM_SUCCESS,
+        message="now ready",
+    )
+    assert succeeded.accepted
+    assert succeeded.snapshot is not None
+    assert succeeded.snapshot.status == VLM_SUCCESS
+
+
+def test_success_remains_terminal_for_same_attempt() -> None:
+    registry = SceneVerdictStore(known_skill_names={"test_skill"})
+    opened = registry.begin_attempt("test_skill")
+
+    succeeded = registry.report(
+        skill_name="test_skill",
+        attempt_id=opened.attempt_id,
+        status=VLM_SUCCESS,
+        message="done",
+    )
+    assert succeeded.accepted
+
+    later_failure = registry.report(
+        skill_name="test_skill",
+        attempt_id=opened.attempt_id,
+        status=VLM_FAILURE,
+        message="too late",
+    )
+    assert later_failure.accepted is False
+    assert later_failure.snapshot is not None
+    assert later_failure.snapshot.status == VLM_SUCCESS
 
 
 def test_no_warning_at_import():

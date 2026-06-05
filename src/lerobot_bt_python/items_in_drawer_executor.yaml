@@ -10,6 +10,9 @@
 # 0 disables the per-attempt VLM check timeout (gate waits indefinitely for SUCCESS).
 vlm_timeout_s: 0.0
 
+auto_shutdown_success_names:
+  - items_in_drawer.task_complete
+
 expected_skill_names:
   - insert_next_drawer_item
 

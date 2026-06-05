@@ -105,12 +105,16 @@ class _ActiveSkillTracker:
     def __init__(self) -> None:
         self._lock = threading.Lock()
         self._skill_name: str | None = None
+        self._attempt_id: int = 0
         self._vlm_result: ActiveSkillVlmResult | None = None
 
-    def begin(self, skill_name: str) -> None:
+    def begin(self, skill_name: str, *, attempt_id: int = 0) -> None:
         """@brief Mark `skill_name` as the externally-stoppable active skill."""
         with self._lock:
+            if self._skill_name == skill_name and self._attempt_id == int(attempt_id):
+                return
             self._skill_name = skill_name
+            self._attempt_id = int(attempt_id)
             self._vlm_result = None
 
     def clear(self, skill_name: str) -> None:
@@ -118,6 +122,7 @@ class _ActiveSkillTracker:
         with self._lock:
             if self._skill_name == skill_name:
                 self._skill_name = None
+                self._attempt_id = 0
                 self._vlm_result = None
 
     def get(self, skill_name: str) -> ActiveSkillVlmResult | None:
@@ -130,14 +135,17 @@ class _ActiveSkillTracker:
     def report(self, *, skill_name: str, status: str, message: str, attempt_id: int) -> bool:
         """@brief Try to register a live verifier verdict for the active skill.
 
-        Only `attempt_id == 0` and statuses in `_ACTIVE_SKILL_STOP_STATUSES`
-        can target a still-running skill; everything else falls through to the
-        normal registry path.
+        Accept either the special legacy live-stop id `0` or the concrete
+        active attempt id for this running skill. That preserves protection
+        against stale verifier results while allowing modern publishers to
+        reference the real attempt they are evaluating.
         """
-        if attempt_id != 0 or status not in _ACTIVE_SKILL_STOP_STATUSES:
+        if status not in _ACTIVE_SKILL_STOP_STATUSES:
             return False
         with self._lock:
             if self._skill_name != skill_name:
+                return False
+            if attempt_id not in {0, self._attempt_id}:
                 return False
             if self._vlm_result is not None:
                 return False
@@ -184,8 +192,8 @@ class SkillRunner:
         @details Post-skill VLM results normally apply to an already-open
         registry attempt. During real robot bring-up, operators may also need
         to say "this skill is done now" while the policy is still rolling out.
-        In that case there is no attempt id yet, so only `attempt_id=0` can
-        target the active command.
+        Legacy callers may still use `attempt_id=0`, while the normal runtime
+        now also accepts the concrete active attempt id.
         """
         return self._active_skill_tracker.report(
             skill_name=skill_name,
@@ -194,17 +202,42 @@ class SkillRunner:
             attempt_id=attempt_id,
         )
 
-    def _begin_active_skill(self, skill_name: str) -> None:
+    def _begin_active_skill(self, skill_name: str, *, attempt_id: int = 0) -> None:
         """@brief Mark a skill as externally stoppable."""
-        self._active_skill_tracker.begin(skill_name)
+        self._active_skill_tracker.begin(skill_name, attempt_id=attempt_id)
+
+    def begin_live_vlm_skill(self, skill_name: str, *, attempt_id: int = 0) -> None:
+        """@brief Make an upcoming skill receptive to live VLM results."""
+        self._begin_active_skill(skill_name, attempt_id=attempt_id)
 
     def _clear_active_skill(self, skill_name: str) -> None:
         """@brief Clear active skill state after the rollout returns."""
         self._active_skill_tracker.clear(skill_name)
 
+    def clear_live_vlm_skill(self, skill_name: str) -> None:
+        """@brief Clear a previously primed live VLM skill."""
+        self._clear_active_skill(skill_name)
+
     def _get_active_vlm_result(self, skill_name: str) -> ActiveSkillVlmResult | None:
         """@brief Return the live verifier result for this skill, if one arrived."""
         return self._active_skill_tracker.get(skill_name)
+
+    def _consume_active_vlm_result(
+        self,
+        *,
+        skill_name: str,
+        start_t: float,
+    ) -> CommandResult | None:
+        """@brief Convert a pending live VLM stop into an immediate command result."""
+        active_vlm_result = self._get_active_vlm_result(skill_name)
+        if active_vlm_result is None:
+            return None
+        elapsed_s = time.perf_counter() - start_t
+        return self._command_result_from_active_vlm(
+            skill_name=skill_name,
+            elapsed_s=elapsed_s,
+            vlm_result=active_vlm_result,
+        )
 
     def _command_result_from_active_vlm(
         self,
@@ -260,6 +293,7 @@ class SkillRunner:
         robot_action_processor: RobotProcessorPipeline,
         robot_observation_processor: RobotProcessorPipeline,
         timeout_override_s: float = 0.0,
+        live_vlm_attempt_id: int = 0,
     ) -> CommandResult:
         """@brief Execute one learned primitive requested by the BT.
 
@@ -267,14 +301,27 @@ class SkillRunner:
         @param robot_action_processor Converts policy actions to robot commands.
         @param robot_observation_processor Converts robot observations to policy inputs.
         @param timeout_override_s Optional BT-side timeout override.
+        @param live_vlm_attempt_id Pre-skill VLM attempt id associated with
+            this rollout, used to accept terminal live-stop verdicts.
         @return Normalized command result for the ROS2 response.
         """
         if skill_name not in self.skill_configs:
+            self.clear_live_vlm_skill(skill_name)
             return CommandResult(False, "ERROR", 0.0, f"Unknown skill '{skill_name}'.")
 
         with self._command_lock:
             start_t = time.perf_counter()
             try:
+                # Mark the skill as live-stoppable before any pre-rollout reset
+                # so a verifier SUCCESS/FAILURE arriving during reset prevents
+                # the actual policy rollout from starting afterward.
+                self._begin_active_skill(skill_name, attempt_id=live_vlm_attempt_id)
+                live_stop_result = self._consume_active_vlm_result(
+                    skill_name=skill_name,
+                    start_t=start_t,
+                )
+                if live_stop_result is not None:
+                    return live_stop_result
                 skill = self._get_skill_runtime(
                     skill_name,
                     robot_action_processor,
@@ -286,6 +333,12 @@ class SkillRunner:
                     logging.info("Resetting robot before skill '%s'.", skill_name)
                     self.robot.reset()
                     logging.info("Robot reset before skill '%s' complete.", skill_name)
+                    live_stop_result = self._consume_active_vlm_result(
+                        skill_name=skill_name,
+                        start_t=start_t,
+                    )
+                    if live_stop_result is not None:
+                        return live_stop_result
 
                 skill.reset()
                 robot_action_processor.reset()
@@ -293,9 +346,14 @@ class SkillRunner:
                 if skill.cfg.settle_time_s > 0:
                     # Give robot/camera state time to settle before inference starts.
                     time.sleep(skill.cfg.settle_time_s)
+                live_stop_result = self._consume_active_vlm_result(
+                    skill_name=skill_name,
+                    start_t=start_t,
+                )
+                if live_stop_result is not None:
+                    return live_stop_result
 
                 start_t = time.perf_counter()
-                self._begin_active_skill(skill_name)
                 target_dt_s = 1 / self.cfg.fps
                 timeout_s = (
                     None
@@ -306,14 +364,12 @@ class SkillRunner:
                 step_idx = 0
                 while True:
                     loop_t = time.perf_counter()
-                    active_vlm_result = self._get_active_vlm_result(skill_name)
-                    if active_vlm_result is not None:
-                        elapsed_s = time.perf_counter() - start_t
-                        return self._command_result_from_active_vlm(
-                            skill_name=skill_name,
-                            elapsed_s=elapsed_s,
-                            vlm_result=active_vlm_result,
-                        )
+                    live_stop_result = self._consume_active_vlm_result(
+                        skill_name=skill_name,
+                        start_t=start_t,
+                    )
+                    if live_stop_result is not None:
+                        return live_stop_result
 
                     # Live rollout: read observation -> evaluate status -> maybe predict action.
                     obs = self.robot.get_observation()
@@ -330,14 +386,12 @@ class SkillRunner:
                         logging.error(message)
                         return CommandResult(False, status, elapsed_s, message)
 
-                    active_vlm_result = self._get_active_vlm_result(skill_name)
-                    if active_vlm_result is not None:
-                        elapsed_s = time.perf_counter() - start_t
-                        return self._command_result_from_active_vlm(
-                            skill_name=skill_name,
-                            elapsed_s=elapsed_s,
-                            vlm_result=active_vlm_result,
-                        )
+                    live_stop_result = self._consume_active_vlm_result(
+                        skill_name=skill_name,
+                        start_t=start_t,
+                    )
+                    if live_stop_result is not None:
+                        return live_stop_result
 
                     self._run_skill_step(skill, obs, obs_processed, robot_action_processor, step_idx=step_idx)
                     step_idx += 1

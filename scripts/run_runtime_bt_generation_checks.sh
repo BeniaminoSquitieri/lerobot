@@ -153,9 +153,9 @@ bad_order="$(
     "    {\"kind\": \"vlm_gate\", \"name\": \"initial_scene_ready\"}," \
     "    {\"kind\": \"robot_skill\", \"name\": \"place_first_toast\"}," \
     "    {\"kind\": \"human_step\", \"name\": \"pour_ingredient\"}," \
-    "    {\"kind\": \"vlm_gate\", \"name\": \"second_toast_ready\"}," \
     "    {\"kind\": \"vlm_gate\", \"name\": \"ingredient_poured\"}," \
     "    {\"kind\": \"robot_skill\", \"name\": \"place_second_toast\"}," \
+    "    {\"kind\": \"vlm_gate\", \"name\": \"second_toast_placed\"}," \
     "    {\"kind\": \"vlm_gate\", \"name\": \"make_sandwich.task_complete\"}" \
     "  ]" \
     "}"
@@ -170,8 +170,8 @@ bad_extra_step="$(
     "    {\"kind\": \"robot_skill\", \"name\": \"place_first_toast\"}," \
     "    {\"kind\": \"human_step\", \"name\": \"pour_ingredient\"}," \
     "    {\"kind\": \"vlm_gate\", \"name\": \"ingredient_poured\"}," \
-    "    {\"kind\": \"vlm_gate\", \"name\": \"second_toast_ready\"}," \
     "    {\"kind\": \"robot_skill\", \"name\": \"place_second_toast\"}," \
+    "    {\"kind\": \"vlm_gate\", \"name\": \"second_toast_placed\"}," \
     "    {\"kind\": \"vlm_gate\", \"name\": \"make_sandwich.task_complete\"}," \
     "    {\"kind\": \"vlm_gate\", \"name\": \"initial_scene_ready\"}" \
     "  ]" \
@@ -187,8 +187,8 @@ bad_raw_xml="$(
     "    {\"kind\": \"robot_skill\", \"name\": \"place_first_toast\"}," \
     "    {\"kind\": \"human_step\", \"name\": \"pour_ingredient\"}," \
     "    {\"kind\": \"vlm_gate\", \"name\": \"ingredient_poured\"}," \
-    "    {\"kind\": \"vlm_gate\", \"name\": \"second_toast_ready\"}," \
     "    {\"kind\": \"robot_skill\", \"name\": \"place_second_toast\"}," \
+    "    {\"kind\": \"vlm_gate\", \"name\": \"second_toast_placed\"}," \
     "    {\"kind\": \"vlm_gate\", \"name\": \"make_sandwich.task_complete\"}" \
     "  ]" \
     "}"

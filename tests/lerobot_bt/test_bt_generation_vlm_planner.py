@@ -56,7 +56,7 @@ def test_build_planner_prompt_lists_available_step_kinds() -> None:
     assert "- pour_ingredient" in prompt
     assert "Available vlm_gates:" in prompt
     assert "- ingredient_poured" in prompt
-    assert "- second_toast_ready" in prompt
+    assert "- second_toast_placed" in prompt
     assert "- make_sandwich.task_complete" in prompt
     assert "place_first_toast = robot_skill" in prompt
     assert "pour_ingredient = human_step" in prompt
@@ -207,10 +207,10 @@ def test_missing_make_sandwich_task_complete_fails() -> None:
     assert any("must finish with vlm_gate 'make_sandwich.task_complete'" in error for error in errors)
 
 
-def test_place_second_toast_without_second_toast_ready_fails() -> None:
-    errors = _strict_errors_for_asset("make_sandwich_bad_missing_second_toast_ready.json")
+def test_place_second_toast_without_second_toast_placed_fails() -> None:
+    errors = _strict_errors_for_asset("make_sandwich_bad_missing_second_toast_placed.json")
 
-    assert any("must be preceded by vlm_gate 'second_toast_ready'" in error for error in errors)
+    assert any("must be followed later by vlm_gate 'second_toast_placed'" in error for error in errors)
 
 
 def test_swapped_make_sandwich_order_fails_strict_validation() -> None:
@@ -221,9 +221,9 @@ def test_swapped_make_sandwich_order_fails_strict_validation() -> None:
             {"kind": "vlm_gate", "name": "initial_scene_ready"},
             {"kind": "robot_skill", "name": "place_first_toast"},
             {"kind": "human_step", "name": "pour_ingredient"},
-            {"kind": "vlm_gate", "name": "second_toast_ready"},
-            {"kind": "vlm_gate", "name": "ingredient_poured"},
             {"kind": "robot_skill", "name": "place_second_toast"},
+            {"kind": "vlm_gate", "name": "ingredient_poured"},
+            {"kind": "vlm_gate", "name": "second_toast_placed"},
             {"kind": "vlm_gate", "name": "make_sandwich.task_complete"},
         ],
     }
@@ -241,7 +241,6 @@ def test_missing_ingredient_poured_fails_strict_validation() -> None:
             {"kind": "vlm_gate", "name": "initial_scene_ready"},
             {"kind": "robot_skill", "name": "place_first_toast"},
             {"kind": "human_step", "name": "pour_ingredient"},
-            {"kind": "vlm_gate", "name": "second_toast_ready"},
             {"kind": "robot_skill", "name": "place_second_toast"},
             {"kind": "vlm_gate", "name": "make_sandwich.task_complete"},
         ],
@@ -312,7 +311,7 @@ def test_known_object_alias_canonicalizes() -> None:
 
     assert plan["steps"][1]["object"] == "first_toast"
     assert plan["steps"][2]["object"] == "ingredient"
-    assert plan["steps"][5]["object"] == "second_toast"
+    assert plan["steps"][4]["object"] == "second_toast"
     assert validate_linear_plan(plan, registry, SANDWICH_EXECUTOR, strict_generated=True) == []
 
 
