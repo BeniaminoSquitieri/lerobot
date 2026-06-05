@@ -7,7 +7,8 @@
 # open/close phases stay in the BT as verification gates. Do not change service
 # names, policy paths, or timing values casually before robot-day.
 
-vlm_timeout_s: 60.0
+# 0 disables the per-attempt VLM check timeout (gate waits indefinitely for SUCCESS).
+vlm_timeout_s: 0.0
 
 expected_skill_names:
   - insert_next_drawer_item

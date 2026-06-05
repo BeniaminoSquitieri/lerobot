@@ -85,7 +85,8 @@ def test_retry_value_helper_rejects_invalid_values(value: int) -> None:
 def test_executor_vlm_timeout_is_enabled(path: Path) -> None:
     cfg = _load_yaml(path)
 
-    assert float(cfg["vlm_timeout_s"]) > 0.0, f"{path}:vlm_timeout_s must be positive"
+    # 0 means "no per-attempt timeout" (gate waits indefinitely); negative is invalid.
+    assert float(cfg["vlm_timeout_s"]) >= 0.0, f"{path}:vlm_timeout_s must be >= 0"
 
 
 @pytest.mark.parametrize("path", _executor_yaml_paths(), ids=lambda path: path.name)

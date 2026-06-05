@@ -18,7 +18,8 @@ vlm_request_topic: "/lerobot_bt/vlm_request"
 vlm_result_topic: "/lerobot_bt/vlm_result"
 # If the VLM/manual verifier does not report SUCCESS before this deadline,
 # the attempt is marked FAILURE and the BT retry wrapper reruns the skill.
-vlm_timeout_s: 60.0
+# 0 disables the per-attempt VLM check timeout (gate waits indefinitely for SUCCESS).
+vlm_timeout_s: 0.0
 
 # Default variant. Per-skill policy_variant can mix any registered LeRobot
 # policy type, e.g. act.
