@@ -19,28 +19,27 @@ The default v1 flow is deterministic:
 4. The plan validator checks the Linear IR against the registry and, when
    provided, the executor YAML.
 5. The renderer writes BehaviorTree.CPP XML and ROS2 BT parameter YAML.
-6. The generated XML/YAML pass a static blackboard key check.
+6. The generated XML/YAML pass a blackboard key consistency check.
 
 The BT is generated once at episode start and then executed normally by
 BehaviorTree.CPP. There is no hot-swap during execution and no runtime
 replanning yet.
 
-## Supported Static Tasks
+## Supported Runtime Templates
 
-The template planner supports all current static BT tasks:
+The template planner supports all current runtime-generated BT task templates:
 
-| task_name | Static tree | Executor YAML |
-|---|---|---|
-| `make_sandwich` | `src/lerobot_bt_runtime_cpp/trees/make_sandwich.xml` | `src/lerobot_bt_python/make_sandwich_executor.yaml` |
-| `set_breakfast_table` | `src/lerobot_bt_runtime_cpp/trees/set_breakfast_table.xml` | `src/lerobot_bt_python/set_breakfast_table_executor.yaml` |
-| `make_coffee` | `src/lerobot_bt_runtime_cpp/trees/make_coffee.xml` | `src/lerobot_bt_python/make_coffee_executor.yaml` |
-| `prepare_picnic_bag` | `src/lerobot_bt_runtime_cpp/trees/prepare_picnic_bag.xml` | `src/lerobot_bt_python/prepare_picnic_bag_executor.yaml` |
-| `items_in_drawer` | `src/lerobot_bt_runtime_cpp/trees/items_in_drawer.xml` | `src/lerobot_bt_python/items_in_drawer_executor.yaml` |
+| task_name | Generated XML | Generated BT params YAML | Executor YAML |
+|---|---|---|---|
+| `make_sandwich` | `generated_bt/trees/make_sandwich.xml` | `generated_bt/config/make_sandwich_bt.yaml` | `src/lerobot_bt_python/make_sandwich_executor.yaml` |
+| `set_breakfast_table` | `generated_bt/trees/set_breakfast_table.xml` | `generated_bt/config/set_breakfast_table_bt.yaml` | `src/lerobot_bt_python/set_breakfast_table_executor.yaml` |
+| `make_coffee` | `generated_bt/trees/make_coffee.xml` | `generated_bt/config/make_coffee_bt.yaml` | `src/lerobot_bt_python/make_coffee_executor.yaml` |
+| `prepare_picnic_bag` | `generated_bt/trees/prepare_picnic_bag.xml` | `generated_bt/config/prepare_picnic_bag_bt.yaml` | `src/lerobot_bt_python/prepare_picnic_bag_executor.yaml` |
+| `items_in_drawer` | `generated_bt/trees/items_in_drawer.xml` | `generated_bt/config/items_in_drawer_bt.yaml` | `src/lerobot_bt_python/items_in_drawer_executor.yaml` |
 
-The registry uses concrete names from the static BT YAML profiles and executor
-YAML files. `DoSkill` leaves become `robot_skill`; human-operated
-`AwaitScene` leaves become `human_step`; pure visual checkpoints become
-`vlm_gate`.
+The registry and executor YAML files provide the concrete names. `DoSkill`
+leaves become `robot_skill`; human-operated `AwaitScene` leaves become
+`human_step`; pure visual checkpoints become `vlm_gate`.
 
 `items_in_drawer` intentionally keeps `insert_next_drawer_item` under
 `RetryUntilSuccessful`. The robot skill inserts the next object; if objects
@@ -57,7 +56,8 @@ The default planner is still the deterministic template planner:
 --planner template
 ```
 
-It runs entirely in `lerobot` and supports all five static tasks listed above.
+It runs entirely in `lerobot` and supports all five task templates listed
+above.
 
 ### Canonical Ordering Contract
 
@@ -105,7 +105,7 @@ task_name + optional scene_facts/model_response
   -> canonicalization
   -> strict validation
   -> existing XML/YAML renderer
-  -> static XML/YAML blackboard check
+  -> generated XML/YAML blackboard consistency check
   -> generated BT executed normally
 ```
 
@@ -276,9 +276,8 @@ pairs.
 Because `DoSkill` already waits for `GetSkillVerification`, generated BTs do
 not add robot `verify_after` gates by default. The CLI supports
 `--explicit-postcondition-gates` for manual experiments, but the safe default
-avoids duplicated verification after robot skills. The current static-task
-templates render human stages as one merged `AwaitScene` leaf, matching the
-hand-written XML files.
+avoids duplicated verification after robot skills. The current runtime
+templates render human stages as one merged `AwaitScene` leaf.
 
 ## Retry Policy
 
@@ -320,8 +319,8 @@ must have a non-empty task description.
 
 ## Inference
 
-The registry is built from the existing BT XML, BT parameter YAML, and executor
-YAML:
+The registry encodes the task contract that is rendered into generated BT XML
+and generated BT parameter YAML:
 
 - Names in executor YAML `skills` or `expected_skill_names` are robot skills.
 - Names used as `AwaitScene` gates and VLM gate tasks are VLM gates.
@@ -331,8 +330,8 @@ YAML:
 For the sandwich task, `place_first_toast` and `place_second_toast` are robot
 skills because they appear in `make_sandwich_executor.yaml` under both
 `expected_skill_names` and `skills`. `pour_ingredient` is a human step because
-the existing XML renders it as an `AwaitScene` manual/VLM gate and it is not a
-robot skill in the executor YAML.
+the registry renders it as an `AwaitScene` manual/VLM gate and it is not a robot
+skill in the executor YAML.
 
 ## No Automatic Fallback
 
@@ -368,7 +367,7 @@ To add a robot skill:
 
 To add a human step:
 
-1. Confirm the existing task treats it as a human/manual/VLM gate rather than a
+1. Confirm the task contract treats it as a human/manual/VLM gate rather than a
    robot policy.
 2. Add a `human_steps` entry with a non-empty `instruction`.
 3. Point `verify_after` to an existing `vlm_gate`, or set it explicitly to
@@ -407,7 +406,7 @@ PYTHONPATH=src python -m lerobot_bt_python.bt_generation.generate_and_run \
   --output-dir generated_bt
 ```
 
-Generate the other static tasks by changing the task and executor YAML:
+Generate the other runtime templates by changing the task and executor YAML:
 
 ```bash
 PYTHONPATH=src python -m lerobot_bt_python.bt_generation.generate \
@@ -485,8 +484,8 @@ Run the offline helper:
 PYTHONPATH=src PYTHON_BIN=python GENERATED_BT_DIR=generated_bt scripts/check_generated_bt_offline.sh
 ```
 
-The generator performs a static blackboard check before writing output: every
-`{key}` referenced by generated XML must exist under
+The generator performs a blackboard consistency check before writing output:
+every `{key}` referenced by generated XML must exist under
 `lerobot_bt_runner.ros__parameters.bt` in generated YAML. Extra YAML keys are
 allowed.
 

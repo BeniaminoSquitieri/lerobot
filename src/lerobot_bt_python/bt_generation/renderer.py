@@ -121,38 +121,25 @@ def _append_step_xml(parent: ET.Element, step: dict[str, str], registry: Registr
                 "timeout_s": f"{{{key}_timeout_s}}",
             },
         )
-    elif kind == HUMAN_STEP:
-        ET.SubElement(
-            retry,
-            "AwaitScene",
-            {
-                "name": f"Human step: {_human_label(name)}",
-                "scene_name": f"{{{key}_gate}}",
-            },
+    elif kind in {HUMAN_STEP, VLM_GATE}:
+        node_name = (
+            f"Human step: {_human_label(name)}"
+            if kind == HUMAN_STEP
+            else _human_label(name)
         )
-    elif kind == VLM_GATE:
         ET.SubElement(
             retry,
             "AwaitScene",
             {
-                "name": _human_label(name),
+                "name": node_name,
                 "scene_name": f"{{{key}_gate}}",
             },
         )
 
 
 def _retry_num_attempts_literal(kind: str, entry: object) -> int:
-    if kind == ROBOT_SKILL:
-        raw_value = getattr(entry, "max_attempts", None)
-    elif kind == HUMAN_STEP:
-        raw_value = getattr(entry, "max_attempts", None)
-    elif kind == VLM_GATE:
-        raw_value = getattr(entry, "max_attempts", None)
-    else:
-        raw_value = None
-
     try:
-        attempts = int(raw_value) if raw_value is not None else 1
+        attempts = int(getattr(entry, "max_attempts", 1))
     except (TypeError, ValueError):
         return 1
 

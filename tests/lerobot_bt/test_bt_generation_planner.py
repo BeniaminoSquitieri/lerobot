@@ -16,7 +16,6 @@ from lerobot_bt_python.bt_generation.registry import HUMAN_STEP, ROBOT_SKILL, VL
 REPO_ROOT = Path(__file__).resolve().parents[2]
 REGISTRY_PATH = REPO_ROOT / "src/lerobot_bt_python/bt_generation/skills_registry.yaml"
 SANDWICH_EXECUTOR = REPO_ROOT / "src/lerobot_bt_python/make_sandwich_executor.yaml"
-SANDWICH_XML = REPO_ROOT / "src/lerobot_bt_runtime_cpp/trees/make_sandwich.xml"
 
 
 def test_make_sandwich_produces_linear_ir() -> None:
@@ -42,10 +41,11 @@ def test_pour_ingredient_is_human_step_from_repo_audit() -> None:
     plan = build_linear_plan("make_sandwich", registry)
     executor = yaml.safe_load(SANDWICH_EXECUTOR.read_text(encoding="utf-8"))
     skill_names = {skill["name"] for skill in executor["skills"]}
+    pour_entry = registry.get(HUMAN_STEP, "pour_ingredient")
 
     assert "pour_ingredient" not in skill_names
     assert "pour_ingredient" not in set(executor["expected_skill_names"])
-    assert "pour_ingredient_gate" in SANDWICH_XML.read_text(encoding="utf-8")
+    assert pour_entry.verify_after == "ingredient_poured"
     assert {"kind": HUMAN_STEP, "name": "pour_ingredient"} in plan["steps"]
 
 

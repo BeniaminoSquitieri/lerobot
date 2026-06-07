@@ -12,12 +12,11 @@ from __future__ import annotations
 
 import argparse
 import json
-import sys
 import time
 from collections import Counter
 from pathlib import Path
 
-from . import env_snapshot
+from . import cli_utils
 from . import experiment_log
 from .manifest import build_generation_manifest, write_generation_manifest
 from .planner import build_linear_plan
@@ -32,36 +31,14 @@ from .vlm_planner import canonicalize_plan, parse_planner_response
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Generate a runtime BT XML/YAML pair.")
     parser.add_argument("--task", required=True, help="Known deterministic task name.")
-    parser.add_argument(
-        "--planner",
-        choices=("template", "model-response", "ros-service"),
-        default="template",
-        help="Planner source. template is deterministic; model-response reads Linear IR JSON; ros-service queries a ROS2 planning service.",
+    cli_utils.add_planner_source_arguments(
+        parser,
+        planner_help=(
+            "Planner source. template is deterministic; model-response reads Linear IR JSON; "
+            "ros-service queries a ROS2 planning service."
+        ),
     )
-    parser.add_argument(
-        "--plan-service-name",
-        type=str,
-        default="/lerobot_bt/generate_plan",
-        help="ROS2 service name for ros-service planner mode.",
-    )
-    parser.add_argument(
-        "--plan-service-timeout-s",
-        type=float,
-        default=0.0,
-        help="Timeout (seconds) for ROS2 planning service. Use 0 to wait indefinitely.",
-    )
-    parser.add_argument(
-        "--scene-facts-file",
-        type=Path,
-        help="Optional JSON file with scene facts for planning.",
-    )
-    parser.add_argument(
-        "--model-response-file",
-        type=Path,
-        help="Path to a pre-generated model Linear IR JSON response.",
-    )
-    parser.add_argument("--registry", required=True, type=Path, help="skills_registry.yaml path.")
-    parser.add_argument("--executor-yaml", type=Path, help="Executor YAML used for consistency checks.")
+    cli_utils.add_registry_arguments(parser)
     parser.add_argument("--out-tree", type=Path, help="Output BehaviorTree.CPP XML path.")
     parser.add_argument("--out-config", type=Path, help="Output BT params YAML path.")
     parser.add_argument(
@@ -72,10 +49,9 @@ def main(argv: list[str] | None = None) -> int:
             "writes trees/<task>.xml and config/<task>_bt.yaml under this directory."
         ),
     )
-    parser.add_argument(
-        "--explicit-postcondition-gates",
-        action="store_true",
-        help=(
+    cli_utils.add_explicit_postcondition_gates_argument(
+        parser,
+        help_text=(
             "Also render robot_skill verify_after gates. Off by default because "
             "the current DoSkill C++ node already waits for GetSkillVerification."
         ),
@@ -88,20 +64,9 @@ def main(argv: list[str] | None = None) -> int:
             "--output-dir is set, defaults to <output-dir>/experiments/trials.jsonl."
         ),
     )
-    parser.add_argument(
-        "--trial-id",
-        type=str,
-        help="Stable trial id. Generated automatically when not provided.",
-    )
-    parser.add_argument(
-        "--planner-label",
-        type=str,
-        help="Human-readable planner label for experiment grouping (defaults to --planner).",
-    )
-    parser.add_argument(
-        "--condition-label",
-        type=str,
-        help="Experiment condition label for grouping (defaults to 'default').",
+    cli_utils.add_experiment_label_arguments(
+        parser,
+        trial_id_help="Stable trial id. Generated automatically when not provided.",
     )
     args = parser.parse_args(argv)
 
@@ -109,7 +74,7 @@ def main(argv: list[str] | None = None) -> int:
     trial_id = args.trial_id or experiment_log.new_trial_id(args.task, args.planner)
     planner_label = args.planner_label or args.planner
     condition_label = args.condition_label or "default"
-    env = _environment_snapshot(argv)
+    env = cli_utils.environment_snapshot("lerobot_bt_python.bt_generation.generate", argv)
     setattr(args, "_env_snapshot", env)
 
     errors: list[str] = []
@@ -243,7 +208,7 @@ def main(argv: list[str] | None = None) -> int:
     if errors or plan is None:
         if raw_response_output_path is not None and model_response_text is not None:
             _write_text(raw_response_output_path, model_response_text)
-        _print_errors(errors)
+        cli_utils.print_errors("BT generation failed:", errors)
         _log_generation_event(
             args,
             trial_id=trial_id,
@@ -265,7 +230,7 @@ def main(argv: list[str] | None = None) -> int:
         yaml_text = render_bt_params_yaml(plan, registry)
         errors.extend(validate_xml_yaml_blackboard_text(xml_text, yaml_text))
     except Exception as exc:  # noqa: BLE001
-        _print_errors([str(exc)])
+        cli_utils.print_errors("BT generation failed:", [str(exc)])
         _log_generation_event(
             args,
             trial_id=trial_id,
@@ -283,7 +248,7 @@ def main(argv: list[str] | None = None) -> int:
         return 1
 
     if errors:
-        _print_errors(errors)
+        cli_utils.print_errors("BT generation failed:", errors)
         _log_generation_event(
             args,
             trial_id=trial_id,
@@ -324,7 +289,7 @@ def main(argv: list[str] | None = None) -> int:
             )
             write_generation_manifest(manifest_output_path, manifest)
     except Exception as exc:  # noqa: BLE001
-        _print_errors([str(exc)])
+        cli_utils.print_errors("BT generation failed:", [str(exc)])
         _log_generation_event(
             args,
             trial_id=trial_id,
@@ -467,27 +432,9 @@ def _log_generation_event(
     experiment_log.append_event(log_path, event)
 
 
-def _environment_snapshot(argv: list[str] | None) -> dict:
-    repo_root = Path(__file__).resolve().parents[3]
-    if argv is None:
-        command_argv = list(sys.argv)
-    else:
-        command_argv = [
-            "python -m lerobot_bt_python.bt_generation.generate",
-            *[str(part) for part in argv],
-        ]
-    return env_snapshot.build_environment_snapshot(repo_root, command_argv)
-
-
 def _write_text(path: Path, text: str) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(text, encoding="utf-8")
-
-
-def _print_errors(errors: list[str]) -> None:
-    print("BT generation failed:", file=sys.stderr)
-    for error in errors:
-        print(f"- {error}", file=sys.stderr)
 
 
 if __name__ == "__main__":

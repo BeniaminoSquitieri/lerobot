@@ -323,20 +323,6 @@ def read_events(jsonl_path: Path) -> list[dict]:
     return events
 
 
-def write_csv_summary(jsonl_path: Path, csv_path: Path) -> None:
-    """Write an aggregated CSV summary grouped by task/planner/condition."""
-
-    events = read_events(jsonl_path)
-    rows = summarize_events(events)
-    csv_path = Path(csv_path)
-    csv_path.parent.mkdir(parents=True, exist_ok=True)
-    with csv_path.open("w", encoding="utf-8", newline="") as handle:
-        writer = csv.DictWriter(handle, fieldnames=list(SUMMARY_FIELDS))
-        writer.writeheader()
-        for row in rows:
-            writer.writerow(row)
-
-
 def write_events_csv(jsonl_path: Path, csv_path: Path) -> None:
     """Write a flat, event-level CSV (one row per logged event)."""
 

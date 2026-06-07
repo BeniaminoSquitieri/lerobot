@@ -41,6 +41,7 @@ import os
 import shutil
 import subprocess
 import sys
+import tempfile
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -61,44 +62,29 @@ ROS2_SETUP_CANDIDATES = [
 ]
 
 BT_PYTHON_DIR = SRC_DIR / "lerobot_bt_python"
-BT_CPP_DIR = SRC_DIR / "lerobot_bt_runtime_cpp"
 PLANNER_SERVICE_NAME = "/lerobot_bt/generate_plan"
 PLANNER_SERVICE_TYPE = "lerobot_bt_interfaces/srv/GenerateTaskPlan"
 
 # Known conda/venv environment names (prefix match).
 EXPECTED_CONDA_ENVS = ["lerobot"]
 
-# Known BT tasks and their config files
+# Known BT tasks and their executor configs. BT XML/YAML artifacts are generated
+# on demand by lerobot_bt_python.bt_generation; no task profiles live in src.
 KNOWN_TASKS: dict[str, dict[str, str]] = {
     "make_sandwich": {
         "executor_yaml": "make_sandwich_executor.yaml",
-        "bt_yaml": "make_sandwich_bt.yaml",
-        "tree_xml": "make_sandwich.xml",
-        "launch": "make_sandwich.launch.py",
     },
     "make_coffee": {
         "executor_yaml": "make_coffee_executor.yaml",
-        "bt_yaml": "make_coffee_bt.yaml",
-        "tree_xml": "make_coffee.xml",
-        "launch": "make_coffee.launch.py",
     },
     "set_breakfast_table": {
         "executor_yaml": "set_breakfast_table_executor.yaml",
-        "bt_yaml": "set_breakfast_table_bt.yaml",
-        "tree_xml": "set_breakfast_table.xml",
-        "launch": "set_breakfast_table.launch.py",
     },
     "prepare_picnic_bag": {
         "executor_yaml": "prepare_picnic_bag_executor.yaml",
-        "bt_yaml": "prepare_picnic_bag_bt.yaml",
-        "tree_xml": "prepare_picnic_bag.xml",
-        "launch": "prepare_picnic_bag.launch.py",
     },
     "items_in_drawer": {
         "executor_yaml": "items_in_drawer_executor.yaml",
-        "bt_yaml": "items_in_drawer_bt.yaml",
-        "tree_xml": "items_in_drawer.xml",
-        "launch": "items_in_drawer.launch.py",
     },
 }
 
@@ -388,26 +374,18 @@ def _check_python_environment(report: PreflightReport) -> None:
 
 
 def _check_yaml_consistency(report: PreflightReport, task: str) -> None:
-    """Cross-validate skill names between BT YAML params and executor YAML."""
+    """Generate BT artifacts and cross-validate generated params against executor YAML."""
     import yaml
 
     task_info = KNOWN_TASKS[task]
     executor_yaml_path = BT_PYTHON_DIR / task_info["executor_yaml"]
-    bt_yaml_path = BT_CPP_DIR / "config" / task_info["bt_yaml"]
-    tree_xml_path = BT_CPP_DIR / "trees" / task_info["tree_xml"]
 
-    # 1. Files exist
-    for label, path in [("Executor YAML", executor_yaml_path),
-                        ("BT params YAML", bt_yaml_path),
-                        ("BT tree XML", tree_xml_path)]:
-        if path.exists():
-            report.add(CheckResult(f"{label} exists", True, True, f"Path: {path}"))
-        else:
-            report.add(CheckResult(f"{label} exists", False, True,
-                                   f"Missing: {path}"))
-            return
+    if executor_yaml_path.exists():
+        report.add(CheckResult("Executor YAML exists", True, True, f"Path: {executor_yaml_path}"))
+    else:
+        report.add(CheckResult("Executor YAML exists", False, True, f"Missing: {executor_yaml_path}"))
+        return
 
-    # 2. Parse executor YAML → skill names
     try:
         with open(executor_yaml_path) as fh:
             executor_cfg = yaml.safe_load(fh)
@@ -430,63 +408,104 @@ def _check_yaml_consistency(report: PreflightReport, task: str) -> None:
         report.add(CheckResult("Executor YAML has skills", False, True,
                                "No skills defined in executor YAML"))
 
-    # 3. Parse BT params YAML → skill references (values ending in _skill)
-    try:
-        with open(bt_yaml_path) as fh:
-            bt_cfg = yaml.safe_load(fh)
-    except Exception as e:
-        report.add(CheckResult("Parse BT params YAML", False, True, str(e)))
-        return
+    with tempfile.TemporaryDirectory(prefix=f"lerobot_bt_preflight_{task}_") as tmp_dir:
+        generated_dir = Path(tmp_dir) / "generated_bt"
+        env = {**os.environ, "PYTHONPATH": f"{SRC_DIR}:{os.environ.get('PYTHONPATH', '')}"}
+        result = subprocess.run(
+            [
+                sys.executable,
+                "-m",
+                "lerobot_bt_python.bt_generation.generate",
+                "--task",
+                task,
+                "--planner",
+                "template",
+                "--registry",
+                str(BT_PYTHON_DIR / "bt_generation" / "skills_registry.yaml"),
+                "--executor-yaml",
+                str(executor_yaml_path),
+                "--output-dir",
+                str(generated_dir),
+            ],
+            capture_output=True,
+            text=True,
+            timeout=30,
+            env=env,
+        )
+        if result.returncode != 0:
+            detail = (result.stderr or result.stdout).strip()
+            report.add(CheckResult(
+                "Generate runtime BT artifacts",
+                False,
+                True,
+                detail[:500] if detail else f"generator returned {result.returncode}",
+                "Fix registry/task template/executor YAML alignment before robot rollout.",
+            ))
+            return
+        report.add(CheckResult("Generate runtime BT artifacts", True, True))
 
-    bt_params = bt_cfg.get("lerobot_bt_runner", {}).get("ros__parameters", {}).get("bt", {})
-    bt_skill_names: set[str] = set()
-    for key, value in bt_params.items():
-        if key.endswith("_skill") and isinstance(value, str):
-            bt_skill_names.add(value)
+        bt_yaml_path = generated_dir / "config" / f"{task}_bt.yaml"
+        tree_xml_path = generated_dir / "trees" / f"{task}.xml"
+        for label, path in [("Generated BT params YAML", bt_yaml_path), ("Generated BT tree XML", tree_xml_path)]:
+            if path.exists():
+                report.add(CheckResult(f"{label} exists", True, True, f"Path: {path}"))
+            else:
+                report.add(CheckResult(f"{label} exists", False, True, f"Missing: {path}"))
+                return
 
-    if bt_skill_names:
-        report.add(CheckResult("BT params YAML has skill refs", True, True,
-                               f"Skills: {sorted(bt_skill_names)}"))
-    else:
-        report.add(CheckResult("BT params YAML has skill refs", False, True,
-                               "No *_skill entries found in BT params YAML"))
+        try:
+            with open(bt_yaml_path) as fh:
+                bt_cfg = yaml.safe_load(fh)
+        except Exception as e:
+            report.add(CheckResult("Parse generated BT params YAML", False, True, str(e)))
+            return
 
-    # 4. CROSS-VALIDATE: BT skill names ⊆ executor skill names
+        bt_params = bt_cfg.get("lerobot_bt_runner", {}).get("ros__parameters", {}).get("bt", {})
+        bt_skill_names: set[str] = set()
+        for key, value in bt_params.items():
+            if key.endswith("_skill") and isinstance(value, str):
+                bt_skill_names.add(value)
+
+        if bt_skill_names:
+            report.add(CheckResult("Generated BT params YAML has skill refs", True, True,
+                                   f"Skills: {sorted(bt_skill_names)}"))
+        else:
+            report.add(CheckResult("Generated BT params YAML has skill refs", False, True,
+                                   "No *_skill entries found in generated BT params YAML"))
+
+        try:
+            tree_text = tree_xml_path.read_text()
+            if "<BehaviorTree" in tree_text and "</root>" in tree_text:
+                report.add(CheckResult("Generated BT XML syntax valid", True, True))
+            else:
+                report.add(CheckResult("Generated BT XML syntax valid", False, True,
+                                       "XML missing expected BehaviorTree/root tags"))
+        except Exception as e:
+            report.add(CheckResult("Generated BT XML readable", False, True, str(e)))
+
     missing_in_executor = bt_skill_names - executor_skill_names
     if not missing_in_executor:
-        report.add(CheckResult("BT→Executor skill name match", True, True,
-                               "All BT-referenced skills exist in executor YAML"))
+        report.add(CheckResult("Generated BT to executor skill name match", True, True,
+                               "All generated BT-referenced skills exist in executor YAML"))
     else:
-        report.add(CheckResult("BT→Executor skill name match", False, True,
-                               f"BT references skills not in executor: {sorted(missing_in_executor)}",
-                               "Add missing skill entries to executor YAML or fix BT params YAML"))
+        report.add(CheckResult("Generated BT to executor skill name match", False, True,
+                               f"Generated BT references skills not in executor: {sorted(missing_in_executor)}",
+                               "Add missing skill entries to executor YAML or fix registry/task templates"))
 
-    # 5. CROSS-VALIDATE: expected_skill_names match BT skills
     if expected_skill_names:
         unexpected = expected_skill_names - bt_skill_names
         missing_expected = bt_skill_names - expected_skill_names
         if not unexpected and not missing_expected:
-            report.add(CheckResult("expected_skill_names ↔ BT skills match", True, True))
+            report.add(CheckResult("expected_skill_names match generated BT skills", True, True))
         else:
             msg_parts = []
             if unexpected:
                 msg_parts.append(f"Extra in expected: {sorted(unexpected)}")
             if missing_expected:
                 msg_parts.append(f"Missing from expected: {sorted(missing_expected)}")
-            report.add(CheckResult("expected_skill_names ↔ BT skills match", False, True,
+            report.add(CheckResult("expected_skill_names match generated BT skills", False, True,
                                    "; ".join(msg_parts),
-                                   "Update 'expected_skill_names' in executor YAML to match BT params"))
-
-    # 6. Parse XML tree → verify tree structure is valid
-    try:
-        tree_text = tree_xml_path.read_text()
-        if "<BehaviorTree" in tree_text and "</root>" in tree_text:
-            report.add(CheckResult("BT XML tree syntax valid", True, True))
-        else:
-            report.add(CheckResult("BT XML tree syntax valid", False, True,
-                                   "XML missing expected BehaviorTree/root tags"))
-    except Exception as e:
-        report.add(CheckResult("BT XML tree readable", False, True, str(e)))
+                                   "Update 'expected_skill_names' in executor YAML to match generated BT params"))
 
 
 def _check_policy_checkpoints(report: PreflightReport, task: str) -> None:
@@ -648,7 +667,6 @@ def _print_policy_swap_guide(task: str) -> None:
     """Print a quick-reference guide for swapping policy models."""
     task_info = KNOWN_TASKS[task]
     executor_yaml_path = BT_PYTHON_DIR / task_info["executor_yaml"]
-    bt_yaml_path = BT_CPP_DIR / "config" / task_info["bt_yaml"]
 
     print(f"""
 ╔══════════════════════════════════════════════════════════════╗
@@ -658,9 +676,8 @@ def _print_policy_swap_guide(task: str) -> None:
 ║  You only need to edit ONE file:                           ║
 ║    {executor_yaml_path.name:<50}║
 ║                                                            ║
-║  These files NEVER need changes for policy swaps:          ║
-║    {bt_yaml_path.name:<50}║
-║    {task_info['tree_xml']:<50}║
+║  Generated BT XML/YAML should not be edited by hand.       ║
+║  Regenerate them after changing the executor config.       ║
 ║                                                            ║
 ║  ── Option A: Change the active variant ──                 ║
 ║  Set policy_variant (per-skill or top-level) to one of:    ║

@@ -18,7 +18,7 @@ import sys
 import time
 from pathlib import Path
 
-from . import env_snapshot, experiment_log, generate
+from . import cli_utils, experiment_log, generate
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -26,45 +26,20 @@ def main(argv: list[str] | None = None) -> int:
         description="Generate a runtime BT XML/YAML pair and run lerobot_bt_runner.",
     )
     parser.add_argument("--task", required=True, help="Known task name.")
-    parser.add_argument(
-        "--planner",
-        choices=("template", "model-response", "ros-service"),
-        default="template",
-        help="Planner source passed through to bt_generation.generate.",
+    cli_utils.add_planner_source_arguments(
+        parser,
+        planner_help="Planner source passed through to bt_generation.generate.",
     )
-    parser.add_argument(
-        "--model-response-file",
-        type=Path,
-        help="Path to a pre-generated model Linear IR JSON response.",
-    )
-    parser.add_argument(
-        "--plan-service-name",
-        default="/lerobot_bt/generate_plan",
-        help="ROS2 service name for ros-service planner mode.",
-    )
-    parser.add_argument(
-        "--plan-service-timeout-s",
-        type=float,
-        default=0.0,
-        help="Timeout (seconds) for ROS2 planning service. Use 0 to wait indefinitely.",
-    )
-    parser.add_argument(
-        "--scene-facts-file",
-        type=Path,
-        help="Optional JSON file with scene facts for planning.",
-    )
-    parser.add_argument("--registry", required=True, type=Path, help="skills_registry.yaml path.")
-    parser.add_argument("--executor-yaml", type=Path, help="Executor YAML used for consistency checks.")
+    cli_utils.add_registry_arguments(parser)
     parser.add_argument(
         "--output-dir",
         required=True,
         type=Path,
         help="Generated BT output directory containing trees/ and config/ subdirectories.",
     )
-    parser.add_argument(
-        "--explicit-postcondition-gates",
-        action="store_true",
-        help="Pass through to the generator for manual experiments.",
+    cli_utils.add_explicit_postcondition_gates_argument(
+        parser,
+        help_text="Pass through to the generator for manual experiments.",
     )
     parser.add_argument(
         "--no-run",
@@ -88,20 +63,9 @@ def main(argv: list[str] | None = None) -> int:
             "<output-dir>/experiments/trials.jsonl."
         ),
     )
-    parser.add_argument(
-        "--trial-id",
-        type=str,
-        help="Stable trial id shared by generation and runner events.",
-    )
-    parser.add_argument(
-        "--planner-label",
-        type=str,
-        help="Human-readable planner label for experiment grouping (defaults to --planner).",
-    )
-    parser.add_argument(
-        "--condition-label",
-        type=str,
-        help="Experiment condition label for grouping (defaults to 'default').",
+    cli_utils.add_experiment_label_arguments(
+        parser,
+        trial_id_help="Stable trial id shared by generation and runner events.",
     )
     args = parser.parse_args(argv)
 
@@ -109,7 +73,7 @@ def main(argv: list[str] | None = None) -> int:
     planner_label = args.planner_label or args.planner
     condition_label = args.condition_label or "default"
     log_path = experiment_log.resolve_log_path(args.experiment_log, args.output_dir)
-    env = _environment_snapshot(argv)
+    env = cli_utils.environment_snapshot("lerobot_bt_python.bt_generation.generate_and_run", argv)
 
     if args.cleanup_output_dir_on_exit:
         _register_output_dir_cleanup(args.output_dir)
@@ -130,7 +94,10 @@ def main(argv: list[str] | None = None) -> int:
     manifest_path = _generated_manifest_path(args)
     missing = [path for path in (tree_path, config_path) if not path.exists()]
     if missing:
-        _print_errors([f"Expected generated file does not exist: {path}" for path in missing])
+        cli_utils.print_errors(
+            "BT generate-and-run failed:",
+            [f"Expected generated file does not exist: {path}" for path in missing],
+        )
         return 1
 
     runner_command = build_runner_command(tree_path, config_path)
@@ -149,12 +116,13 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     if shutil.which("ros2") is None:
-        _print_errors(
+        cli_utils.print_errors(
+            "BT generate-and-run failed:",
             [
                 "ros2 command not found. Source ROS2 and the built workspace before running "
                 "without --no-run.",
                 "Example: source /opt/ros/<distro>/setup.bash && source install/setup.bash",
-            ]
+            ],
         )
         _log_runner_event(
             args,
@@ -308,18 +276,6 @@ def _log_runner_event(
     experiment_log.append_event(log_path, event)
 
 
-def _environment_snapshot(argv: list[str] | None) -> dict:
-    repo_root = Path(__file__).resolve().parents[3]
-    if argv is None:
-        command_argv = list(sys.argv)
-    else:
-        command_argv = [
-            "python -m lerobot_bt_python.bt_generation.generate_and_run",
-            *[str(part) for part in argv],
-        ]
-    return env_snapshot.build_environment_snapshot(repo_root, command_argv)
-
-
 def _register_output_dir_cleanup(output_dir: Path) -> None:
     output_dir = output_dir.resolve()
 
@@ -340,12 +296,6 @@ def _register_output_dir_cleanup(output_dir: Path) -> None:
 
 def _format_command(command: list[str]) -> str:
     return " ".join(shlex.quote(part) for part in command)
-
-
-def _print_errors(errors: list[str]) -> None:
-    print("BT generate-and-run failed:", file=sys.stderr)
-    for error in errors:
-        print(f"- {error}", file=sys.stderr)
 
 
 if __name__ == "__main__":

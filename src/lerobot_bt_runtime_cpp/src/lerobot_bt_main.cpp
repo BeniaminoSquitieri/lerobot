@@ -14,9 +14,6 @@
 // Comment: includes a dependency required for compilation.
 #include <string>
 
-// Comment: includes a dependency required for compilation.
-#include <ament_index_cpp/get_package_share_directory.hpp>
-// Comment: includes a dependency required for compilation.
 #include <rclcpp/rclcpp.hpp>
 
 // Comment: selects code based on the macros available at compile time.
@@ -92,18 +89,6 @@ namespace
 {
 
 /**
- * @brief Returns the installed default make-sandwich behavior-tree XML path.
- */
-// Comment: executes this BT logic statement in C++.
-std::string default_tree_xml_path()
-// Comment: opens a new C++ code block.
-{
-  // Comment: returns the value or status to the caller.
-  return ament_index_cpp::get_package_share_directory("lerobot_bt_runtime_cpp") + "/trees/make_sandwich.xml";
-// Comment: closes the current C++ code block.
-}
-
-/**
  * @brief Declare a ROS2 parameter if absent, then return its typed value.
  *
  * Parameters may come from a task profile YAML, launch overrides, or the
@@ -134,10 +119,10 @@ ParameterT declareOrGetParameter(
 }
 
 /**
- * @brief Copy task-profile `bt.*` ROS2 parameters into the BT blackboard.
+ * @brief Copy generated `bt.*` ROS2 parameters into the BT blackboard.
  *
  * The XML trees use placeholders such as `{place_first_toast_skill}`. The
- * corresponding values live in YAML profiles and become blackboard entries
+ * corresponding values live in generated YAML and become blackboard entries
  * before the tree is instantiated.
  */
 // Comment: executes this BT logic statement in C++.
@@ -148,7 +133,7 @@ void setBtBlackboardEntries(
   const std::shared_ptr<BT::Blackboard>& blackboard)
 // Comment: opens a new C++ code block.
 {
-  // Task YAML files place all tree variables under `bt.*`; only those
+  // Generated YAML files place all tree variables under `bt.*`; only those
   // parameters are copied into the BehaviorTree.CPP blackboard.
   // Comment: assigns or initializes a value used by the BT runtime.
   const auto bt_parameters = node->list_parameters({"bt"}, 10);
@@ -261,9 +246,17 @@ int main(int argc, char** argv)
                               .automatically_declare_parameters_from_overrides(true);
   // Comment: assigns or initializes a value used by the BT runtime.
   auto node = std::make_shared<rclcpp::Node>("lerobot_bt_runner", node_options);
-  // Path to the behavior tree XML file.
+  // Path to the generated behavior tree XML file.
   // Comment: assigns or initializes a value used by the BT runtime.
-  const auto tree_xml_path = declareOrGetParameter<std::string>(node, "tree_xml_path", default_tree_xml_path());
+  const auto tree_xml_path = declareOrGetParameter<std::string>(node, "tree_xml_path", "");
+  if (tree_xml_path.empty()) {
+    RCLCPP_ERROR(
+      node->get_logger(),
+      "Missing required parameter 'tree_xml_path'. Generate a BT first and pass "
+      "'-p tree_xml_path:=<generated_bt/trees/<task>.xml>'.");
+    rclcpp::shutdown();
+    return 1;
+  }
   // ROS2 service called by leaf nodes to run robot skills.
   // Comment: assigns or initializes a value used by the BT runtime.
   const auto bt_command_service = declareOrGetParameter<std::string>(node, "bt_command_service", "/lerobot_bt/run");
@@ -278,22 +271,6 @@ int main(int argc, char** argv)
   const auto enable_groot = declareOrGetParameter<bool>(node, "enable_groot_publisher", true);
   // Comment: assigns or initializes a value used by the BT runtime.
   const auto groot_port = declareOrGetParameter<int>(node, "groot_publisher_port", 1667);
-
-  // Keep default make-sandwich values available when no params file is passed.
-  // Comment: executes this BT logic statement in C++.
-  declareOrGetParameter<std::string>(node, "bt.initial_scene_ready_gate", "initial_scene_ready");
-  // Comment: executes this BT logic statement in C++.
-  declareOrGetParameter<std::string>(node, "bt.place_first_toast_skill", "place_first_toast");
-  // Comment: executes this BT logic statement in C++.
-  declareOrGetParameter<double>(node, "bt.place_first_toast_timeout_s", 120.0);
-  // Comment: executes this BT logic statement in C++.
-  declareOrGetParameter<std::string>(node, "bt.pour_ingredient_gate", "pour_ingredient");
-  // Comment: executes this BT logic statement in C++.
-  declareOrGetParameter<std::string>(node, "bt.place_second_toast_skill", "place_second_toast");
-  // Comment: executes this BT logic statement in C++.
-  declareOrGetParameter<double>(node, "bt.place_second_toast_timeout_s", 30.0);
-  // Comment: executes this BT logic statement in C++.
-  declareOrGetParameter<std::string>(node, "bt.second_toast_placed_gate", "second_toast_placed");
 
   // ---- Merged leaves: one node = action + VLM verification ------------
   // These replace the old OpenVLMGate + WaitForVLMVerdict and

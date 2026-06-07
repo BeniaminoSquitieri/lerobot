@@ -69,7 +69,7 @@ echo "XML/YAML blackboard keys OK"
 
 "${PYTHON_CMD[@]}" -m pytest \
   tests/lerobot_bt/test_bt_generation_cli.py \
-  tests/lerobot_bt/test_bt_generation_all_static_tasks.py \
+  tests/lerobot_bt/test_bt_generation_all_runtime_tasks.py \
   tests/lerobot_bt/test_bt_generation_fake_execution.py \
   tests/lerobot_bt/test_bt_generation_planner.py \
   tests/lerobot_bt/test_bt_generation_registry.py \

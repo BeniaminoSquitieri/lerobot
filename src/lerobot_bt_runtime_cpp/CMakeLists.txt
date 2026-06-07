@@ -11,7 +11,6 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 # Core ROS2 build/runtime dependencies.
 find_package(ament_cmake REQUIRED)
 find_package(rclcpp REQUIRED)
-find_package(ament_index_cpp REQUIRED)
 find_package(lerobot_bt_interfaces REQUIRED)
 
 # Support both BehaviorTree.CPP package names used across ROS distributions.
@@ -45,7 +44,6 @@ target_include_directories(lerobot_bt_runner PRIVATE include)
 # Link ROS2, generated services, and the detected BT.CPP implementation.
 ament_target_dependencies(lerobot_bt_runner
   rclcpp
-  ament_index_cpp
   lerobot_bt_interfaces
   ${BTCPP_DEPENDENCY}
 )
@@ -60,33 +58,8 @@ install(DIRECTORY include/
   DESTINATION include
 )
 
-# Explicit tree list prevents accidentally installing scratch or duplicate XML.
-set(LEROBOT_BT_TREE_FILES
-  trees/items_in_drawer.xml
-  trees/set_breakfast_table.xml
-  trees/make_coffee.xml
-  trees/make_sandwich.xml
-  trees/prepare_picnic_bag.xml
-)
-set(LEROBOT_BT_CONFIG_FILES
-  config/items_in_drawer_bt.yaml
-  config/set_breakfast_table_bt.yaml
-  config/make_coffee_bt.yaml
-  config/make_sandwich_bt.yaml
-  config/prepare_picnic_bag_bt.yaml
-)
-
-# Install only the curated tree/subtree XML files into the package share path.
-install(FILES ${LEROBOT_BT_TREE_FILES}
-  DESTINATION share/${PROJECT_NAME}/trees
-)
-
-# Install task-level BT parameter profiles.
-install(FILES ${LEROBOT_BT_CONFIG_FILES}
-  DESTINATION share/${PROJECT_NAME}/config
-)
-
-# Install launch files for one-command BT runner startup.
+# Install the generated-BT launch wrapper. XML/YAML artifacts are produced at
+# runtime by lerobot_bt_python.bt_generation and are not installed here.
 install(DIRECTORY launch/
   DESTINATION share/${PROJECT_NAME}/launch
 )

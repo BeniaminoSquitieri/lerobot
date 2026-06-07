@@ -18,12 +18,11 @@ import yaml
 from .registry import (
     ALLOWED_KINDS,
     HUMAN_STEP,
-    INFINITE_RETRY_ATTEMPTS,
     ROBOT_SKILL,
     VLM_GATE,
     Registry,
     RegistryEntry,
-    is_valid_max_attempts,
+    validate_entry_runtime_bounds,
 )
 from .task_contracts import TASK_ALLOWED_VARIANTS, TASK_TEMPLATES
 
@@ -160,7 +159,7 @@ def _load_executor_context(executor_yaml_path: Path | None) -> dict[str, Any] | 
 
 
 def _validate_robot_skill(entry: RegistryEntry, executor_context: dict[str, Any] | None) -> list[str]:
-    errors = _validate_runtime_bounds(entry)
+    errors = validate_entry_runtime_bounds(entry)
     if executor_context is not None:
         real_skill_names = executor_context["skill_names"] | executor_context["expected_skill_names"]
         if entry.name not in real_skill_names:
@@ -177,7 +176,7 @@ def _validate_robot_skill(entry: RegistryEntry, executor_context: dict[str, Any]
 
 
 def _validate_human_step(entry: RegistryEntry, executor_context: dict[str, Any] | None) -> list[str]:
-    errors = _validate_runtime_bounds(entry)
+    errors = validate_entry_runtime_bounds(entry)
     if not entry.instruction.strip():
         errors.append(f"human_step {entry.name!r} must have a non-empty instruction.")
     if entry.verify_after is not None and not entry.verify_after.strip():
@@ -192,24 +191,12 @@ def _validate_human_step(entry: RegistryEntry, executor_context: dict[str, Any] 
 
 
 def _validate_vlm_gate(entry: RegistryEntry, executor_context: dict[str, Any] | None) -> list[str]:
-    errors = _validate_runtime_bounds(entry)
+    errors = validate_entry_runtime_bounds(entry)
     if not entry.task.strip():
         errors.append(f"vlm_gate {entry.name!r} must have a non-empty task.")
     if executor_context is not None and executor_context["has_vlm_gate_tasks"]:
         if entry.name not in executor_context["vlm_gate_tasks"]:
             errors.append(f"vlm_gate {entry.name!r} is missing from executor YAML vlm_gate_tasks.")
-    return errors
-
-
-def _validate_runtime_bounds(entry: RegistryEntry) -> list[str]:
-    errors: list[str] = []
-    if entry.timeout_s <= 0.0:
-        errors.append(f"{entry.kind} {entry.name!r} timeout_s must be > 0.")
-    if not is_valid_max_attempts(entry.max_attempts):
-        errors.append(
-            f"{entry.kind} {entry.name!r} max_attempts must be "
-            f"{INFINITE_RETRY_ATTEMPTS} for infinite retries or a positive integer."
-        )
     return errors
 
 
@@ -342,6 +329,8 @@ def _validate_make_sandwich_strict_rules(plan: dict, steps: list[Any]) -> list[s
             )
 
     return errors
+
+
 def _has_later_gate_before_task_end(steps: list[dict[str, Any]], after_index: int, name: str) -> bool:
     for step in steps[after_index + 1 :]:
         if step.get("kind") == VLM_GATE and step.get("name") == "make_sandwich.task_complete":

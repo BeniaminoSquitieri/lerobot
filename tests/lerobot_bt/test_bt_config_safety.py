@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-"""Static safety checks for BT runtime and executor YAML profiles."""
+"""Safety checks for generated BT runtime and executor YAML configs."""
 
 from __future__ import annotations
 
@@ -11,15 +11,24 @@ from typing import Any
 import pytest
 import yaml
 
-from lerobot_bt_python.bt_generation.registry import is_valid_max_attempts
+from lerobot_bt_python.bt_generation.planner import build_linear_plan
+from lerobot_bt_python.bt_generation.registry import is_valid_max_attempts, load_registry
+from lerobot_bt_python.bt_generation.renderer import render_bt_params_yaml
 
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-BT_CONFIG_DIR = REPO_ROOT / "src/lerobot_bt_runtime_cpp/config"
 EXECUTOR_CONFIG_DIR = REPO_ROOT / "src/lerobot_bt_python"
+REGISTRY_PATH = REPO_ROOT / "src/lerobot_bt_python/bt_generation/skills_registry.yaml"
 MAX_SKILL_DURATION_S = 300.0
 ITEMS_IN_DRAWER_EXECUTOR = EXECUTOR_CONFIG_DIR / "items_in_drawer_executor.yaml"
 SKILL_SERVER_CONFIG_PATH = REPO_ROOT / "src/lerobot_bt_python/config.py"
+TASK_NAMES = [
+    "make_sandwich",
+    "set_breakfast_table",
+    "make_coffee",
+    "prepare_picnic_bag",
+    "items_in_drawer",
+]
 
 
 def _load_yaml(path: Path) -> dict[str, Any]:
@@ -30,10 +39,6 @@ def _load_yaml(path: Path) -> dict[str, Any]:
 
 def _executor_yaml_paths() -> list[Path]:
     return sorted(EXECUTOR_CONFIG_DIR.glob("*_executor.yaml"))
-
-
-def _bt_yaml_paths() -> list[Path]:
-    return sorted(BT_CONFIG_DIR.glob("*_bt.yaml"))
 
 
 def _skill_server_default_node(field_name: str) -> ast.AST:
@@ -54,9 +59,11 @@ def _skill_server_literal_default(field_name: str) -> Any:
     return node.value
 
 
-@pytest.mark.parametrize("path", _bt_yaml_paths(), ids=lambda path: path.name)
-def test_bt_retry_values_are_valid(path: Path) -> None:
-    cfg = _load_yaml(path)
+@pytest.mark.parametrize("task_name", TASK_NAMES)
+def test_generated_bt_retry_values_are_valid(task_name: str) -> None:
+    registry = load_registry(REGISTRY_PATH)
+    plan = build_linear_plan(task_name, registry)
+    cfg = yaml.safe_load(render_bt_params_yaml(plan, registry))
     bt_params = cfg["lerobot_bt_runner"]["ros__parameters"]["bt"]
 
     retry_limits = {
@@ -65,10 +72,10 @@ def test_bt_retry_values_are_valid(path: Path) -> None:
         if key.endswith("_max_attempts")
     }
 
-    assert retry_limits, f"{path} should define retry limits"
+    assert retry_limits, f"{task_name} should define retry limits"
     for key, value in retry_limits.items():
-        assert isinstance(value, int), f"{path}:{key} must be an integer"
-        assert is_valid_max_attempts(value), f"{path}:{key} must be -1 or a positive integer"
+        assert isinstance(value, int), f"{task_name}:{key} must be an integer"
+        assert is_valid_max_attempts(value), f"{task_name}:{key} must be -1 or a positive integer"
 
 
 @pytest.mark.parametrize("value", [-1, 1, 3])

@@ -50,6 +50,20 @@ class RegistryEntry:
     verify_after_declared: bool = True
 
 
+def validate_entry_runtime_bounds(entry: RegistryEntry) -> list[str]:
+    """Validate timeout and retry bounds shared by registry and plan checks."""
+
+    errors: list[str] = []
+    if entry.timeout_s <= 0.0:
+        errors.append(f"{entry.kind} {entry.name!r} timeout_s must be > 0.")
+    if not is_valid_max_attempts(entry.max_attempts):
+        errors.append(
+            f"{entry.kind} {entry.name!r} max_attempts must be "
+            f"{INFINITE_RETRY_ATTEMPTS} for infinite retries or a positive integer."
+        )
+    return errors
+
+
 @dataclass(frozen=True)
 class RegistryObject:
     """Optional object aliases accepted in model-proposed Linear IR."""
@@ -249,13 +263,7 @@ def _validate_common_entry(entry: RegistryEntry) -> list[str]:
             f"{entry.kind} {entry.name!r} must use executor "
             f"{EXPECTED_EXECUTORS[entry.kind]!r}, got {entry.executor!r}."
         )
-    if entry.timeout_s <= 0.0:
-        errors.append(f"{entry.kind} {entry.name!r} timeout_s must be > 0.")
-    if not is_valid_max_attempts(entry.max_attempts):
-        errors.append(
-            f"{entry.kind} {entry.name!r} max_attempts must be "
-            f"{INFINITE_RETRY_ATTEMPTS} for infinite retries or a positive integer."
-        )
+    errors.extend(validate_entry_runtime_bounds(entry))
     return errors
 
 

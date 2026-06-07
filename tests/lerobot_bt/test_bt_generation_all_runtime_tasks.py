@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 
-"""Coverage for generating every static BT task from the template planner."""
+"""Coverage for generating every runtime BT task from the template planner."""
 
 from __future__ import annotations
 
@@ -74,7 +74,7 @@ EXPECTED_STEPS = {
 
 
 @pytest.mark.parametrize("task_name", EXPECTED_STEPS)
-def test_build_linear_plan_matches_static_task_order(task_name: str) -> None:
+def test_build_linear_plan_matches_runtime_task_order(task_name: str) -> None:
     registry = load_registry(REGISTRY_PATH)
     plan = build_linear_plan(task_name, registry)
 
@@ -82,7 +82,7 @@ def test_build_linear_plan_matches_static_task_order(task_name: str) -> None:
 
 
 @pytest.mark.parametrize("task_name", EXPECTED_STEPS)
-def test_cli_generates_parseable_xml_yaml_for_static_task(task_name: str, tmp_path: Path) -> None:
+def test_cli_generates_parseable_xml_yaml_for_runtime_task(task_name: str, tmp_path: Path) -> None:
     tree = tmp_path / f"{task_name}.xml"
     config = tmp_path / f"{task_name}_bt.yaml"
 
@@ -124,7 +124,7 @@ def test_step_kinds_render_to_expected_leaf_types(task_name: str) -> None:
 
 
 @pytest.mark.parametrize("task_name", EXPECTED_STEPS)
-def test_rendered_yaml_is_parseable_for_static_task(task_name: str) -> None:
+def test_rendered_yaml_is_parseable_for_runtime_task(task_name: str) -> None:
     registry = load_registry(REGISTRY_PATH)
     plan = build_linear_plan(task_name, registry)
 
