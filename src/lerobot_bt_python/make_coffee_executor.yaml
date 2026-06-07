@@ -147,7 +147,7 @@ force_download_policy: true
 # will ABSTAIN with reason "frame_mismatch". Shadow mode makes this visible.
 spatial_prior_gate:
   mode: shadow
-  priors_dir: spatial_priors
+  priors_dir: perception/spatial_priors
   query_pose_service: "/perception/query_pose"
   query_max_age_s: 2.0
   require_fresh_pose: true

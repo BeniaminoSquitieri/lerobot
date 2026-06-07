@@ -15,7 +15,6 @@ from lerobot_bt_python.bt_generation.planner import build_linear_plan
 from lerobot_bt_python.bt_generation.registry import is_valid_max_attempts, load_registry
 from lerobot_bt_python.bt_generation.renderer import render_bt_params_yaml
 
-
 REPO_ROOT = Path(__file__).resolve().parents[2]
 EXECUTOR_CONFIG_DIR = REPO_ROOT / "src/lerobot_bt_python"
 REGISTRY_PATH = REPO_ROOT / "src/lerobot_bt_python/bt_generation/skills_registry.yaml"
@@ -46,9 +45,13 @@ def _skill_server_default_node(field_name: str) -> ast.AST:
     for node in module.body:
         if isinstance(node, ast.ClassDef) and node.name == "SkillCommandServerConfig":
             for child in node.body:
-                if isinstance(child, ast.AnnAssign) and isinstance(child.target, ast.Name):
-                    if child.target.id == field_name and child.value is not None:
-                        return child.value
+                if (
+                    isinstance(child, ast.AnnAssign)
+                    and isinstance(child.target, ast.Name)
+                    and child.target.id == field_name
+                    and child.value is not None
+                ):
+                    return child.value
     raise AssertionError(f"Default for {field_name} not found in SkillCommandServerConfig")
 
 
@@ -66,11 +69,7 @@ def test_generated_bt_retry_values_are_valid(task_name: str) -> None:
     cfg = yaml.safe_load(render_bt_params_yaml(plan, registry))
     bt_params = cfg["lerobot_bt_runner"]["ros__parameters"]["bt"]
 
-    retry_limits = {
-        key: value
-        for key, value in bt_params.items()
-        if key.endswith("_max_attempts")
-    }
+    retry_limits = {key: value for key, value in bt_params.items() if key.endswith("_max_attempts")}
 
     assert retry_limits, f"{task_name} should define retry limits"
     for key, value in retry_limits.items():
@@ -130,9 +129,43 @@ def test_camera_publish_map_covers_required_cameras(path: Path) -> None:
     camera_publish_map = cfg.get("camera_publish_map", {})
 
     assert required_cameras <= set(camera_publish_map), (
-        f"{path}:camera_publish_map must cover required cameras "
-        f"{sorted(required_cameras)}"
+        f"{path}:camera_publish_map must cover required cameras {sorted(required_cameras)}"
     )
+
+
+@pytest.mark.parametrize("path", _executor_yaml_paths(), ids=lambda path: path.name)
+def test_rgbd_publish_maps_stay_aligned_with_required_cameras(path: Path) -> None:
+    cfg = _load_yaml(path)
+    required_cameras = set(cfg.get("required_cameras", []))
+    maps_to_check = {
+        "camera_depth_publish_map": cfg.get("camera_depth_publish_map", {}),
+        "camera_info_publish_map": cfg.get("camera_info_publish_map", {}),
+        "camera_frame_id_map": cfg.get("camera_frame_id_map", {}),
+    }
+
+    for field_name, camera_map in maps_to_check.items():
+        assert required_cameras <= set(camera_map), (
+            f"{path}:{field_name} must cover required cameras {sorted(required_cameras)}"
+        )
+
+
+@pytest.mark.parametrize("path", _executor_yaml_paths(), ids=lambda path: path.name)
+def test_vlm_gate_tasks_cover_rendered_await_scene_names(path: Path) -> None:
+    cfg = _load_yaml(path)
+    task_name = path.name.removesuffix("_executor.yaml")
+    if task_name not in TASK_NAMES:
+        return
+
+    registry = load_registry(REGISTRY_PATH)
+    plan = build_linear_plan(task_name, registry)
+    rendered_cfg = yaml.safe_load(render_bt_params_yaml(plan, registry))
+    bt_params = rendered_cfg["lerobot_bt_runner"]["ros__parameters"]["bt"]
+    rendered_gate_names = {
+        value for key, value in bt_params.items() if key.endswith("_gate") and isinstance(value, str)
+    }
+
+    missing = sorted(rendered_gate_names - set(cfg.get("vlm_gate_tasks", {})))
+    assert missing == [], f"{path}:vlm_gate_tasks missing rendered gate descriptions {missing}"
 
 
 def test_items_in_drawer_omits_runtime_defaults() -> None:

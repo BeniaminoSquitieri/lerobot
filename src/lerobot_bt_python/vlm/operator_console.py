@@ -8,7 +8,6 @@ stdout and never replaces structured logger calls.
 
 from __future__ import annotations
 
-
 _BANNER_RULE = "═" * 60
 
 _RESULT_EMOJI = {

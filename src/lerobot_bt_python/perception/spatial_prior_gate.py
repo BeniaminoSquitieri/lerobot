@@ -20,11 +20,14 @@ The gate runs in one of three modes (see SpatialPriorGateConfig):
 from __future__ import annotations
 
 import json
+from collections.abc import Callable, Mapping
 from pathlib import Path
-from typing import Any, Callable, Mapping, Optional
+from typing import TYPE_CHECKING, Any
 
-from .config import SpatialPriorGateConfig
-from .spatial_prior import ABSTAIN, FAIL, PASS, SpatialPrior, SpatialPriorVerdict
+from .spatial_prior import ABSTAIN, FAIL, SpatialPrior, SpatialPriorVerdict
+
+if TYPE_CHECKING:
+    from ..config import SpatialPriorGateConfig
 
 # A pose_provider takes a perception object name and returns the observed pose
 # as (translation_xyz | None, frame_id | None, confidence | None).
@@ -38,10 +41,10 @@ class ObservedPose:
 
     def __init__(
         self,
-        translation: Optional[list[float]] = None,
-        frame_id: Optional[str] = None,
-        confidence: Optional[float] = None,
-        error: Optional[str] = None,
+        translation: list[float] | None = None,
+        frame_id: str | None = None,
+        confidence: float | None = None,
+        error: str | None = None,
     ) -> None:
         self.translation = translation
         self.frame_id = frame_id
@@ -162,11 +165,11 @@ class SpatialPriorGate:
         """@brief Whether the gate is active and a prior exists for this skill."""
         return self.enabled and skill_name in self._priors
 
-    def object_for_skill(self, skill_name: str) -> Optional[str]:
+    def object_for_skill(self, skill_name: str) -> str | None:
         """@brief Perception object name queried for a gated skill, if any."""
         return self._objects.get(skill_name)
 
-    def evaluate(self, skill_name: str, pose_provider: PoseProvider) -> Optional[SpatialPriorVerdict]:
+    def evaluate(self, skill_name: str, pose_provider: PoseProvider) -> SpatialPriorVerdict | None:
         """@brief Evaluate the gate for one skill.
 
         @param skill_name BT skill about to run.
@@ -208,7 +211,7 @@ class SpatialPriorGate:
         self._log_verdict(skill_name, object_name, verdict)
         return verdict
 
-    def should_block(self, verdict: Optional[SpatialPriorVerdict]) -> bool:
+    def should_block(self, verdict: SpatialPriorVerdict | None) -> bool:
         """@brief Whether a verdict should block skill execution.
 
         Only an explicit FAIL blocks, and only in ENFORCE mode. SHADOW mode
@@ -220,9 +223,7 @@ class SpatialPriorGate:
             return False
         return verdict.blocks
 
-    def _log_verdict(
-        self, skill_name: str, object_name: str, verdict: SpatialPriorVerdict
-    ) -> None:
+    def _log_verdict(self, skill_name: str, object_name: str, verdict: SpatialPriorVerdict) -> None:
         """@brief Structured, greppable log line for one gate evaluation."""
         level = "warning" if verdict.status == FAIL else "info"
         payload = verdict.as_dict()

@@ -16,8 +16,7 @@ import time
 from collections import Counter
 from pathlib import Path
 
-from . import cli_utils
-from . import experiment_log
+from . import cli_utils, experiment_log
 from .manifest import build_generation_manifest, write_generation_manifest
 from .planner import build_linear_plan
 from .registry import load_registry, validate_registry
@@ -75,7 +74,7 @@ def main(argv: list[str] | None = None) -> int:
     planner_label = args.planner_label or args.planner
     condition_label = args.condition_label or "default"
     env = cli_utils.environment_snapshot("lerobot_bt_python.bt_generation.generate", argv)
-    setattr(args, "_env_snapshot", env)
+    args._env_snapshot = env
 
     errors: list[str] = []
     failure_stage: str | None = None
@@ -148,6 +147,7 @@ def main(argv: list[str] | None = None) -> int:
                 # Build planner registry payload
                 from .export_planner_registry import build_planner_registry_payload
                 from .ros_plan_client import request_plan_from_ros_service
+
                 planner_registry_payload = build_planner_registry_payload(args.task, registry)
                 scene_facts = None
                 if args.scene_facts_file is not None:
@@ -226,8 +226,16 @@ def main(argv: list[str] | None = None) -> int:
         return 1
 
     try:
-        xml_text = render_xml(plan, registry)
-        yaml_text = render_bt_params_yaml(plan, registry)
+        xml_text = render_xml(
+            plan,
+            registry,
+            render_robot_postcondition_gates=args.explicit_postcondition_gates,
+        )
+        yaml_text = render_bt_params_yaml(
+            plan,
+            registry,
+            render_robot_postcondition_gates=args.explicit_postcondition_gates,
+        )
         errors.extend(validate_xml_yaml_blackboard_text(xml_text, yaml_text))
     except Exception as exc:  # noqa: BLE001
         cli_utils.print_errors("BT generation failed:", [str(exc)])
@@ -417,9 +425,7 @@ def _log_generation_event(
         duration_s=time.time() - start_time,
         output_dir=str(args.output_dir) if args.output_dir is not None else None,
         linear_ir_path=str(plan_output_path) if plan_output_path is not None else None,
-        raw_response_path=str(raw_response_output_path)
-        if raw_response_output_path is not None
-        else None,
+        raw_response_path=str(raw_response_output_path) if raw_response_output_path is not None else None,
         tree_xml_path=str(out_tree) if out_tree is not None else None,
         bt_yaml_path=str(out_config) if out_config is not None else None,
         manifest_path=str(manifest_path) if manifest_path is not None else None,

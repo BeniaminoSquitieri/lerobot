@@ -4,16 +4,15 @@
 
 from __future__ import annotations
 
-from pathlib import Path
 import re
 import xml.etree.ElementTree as ET
+from pathlib import Path
 
 import yaml
 
 from lerobot_bt_python.bt_generation.planner import build_linear_plan
 from lerobot_bt_python.bt_generation.registry import INFINITE_RETRY_ATTEMPTS, load_registry
 from lerobot_bt_python.bt_generation.renderer import render_bt_params_yaml, render_xml
-
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 REGISTRY_PATH = REPO_ROOT / "src/lerobot_bt_python/bt_generation/skills_registry.yaml"
@@ -49,10 +48,7 @@ def test_xml_retry_num_attempts_are_numeric_literals() -> None:
     retry_nodes = root.findall(".//RetryUntilSuccessful")
 
     assert retry_nodes
-    assert all(
-        re.fullmatch(r"[0-9]+", node.attrib.get("num_attempts", ""))
-        for node in retry_nodes
-    )
+    assert all(re.fullmatch(r"[0-9]+", node.attrib.get("num_attempts", "")) for node in retry_nodes)
 
 
 def test_xml_retry_num_attempts_do_not_use_blackboard_placeholders() -> None:
@@ -69,15 +65,11 @@ def test_xml_place_first_toast_retry_uses_registry_max_attempts_or_default() -> 
     root = ET.fromstring(xml_text)
     registry = load_registry(REGISTRY_PATH)
 
-    place_first_toast_retry = root.find(
-        './/RetryUntilSuccessful[@name="Robot skill: Place first toast"]'
-    )
+    place_first_toast_retry = root.find('.//RetryUntilSuccessful[@name="Robot skill: Place first toast"]')
     assert place_first_toast_retry is not None
 
     expected_registry_attempts = registry.robot_skills["place_first_toast"].max_attempts
-    expected_literal_attempts = (
-        str(expected_registry_attempts) if expected_registry_attempts > 0 else "1"
-    )
+    expected_literal_attempts = str(expected_registry_attempts) if expected_registry_attempts > 0 else "1"
     assert place_first_toast_retry.attrib.get("num_attempts") == expected_literal_attempts
 
 
@@ -138,9 +130,21 @@ def test_renderer_does_not_duplicate_do_skill_verification_by_default() -> None:
     xml_text, _ = _sandwich_outputs()
     root = ET.fromstring(xml_text)
 
-    await_scene_names = {
-        node.attrib.get("scene_name")
-        for node in root.findall(".//AwaitScene")
-    }
+    await_scene_names = {node.attrib.get("scene_name") for node in root.findall(".//AwaitScene")}
     assert "{first_toast_placed_gate}" not in await_scene_names
     assert "{second_toast_placed_gate}" not in await_scene_names
+
+
+def test_renderer_can_render_robot_postconditions_when_requested() -> None:
+    registry = load_registry(REGISTRY_PATH)
+    plan = build_linear_plan(
+        "make_sandwich",
+        registry,
+        explicit_robot_postcondition_gates=True,
+    )
+    xml_text = render_xml(plan, registry, render_robot_postcondition_gates=True)
+    root = ET.fromstring(xml_text)
+
+    await_scene_names = {node.attrib.get("scene_name") for node in root.findall(".//AwaitScene")}
+    assert "{first_toast_placed_gate}" in await_scene_names
+    assert "{second_toast_placed_gate}" in await_scene_names

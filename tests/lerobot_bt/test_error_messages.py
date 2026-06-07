@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import pytest
 
-from lerobot_bt_python.verification import SceneVerdictStore
+from lerobot_bt_python.vlm.verification import SceneVerdictStore
 
 
 def test_report_with_invalid_status_mentions_token_and_expected_set() -> None:
@@ -23,9 +23,7 @@ def test_report_with_invalid_status_mentions_token_and_expected_set() -> None:
         registry.report(skill_name="pick_apple", status=bad_token)
 
     message = str(excinfo.value)
-    assert bad_token in message, (
-        f"Error message should include the offending status token; got: {message!r}"
-    )
+    assert bad_token in message, f"Error message should include the offending status token; got: {message!r}"
     assert "Expected one of" in message, (
         f"Error message should advertise the expected vocabulary; got: {message!r}"
     )
@@ -41,6 +39,4 @@ def test_report_with_invalid_status_lists_known_statuses() -> None:
 
     message = str(excinfo.value)
     for required in ("SUCCESS", "FAILURE"):
-        assert required in message, (
-            f"Error message should mention the {required} status; got: {message!r}"
-        )
+        assert required in message, f"Error message should mention the {required} status; got: {message!r}"

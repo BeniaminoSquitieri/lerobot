@@ -58,6 +58,12 @@ camera_frame_id_map:
 # object poses for grasping. Without real base_link->camera calibration, the
 # perception node marks poses tf_unavailable and rejects robot-frame queries.
 
+vlm_gate_tasks:
+  items_in_drawer.scene_0_ready: "Check that the drawer area is visible, the drawer is accessible, and the objects to insert are on the table."
+  items_in_drawer.drawer_open_ready: "Ask the human to open the drawer fully and keep the insertion area clear."
+  items_in_drawer.drawer_closed: "Ask the human to close the drawer after the robot insertion attempt."
+  items_in_drawer.task_complete: "Check that the drawer is closed and the inserted item is no longer on the table."
+
 skills:
   - name: insert_next_drawer_item
     dataset_repo_id: "scene-transition/insert_next_drawer_item"

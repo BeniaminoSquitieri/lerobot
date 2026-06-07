@@ -29,14 +29,14 @@ PACKAGE_DIR = Path(__file__).resolve().parent.parent / "src" / "lerobot_bt_pytho
 sys.path.insert(0, str(PACKAGE_DIR.parent))
 
 from lerobot_bt_python.config import SpatialPriorGateConfig  # noqa: E402
-from lerobot_bt_python.spatial_prior import ABSTAIN, FAIL, PASS  # noqa: E402
-from lerobot_bt_python.spatial_prior_gate import (  # noqa: E402
+from lerobot_bt_python.perception.spatial_prior import ABSTAIN, FAIL, PASS  # noqa: E402
+from lerobot_bt_python.perception.spatial_prior_gate import (  # noqa: E402
     SpatialPriorGate,
     parse_object_pose_json,
 )
 
 SKILL = "pick_and_insert_capsule"
-PRIOR = PACKAGE_DIR / "spatial_priors" / "put_coffee.json"
+PRIOR = PACKAGE_DIR / "perception" / "spatial_priors" / "put_coffee.json"
 
 
 class _StdoutLogger:

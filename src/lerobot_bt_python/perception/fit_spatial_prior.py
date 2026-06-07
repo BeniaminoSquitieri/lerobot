@@ -19,11 +19,11 @@ pyarrow) instead of going through `LeRobotDataset`, so it does not pull video
 frames or require torch. It only needs the small per-frame state vectors.
 
 Usage:
-    python3 -m lerobot_bt_python.fit_spatial_prior \\
+    python3 -m lerobot_bt_python.perception.fit_spatial_prior \\
         --dataset-repo-id Squitieri/put_coffee \\
         --skill pick_and_insert_capsule \\
         --object coffee_capsule \\
-        --output src/lerobot_bt_python/spatial_priors/put_coffee.json
+        --output src/lerobot_bt_python/perception/spatial_priors/put_coffee.json
 
 The frame_id defaults to "base_link" and MUST match the perception node's
 `target_frame_id`. The two positions are only comparable when expressed in the
@@ -36,7 +36,7 @@ import argparse
 import glob
 import json
 import sys
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 import numpy as np
@@ -62,9 +62,7 @@ def _resolve_dataset_dir(dataset_repo_id: str, local_root: str | None, download:
     if local_root:
         root = Path(local_root).expanduser()
         if not (root / "meta" / "info.json").exists():
-            raise FileNotFoundError(
-                f"--dataset-root {root} does not contain meta/info.json."
-            )
+            raise FileNotFoundError(f"--dataset-root {root} does not contain meta/info.json.")
         return root
 
     if not download:
@@ -100,9 +98,7 @@ def _load_state_frames(dataset_dir: Path):
     df = pd.concat(frames, ignore_index=True)
     for column in ("observation.state", "episode_index", "frame_index"):
         if column not in df.columns:
-            raise KeyError(
-                f"Dataset is missing required column '{column}'. Found: {list(df.columns)}."
-            )
+            raise KeyError(f"Dataset is missing required column '{column}'. Found: {list(df.columns)}.")
     return df
 
 
@@ -133,9 +129,7 @@ def extract_grasp_positions(
         episode = df[df["episode_index"] == episode_index].sort_values("frame_index")
         state = np.stack(episode["observation.state"].to_numpy())
         if state.ndim != 2 or state.shape[1] <= max(gripper_index, *TRANSLATION_INDICES):
-            raise ValueError(
-                f"Episode {episode_index} state has unexpected shape {state.shape}."
-            )
+            raise ValueError(f"Episode {episode_index} state has unexpected shape {state.shape}.")
         gripper = state[:, gripper_index]
         gripper_open = float(gripper[0])
         gripper_min = float(gripper.min())
@@ -211,13 +205,23 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("--object", default="", help="Canonical object name the prior describes.")
     parser.add_argument("--output", required=True, help="Output JSON path for the prior.")
     parser.add_argument("--dataset-root", default=None, help="Local dataset snapshot dir (skips download).")
-    parser.add_argument("--no-download", action="store_true", help="Forbid downloading; require --dataset-root.")
+    parser.add_argument(
+        "--no-download", action="store_true", help="Forbid downloading; require --dataset-root."
+    )
     parser.add_argument("--frame-id", default="base_link", help="Robot base frame the positions live in.")
     parser.add_argument("--confidence-level", type=float, default=0.99, help="Chi-square acceptance level.")
-    parser.add_argument("--closed-fraction", type=float, default=0.5, help="Gripper open->min fraction for grasp.")
-    parser.add_argument("--gripper-index", type=int, default=DEFAULT_GRIPPER_INDEX, help="Gripper col in state.")
-    parser.add_argument("--min-pose-confidence", type=float, default=0.0, help="Runtime min perception confidence.")
-    parser.add_argument("--sigma-regularization", type=float, default=1e-6, help="Isotropic covariance floor (m^2).")
+    parser.add_argument(
+        "--closed-fraction", type=float, default=0.5, help="Gripper open->min fraction for grasp."
+    )
+    parser.add_argument(
+        "--gripper-index", type=int, default=DEFAULT_GRIPPER_INDEX, help="Gripper col in state."
+    )
+    parser.add_argument(
+        "--min-pose-confidence", type=float, default=0.0, help="Runtime min perception confidence."
+    )
+    parser.add_argument(
+        "--sigma-regularization", type=float, default=1e-6, help="Isotropic covariance floor (m^2)."
+    )
     return parser
 
 
@@ -225,9 +229,7 @@ def main(argv: list[str] | None = None) -> int:
     """@brief CLI entry point. Returns a process exit code."""
     args = build_parser().parse_args(argv)
 
-    dataset_dir = _resolve_dataset_dir(
-        args.dataset_repo_id, args.dataset_root, download=not args.no_download
-    )
+    dataset_dir = _resolve_dataset_dir(args.dataset_repo_id, args.dataset_root, download=not args.no_download)
     info = json.loads((dataset_dir / "meta" / "info.json").read_text(encoding="utf-8"))
     df = _load_state_frames(dataset_dir)
     positions, episodes = extract_grasp_positions(
@@ -259,7 +261,7 @@ def main(argv: list[str] | None = None) -> int:
         ),
         metadata={
             "generator": "fit_spatial_prior.py",
-            "created_utc": datetime.now(timezone.utc).isoformat(),
+            "created_utc": datetime.now(UTC).isoformat(),
             "dataset_fps": info.get("fps"),
             "dataset_total_episodes": info.get("total_episodes"),
             "closed_fraction": args.closed_fraction,
@@ -276,7 +278,9 @@ def main(argv: list[str] | None = None) -> int:
     print(f"  std (m)    : {np.round(positions.std(axis=0), 4).tolist()}")
     print(f"  threshold  : {threshold:.4f} (Mahalanobis, level={args.confidence_level})")
     if not np.isnan(pass_rate):
-        print(f"  LOO accept : {pass_rate:.2%} of held-out demos PASS (expected ~{args.confidence_level:.0%})")
+        print(
+            f"  LOO accept : {pass_rate:.2%} of held-out demos PASS (expected ~{args.confidence_level:.0%})"
+        )
     print(f"  frame_id   : {args.frame_id}")
     print(f"  written to : {args.output}")
     return 0

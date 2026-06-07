@@ -14,14 +14,14 @@ single source of truth for the architecture evolution of this feature.
 
 The BT runtime already had **one** scene check before/after each learned skill:
 the **VLM gate** (`VlmNode` in `panda_live_viewer`, orchestrated by the
-`AwaitScene` / VLM-request flow in `server.py`). The VLM answers a *semantic*
+`AwaitScene` / VLM-request flow in `server.py`). The VLM answers a _semantic_
 question:
 
 > "Is the task complete / is the scene correct?"
 
 The VLM is good at semantics but is a **poor metric and spatial judge**: it is
-slow, non-deterministic, and cannot reliably answer *"is this object a few
-centimetres outside the region where the policy was trained?"*. Yet that
+slow, non-deterministic, and cannot reliably answer _"is this object a few
+centimetres outside the region where the policy was trained?"_. Yet that
 spatial question is exactly what determines whether an Action-Chunking
 Transformer (ACT) policy will behave well. ACT policies are **behaviour cloning**
 models: outside the spatial support of their training demonstrations they
@@ -38,10 +38,10 @@ deterministic, fast, GPU-free, and repeatable.
 
 ### Why two independent gates (and not one merged check)
 
-| Gate | Question | Method | Fails when… |
-| --- | --- | --- | --- |
-| Spatial prior (new) | Is the object in the trained region? | Mahalanobis distance to a Gaussian fitted from demos | Object placed outside the demonstrated workspace |
-| VLM (existing) | Is the task semantically done/correct? | VLM reasoning over camera frames | Wrong/missing object, task not completed |
+| Gate                | Question                               | Method                                               | Fails when…                                      |
+| ------------------- | -------------------------------------- | ---------------------------------------------------- | ------------------------------------------------ |
+| Spatial prior (new) | Is the object in the trained region?   | Mahalanobis distance to a Gaussian fitted from demos | Object placed outside the demonstrated workspace |
+| VLM (existing)      | Is the task semantically done/correct? | VLM reasoning over camera frames                     | Wrong/missing object, task not completed         |
 
 They fail for **different reasons** and must stay **separate**. Merging them
 would hide one signal behind the other. The gates run in cascade: the spatial
@@ -53,7 +53,7 @@ prior is checked **before** the skill executes; the VLM check runs as before.
 
 The referenced models and their datasets:
 
-- `Squitieri/putcoffee_act16_100k`  ← dataset `Squitieri/put_coffee`
+- `Squitieri/putcoffee_act16_100k` ← dataset `Squitieri/put_coffee`
 - `Squitieri/closemachine_act16_100k` ← dataset `Squitieri/close_machine_fixed`
 
 > Note: the HF model cards show generic SO100 (`so100_follower`) boilerplate.
@@ -66,7 +66,7 @@ The referenced models and their datasets:
 - Per-frame features (`meta/info.json`):
   - `observation.state` — **7D end-effector Cartesian pose**:
     `[position.x, position.y, position.z, orientation.x, orientation.y,
-    orientation.z, gripper]`
+orientation.z, gripper]`
   - `action` — same 7D Cartesian command
   - `observation.images.wrist_rgb`, `observation.images.left_rgb` — video
   - bookkeeping: `timestamp, frame_index, episode_index, index, task_index`
@@ -94,15 +94,15 @@ grasp EE position over 50 demos (base frame, metres):
   leave-one-out acceptance    = 100% of held-out demos PASS at level 0.99
 ```
 
-This is a tight, unimodal cluster — exactly the *"oggetti abbastanza varianti ma
-non tanto"* (moderately varied, ~5 cm spread) regime the user described. It is
+This is a tight, unimodal cluster — exactly the _"oggetti abbastanza varianti ma
+non tanto"_ (moderately varied, ~5 cm spread) regime the user described. It is
 ideal for a Gaussian OOD gate.
 
 > **Documented modelling caveat.** The grasp-EE position differs from a
-> perception *object centroid* by a roughly **constant grasp offset** (gripper
+> perception _object centroid_ by a roughly **constant grasp offset** (gripper
 > geometry + approach direction). The prior mean is therefore offset from where
 > perception will report the object. This is the main reason the gate ships in
-> **shadow mode**: on the robot we first *measure* the real observed-vs-prior
+> **shadow mode**: on the robot we first _measure_ the real observed-vs-prior
 > distance, then calibrate the offset and/or threshold before enforcing.
 
 ---
@@ -142,7 +142,7 @@ ABSTAIN is the safety-preserving default whenever a trustworthy decision is
 impossible:
 
 - No object pose available from perception.
-- **Frame mismatch** — perception returned a *camera-frame* pose instead of the
+- **Frame mismatch** — perception returned a _camera-frame_ pose instead of the
   base frame. This is the **current real-robot state**: without calibrated
   hand-eye transforms (`camera_static_tf_map` is empty), the perception node
   marks poses `tf_unavailable` and returns camera-frame coordinates, which are
@@ -159,11 +159,11 @@ ABSTAIN never blocks a skill in any mode.
 
 Configured per executor YAML under `spatial_prior_gate.mode`:
 
-| Mode | Evaluates | Logs | Blocks on FAIL |
-| --- | --- | --- | --- |
-| `off` | no | no | no |
-| `shadow` | yes | yes | **no** |
-| `enforce` | yes | yes | yes |
+| Mode      | Evaluates | Logs | Blocks on FAIL |
+| --------- | --------- | ---- | -------------- |
+| `off`     | no        | no   | no             |
+| `shadow`  | yes       | yes  | **no**         |
+| `enforce` | yes       | yes  | yes            |
 
 `shadow` is the recommended first deployment: it surfaces the verdict and the
 measured distance in the logs without ever changing BT behaviour, so the offset
@@ -175,17 +175,17 @@ and threshold can be calibrated against real perception data.
 
 All paths under `lerobot/src/lerobot_bt_python/` unless noted.
 
-| File | Role | New? |
-| --- | --- | --- |
-| `spatial_prior.py` | Pure-numpy core: `SpatialPrior` (load/save, Mahalanobis, `evaluate → PASS/FAIL/ABSTAIN`), `SpatialPriorVerdict`, `chi_square_threshold`. | new |
-| `fit_spatial_prior.py` | Offline CLI fitter: dataset → grasp positions → Gaussian → prior JSON, with leave-one-out sanity check. | new |
-| `spatial_prior_gate.py` | Runtime orchestrator: loads priors, parses perception `pose_json`, evaluates per skill, decides `should_block`. ROS-agnostic (pose provider injected). | new |
-| `spatial_priors/put_coffee.json` | Fitted prior for `pick_and_insert_capsule` (50 demos). | new |
-| `test_spatial_prior.py` | 30 unit tests (checker, fitter, parser, gate modes, end-to-end real-payload PASS/ABSTAIN). | new |
-| `config.py` | Added `SpatialPriorGateConfig` + `SkillCommandServerConfig.spatial_prior_gate` (defaults to `off`). | changed |
-| `bt_interface_paths.py` | Added `load_query_object_pose_service()`. | changed |
-| `server.py` | Build the gate, create a `QueryObjectPose` client when enabled, add `_query_object_pose` pose provider, evaluate the gate before each skill (block only in `enforce`). | changed |
-| `make_coffee_executor.yaml` | Added a `spatial_prior_gate` block (mode `shadow`) for the coffee task. | changed |
+| File                                                | Role                                                                                                                                                                   | New?    |
+| --------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------- |
+| `perception/spatial_prior.py`                       | Pure-numpy core: `SpatialPrior` (load/save, Mahalanobis, `evaluate → PASS/FAIL/ABSTAIN`), `SpatialPriorVerdict`, `chi_square_threshold`.                               | new     |
+| `perception/fit_spatial_prior.py`                   | Offline CLI fitter: dataset → grasp positions → Gaussian → prior JSON, with leave-one-out sanity check.                                                                | new     |
+| `perception/spatial_prior_gate.py`                  | Runtime orchestrator: loads priors, parses perception `pose_json`, evaluates per skill, decides `should_block`. ROS-agnostic (pose provider injected).                 | new     |
+| `perception/spatial_priors/put_coffee.json`         | Fitted prior for `pick_and_insert_capsule` (50 demos).                                                                                                                 | new     |
+| `tests/lerobot_bt/test_perception_spatial_prior.py` | 30 unit tests (checker, fitter, parser, gate modes, end-to-end real-payload PASS/ABSTAIN).                                                                             | new     |
+| `config.py`                                         | Added `SpatialPriorGateConfig` + `SkillCommandServerConfig.spatial_prior_gate` (defaults to `off`).                                                                    | changed |
+| `bt_interface_paths.py`                             | Added `load_query_object_pose_service()`.                                                                                                                              | changed |
+| `server.py`                                         | Build the gate, create a `QueryObjectPose` client when enabled, add `_query_object_pose` pose provider, evaluate the gate before each skill (block only in `enforce`). | changed |
+| `make_coffee_executor.yaml`                         | Added a `spatial_prior_gate` block (mode `shadow`) for the coffee task.                                                                                                | changed |
 
 Cross-package note: `QueryObjectPose.srv` lives in `lerobot_bt_interfaces`
 **inside this repo**, so the BT server uses it natively — no dependency on
@@ -196,8 +196,8 @@ Cross-package note: `QueryObjectPose.srv` lives in `lerobot_bt_interfaces`
 ```mermaid
 flowchart LR
     DS["Squitieri/put_coffee\n(50 demos, EE pose + gripper)"]
-    FIT["fit_spatial_prior.py\n(grasp detection + Gaussian fit)"]
-    PRIOR["spatial_priors/put_coffee.json\n(mu, Sigma, threshold)"]
+    FIT["perception/fit_spatial_prior.py\n(grasp detection + Gaussian fit)"]
+    PRIOR["perception/spatial_priors/put_coffee.json\n(mu, Sigma, threshold)"]
     PERC["PerceptionNode\nQueryObjectPose service"]
     GATE["SpatialPriorGate\n(Mahalanobis)"]
     SRV["BT server _handle_request\n(skill branch)"]
@@ -217,11 +217,11 @@ flowchart LR
 ```bash
 conda activate lerobot
 cd ~/lerobot/src
-python3 -m lerobot_bt_python.fit_spatial_prior \
+python3 -m lerobot_bt_python.perception.fit_spatial_prior \
   --dataset-repo-id Squitieri/put_coffee \
   --skill pick_and_insert_capsule \
   --object coffee_capsule \
-  --output lerobot_bt_python/spatial_priors/put_coffee.json
+  --output lerobot_bt_python/perception/spatial_priors/put_coffee.json
 ```
 
 The fitter prints the demo count, `mu`, per-axis std, the Mahalanobis threshold,
@@ -322,7 +322,7 @@ obvious. Replace it only with real calibration output.
 2. For 4+ non-coplanar points, record the **same** physical point twice:
    - camera frame: the translation from `/perception/query_pose`;
    - base frame: the robot tool-tip position in `base_link` when touching it.
-   Save the pairs in a JSON file:
+     Save the pairs in a JSON file:
    ```json
    {
      "camera_name": "left",
@@ -347,9 +347,10 @@ obvious. Replace it only with real calibration output.
 
 The perception node serializes `pose.translation` as a **dict** `{x, y, z}` (see
 `bt_planning.scene_facts.build_object_pose_fact`). `parse_object_pose_json` in
-`spatial_prior_gate.py` accepts **both** the dict form and a legacy `[x, y, z]`
-list, so the gate receives a real pose instead of silently abstaining with
-`no_translation`. This is covered by `test_spatial_prior.py`
+`perception/spatial_prior_gate.py` accepts **both** the dict form and a legacy
+`[x, y, z]` list, so the gate receives a real pose instead of silently
+abstaining with `no_translation`. This is covered by
+`tests/lerobot_bt/test_perception_spatial_prior.py`
 (`test_parse_object_pose_json_accepts_dict_translation` plus the end-to-end
 PASS/ABSTAIN tests).
 
@@ -369,7 +370,7 @@ measured by perception, purely as read-only spatial context:
   `scene_context` is present, so without perception the prompt is byte-for-byte
   unchanged (no regression).
 
-This is strictly **one-way**: the VLM *reads* poses to ground its judgement but
+This is strictly **one-way**: the VLM _reads_ poses to ground its judgement but
 **never produces coordinates**. Perception remains the single source of truth
 for object poses. Covered by `tests/test_vlm_status_protocol.py`
 (`SceneContextEnrichmentTests`).
@@ -395,12 +396,14 @@ Expected output (greppable `event=spatial_prior_gate` lines):
   (`frame_mismatch`, never blocks).
 
 The script exits non-zero if any verdict or block decision is unexpected. The
-same three scenarios are also asserted as pytest cases in `test_spatial_prior.py`.
+same three scenarios are also asserted as pytest cases in
+`tests/lerobot_bt/test_perception_spatial_prior.py`.
 
 ### Where to run the tests (local robot vs GPU server)
 
-The gate's offline tests (`test_spatial_prior.py`, `test_camera_publisher.py`,
-`smoke_spatial_prior_gate.py`) need **no robot and no GPU**, so run them on
+The gate's offline tests (`tests/lerobot_bt/test_perception_spatial_prior.py`,
+`tests/lerobot_bt/test_perception_camera_publisher.py`,
+`scripts/smoke_spatial_prior_gate.py`) need **no robot and no GPU**, so run them on
 **both** the local robot machine and the GPU server after a `git pull`. The
 hardware end-to-end path (cameras, TF, `scene_facts`, `query_pose`, gate in
 `shadow`) runs on the **local robot machine** (camera owner); the live VLM

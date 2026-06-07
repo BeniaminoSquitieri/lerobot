@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from lerobot_bt_python.executor import _ActiveSkillTracker
-from lerobot_bt_python.verification import VLM_FAILURE, VLM_SUCCESS
+from lerobot_bt_python.vlm.verification import VLM_FAILURE, VLM_SUCCESS
 
 
 def test_active_skill_tracker_accepts_matching_attempt_id() -> None:

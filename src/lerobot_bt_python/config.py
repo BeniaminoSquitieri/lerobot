@@ -11,6 +11,7 @@ casually, because server.py and robot-day configs depend on it staying aligned.
 from collections import Counter
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Any
 
 from lerobot.configs.policies import PreTrainedConfig
 
@@ -46,6 +47,7 @@ class ObservationConditionConfig:
     - `value_max`: secondary threshold used by 'between'.
     - `use_abs`: whether to compare against the absolute value.
     """
+
     # Observation key to check (string).
     key: str
     # Comparison operator (default greater-than).
@@ -68,6 +70,7 @@ class SkillTransitionConfig:
     - `success_conditions`: list of predicates that, when all true, indicate success.
     - `failure_conditions`: list of predicates that, when any true, indicate failure.
     """
+
     # Termination mode for rollout completion.
     mode: str = "timeout"
     # Minimum execution time in seconds before considering termination.
@@ -84,7 +87,9 @@ class SkillTransitionConfig:
         # Validate that the mode is one of the supported enumerations.
         allowed_modes = {"timeout", "all_conditions", "all_conditions_or_timeout", "until_success"}
         if self.mode not in allowed_modes:
-            raise ValueError(f"Unsupported transition mode '{self.mode}'. Expected one of {sorted(allowed_modes)}.")
+            raise ValueError(
+                f"Unsupported transition mode '{self.mode}'. Expected one of {sorted(allowed_modes)}."
+            )
         # Ensure we don't have a non-positive timeout which would be nonsensical.
         if self.max_duration_s <= 0:
             raise ValueError("transition.max_duration_s must be > 0.")
@@ -101,6 +106,7 @@ class PrimitiveSkillConfig:
     This dataclass describes the mapping between a BT command name and the
     underlying dataset/policy/termination semantics used at runtime.
     """
+
     # Unique name used by the BT to refer to this learned primitive.
     name: str
     # HF dataset or repo id used to load metadata/stats (not for replay).
@@ -137,9 +143,7 @@ class PrimitiveSkillConfig:
                 "Expected 'dataset' or 'robot'."
             )
         if self.policy is None and not self.policy_variants:
-            raise ValueError(
-                f"Skill '{self.name}' requires either policy or policy_variants."
-            )
+            raise ValueError(f"Skill '{self.name}' requires either policy or policy_variants.")
         if self.policy is not None and not self.policy_variants:
             self._validate_policy(self.policy)
 
@@ -171,9 +175,7 @@ class PrimitiveSkillConfig:
             )
         pretrained_path_str = str(pretrained_path).strip()
         if not pretrained_path_str:
-            raise ValueError(
-                f"Skill '{self.name}' requires a non-empty pretrained checkpoint path."
-            )
+            raise ValueError(f"Skill '{self.name}' requires a non-empty pretrained checkpoint path.")
         if pretrained_path_str.upper().startswith("TODO"):
             raise ValueError(
                 f"Skill '{self.name}' still uses placeholder checkpoint "
@@ -198,11 +200,12 @@ class SpatialPriorGateConfig:
     - "enforce" : a FAIL verdict (object out-of-distribution) blocks the skill.
                   ABSTAIN never blocks.
     """
+
     # One of "off", "shadow", "enforce".
     mode: str = "off"
     # Directory holding <name>.json prior files. Relative paths resolve against
     # this package directory; absolute paths are used as-is.
-    priors_dir: str = "spatial_priors"
+    priors_dir: str = "perception/spatial_priors"
     # Map BT skill name -> prior JSON file (relative to priors_dir or absolute).
     # Skills not listed here are not gated.
     skill_priors: dict[str, str] = field(default_factory=dict)
@@ -223,8 +226,7 @@ class SpatialPriorGateConfig:
         allowed_modes = {"off", "shadow", "enforce"}
         if self.mode not in allowed_modes:
             raise ValueError(
-                f"spatial_prior_gate.mode={self.mode!r} is invalid. "
-                f"Expected one of {sorted(allowed_modes)}."
+                f"spatial_prior_gate.mode={self.mode!r} is invalid. Expected one of {sorted(allowed_modes)}."
             )
         if self.query_timeout_s <= 0:
             raise ValueError("spatial_prior_gate.query_timeout_s must be > 0.")
@@ -238,6 +240,7 @@ class SkillCommandServerConfig:
     robot description, the list of learned skills, and server-level
     adapters/processors used during execution.
     """
+
     # Robot hardware configuration (CustomManipulatorConfig contains arm/gripper/cameras).
     robot: CustomManipulatorConfig
     # List of learned skills available to the BT runtime.
@@ -341,9 +344,7 @@ class SkillCommandServerConfig:
         empty_skill_names = [index for index, name in enumerate(skill_names) if not name]
         if empty_skill_names:
             raise ValueError(f"Skill entries at indexes {empty_skill_names} have empty names.")
-        duplicate_skill_names = sorted(
-            name for name, count in Counter(skill_names).items() if count > 1
-        )
+        duplicate_skill_names = sorted(name for name, count in Counter(skill_names).items() if count > 1)
         if duplicate_skill_names:
             raise ValueError(
                 "Duplicate skill names in server config: "
@@ -363,7 +364,9 @@ class SkillCommandServerConfig:
             index for index, name in enumerate(self.auto_shutdown_success_names) if not str(name).strip()
         ]
         if empty_shutdown_names:
-            raise ValueError(f"auto_shutdown_success_names entries at indexes {empty_shutdown_names} are empty.")
+            raise ValueError(
+                f"auto_shutdown_success_names entries at indexes {empty_shutdown_names} are empty."
+            )
         if not self.policy_variant:
             raise ValueError("policy_variant must not be empty.")
         for skill in self.skills:
@@ -371,8 +374,7 @@ class SkillCommandServerConfig:
         missing_expected_skills = sorted(set(self.expected_skill_names) - set(skill_names))
         if missing_expected_skills:
             raise ValueError(
-                "The executor config is missing BT-required skill entries: "
-                f"{missing_expected_skills}."
+                f"The executor config is missing BT-required skill entries: {missing_expected_skills}."
             )
         cameras = getattr(self.robot, "cameras", None) or {}
         if not cameras:
@@ -388,7 +390,7 @@ class SkillCommandServerConfig:
                 "The robot config is missing required camera entries: "
                 f"{missing_cameras}. Available cameras: {sorted(cameras)}."
             )
-        camera_map_fields = {
+        camera_map_fields: dict[str, dict[str, Any]] = {
             "camera_publish_map": self.camera_publish_map,
             "camera_depth_publish_map": self.camera_depth_publish_map,
             "camera_info_publish_map": self.camera_info_publish_map,
@@ -420,10 +422,7 @@ class SkillCommandServerConfig:
                 name for name in depth_cameras if not bool(getattr(cameras[name], "use_depth", False))
             )
             if depth_disabled:
-                raise ValueError(
-                    "Depth publishing requires use_depth=true for cameras: "
-                    f"{depth_disabled}."
-                )
+                raise ValueError(f"Depth publishing requires use_depth=true for cameras: {depth_disabled}.")
         for camera_name, tf_config in self.camera_static_tf_map.items():
             translation = tf_config.get("translation", [])
             rotation = tf_config.get("rotation_xyzw", [])

@@ -253,6 +253,7 @@ fallire import come `GenerateTaskPlan`.
 Altri task:
 
 ```bash
+
 ```
 
 ## 6. Terminale C — Check servizi ROS
@@ -638,7 +639,7 @@ degli oggetti misurate dalla percezione, solo come contesto spaziale:
 - se `/perception/scene_facts` è attivo, `VlmNode` formatta gli oggetti presenti
   (es. `- coffee_capsule: [0.684, -0.260, 0.150] m in base_link, confidence 0.62`)
   e li inietta nel prompt del verificatore;
-- è **a senso unico** percezione → VLM: il VLM *legge* le pose ma **non produce
+- è **a senso unico** percezione → VLM: il VLM _legge_ le pose ma **non produce
   mai coordinate**; la percezione resta l'unica sorgente delle pose;
 - senza `scene_facts` il prompt è identico a prima (nessuna regressione).
 
@@ -668,7 +669,7 @@ Da un terminale qualsiasi:
 conda activate lerobot_ben
 cd /home/panda-admin/users/sben/lerobot/src
 
-cat lerobot_bt_python/spatial_priors/put_coffee.json | python3 -m json.tool | head -20
+cat lerobot_bt_python/perception/spatial_priors/put_coffee.json | python3 -m json.tool | head -20
 ```
 
 Atteso: JSON con `frame_id: base_link`, `n_demos: 50`,
@@ -697,9 +698,9 @@ Suite pytest completa:
 
 ```bash
 conda activate lerobot
-cd /home/panda-admin/users/sben/lerobot/src
+cd /home/panda-admin/users/sben/lerobot
 
-python3 -m pytest lerobot_bt_python/test_spatial_prior.py -q
+PYTHONPATH=src python3 -m pytest tests/lerobot_bt/test_perception_spatial_prior.py -q
 ```
 
 Atteso: `30 passed`. Conferma checker, fitter, parser (formato dict `{x,y,z}`
@@ -802,7 +803,7 @@ Quando le distanze in shadow sono sensate, passa a enforce nell'executor YAML:
 
 ```yaml
 spatial_prior_gate:
-  mode: enforce   # era: shadow
+  mode: enforce # era: shadow
 ```
 
 In `enforce` un verdetto FAIL blocca lo skill **prima** del movimento; ABSTAIN
@@ -814,11 +815,11 @@ non blocca mai. Riavvia lo skill server per applicare.
 conda activate lerobot_ben
 cd /home/panda-admin/users/sben/lerobot/src
 
-python3 -m lerobot_bt_python.fit_spatial_prior \
+python3 -m lerobot_bt_python.perception.fit_spatial_prior \
   --dataset-repo-id Squitieri/put_coffee \
   --skill pick_and_insert_capsule \
   --object coffee_capsule \
-  --output lerobot_bt_python/spatial_priors/put_coffee.json
+  --output lerobot_bt_python/perception/spatial_priors/put_coffee.json
 ```
 
 Scarica solo i parquet di stato + metadati (mai i video). Stampa demo, `mu`,
@@ -826,7 +827,6 @@ std per asse, soglia e tasso di accettazione leave-one-out (un prior unimodale
 sano accetta ~99% dei demo held-out).
 
 ## 12. Errori comuni
-
 
 ### `/lerobot_bt/generate_plan` mancante
 
@@ -1036,7 +1036,8 @@ Causa e fix per `reason`:
 - `query_pose_service_unavailable` → il servizio `/perception/query_pose` non è
   attivo; verifica con `ros2 service list | grep query_pose`.
 - prior non caricato (nessuna riga `loaded prior...` all'avvio) → controlla che
-  `spatial_priors/put_coffee.json` esista e che `mode` non sia `off`.
+  `perception/spatial_priors/put_coffee.json` esista e che `mode` non sia
+  `off`.
 
 ## 13. Ordine sicuro sul robot day
 

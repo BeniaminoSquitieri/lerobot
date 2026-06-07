@@ -11,8 +11,9 @@ from __future__ import annotations
 
 import logging
 import threading
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, Callable, Mapping
+from typing import TYPE_CHECKING, Any
 
 from rclpy.node import Node
 
@@ -136,7 +137,9 @@ def _build_depth_msg(depth: Any, stamp: Any, frame_id: str) -> Any | None:
     return msg
 
 
-def _build_static_transform_msg(node: Node, camera_name: str, frame_id: str, config: Mapping[str, Any]) -> Any:
+def _build_static_transform_msg(
+    node: Node, camera_name: str, frame_id: str, config: Mapping[str, Any]
+) -> Any:
     from geometry_msgs.msg import TransformStamped
 
     parent_frame_id = str(config.get("parent_frame_id") or "base_link")
@@ -195,12 +198,12 @@ def _publish_static_transforms(
 
 def start_camera_publisher(
     *,
-    robot: "CustomManipulator",
+    robot: CustomManipulator,
     topic_map: dict[str, str],
     depth_topic_map: dict[str, str] | None = None,
     camera_info_topic_map: dict[str, str] | None = None,
     frame_id_map: dict[str, str] | None = None,
-    static_tf_map: dict[str, Mapping[str, Any]] | None = None,
+    static_tf_map: Mapping[str, Mapping[str, Any]] | None = None,
     fps: float,
     jpeg_quality: int,
     node: Node,
@@ -242,7 +245,9 @@ def start_camera_publisher(
         publishers[bt_cam_name] = _CameraPublishers(
             image=node.create_publisher(CompressedImage, ros_topic, 10),
             depth=node.create_publisher(Image, depth_topic, 10) if depth_topic else None,
-            camera_info=node.create_publisher(CameraInfo, camera_info_topic, 10) if camera_info_topic else None,
+            camera_info=node.create_publisher(CameraInfo, camera_info_topic, 10)
+            if camera_info_topic
+            else None,
             image_topic=ros_topic,
             depth_topic=depth_topic,
             camera_info_topic=camera_info_topic,
@@ -286,7 +291,9 @@ def start_camera_publisher(
                     )
                     if frame is None:
                         continue
-                    _, jpeg_bytes = cv2.imencode(".jpg", cv2.cvtColor(frame, cv2.COLOR_RGB2BGR), encode_params)
+                    _, jpeg_bytes = cv2.imencode(
+                        ".jpg", cv2.cvtColor(frame, cv2.COLOR_RGB2BGR), encode_params
+                    )
                     msg = CompressedImage()
                     msg.header.stamp = node.get_clock().now().to_msg()
                     msg.header.frame_id = spec.frame_id
@@ -303,8 +310,8 @@ def start_camera_publisher(
                         camera_info_msg = _build_camera_info_msg(camera, msg.header.stamp, spec.frame_id)
                         if camera_info_msg is not None:
                             spec.camera_info.publish(camera_info_msg)
-                except Exception:
-                    pass  # Silently skip if camera is busy or no frame available
+                except Exception as exc:  # noqa: BLE001
+                    logging.debug("Skipping camera publish tick: %s", exc)
             stop_event.wait(timeout=period_s)
 
     thread = threading.Thread(target=_publish_loop, daemon=True, name="camera-publisher")

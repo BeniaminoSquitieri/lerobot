@@ -15,12 +15,11 @@ from pathlib import Path
 
 import pytest
 
-
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
 EDITED_FILES = (
     "src/lerobot_bt_python/server.py",
-    "src/lerobot_bt_python/verification.py",
+    "src/lerobot_bt_python/vlm/verification.py",
     "src/lerobot_bt_python/conditions.py",
     "src/lerobot_bt_python/executor.py",
     "src/lerobot_bt_python/config.py",
@@ -53,12 +52,12 @@ def test_no_forbidden_imports(rel_path: str) -> None:
     source = (REPO_ROOT / rel_path).read_text(encoding="utf-8")
     imports = _top_level_imports(source)
     offenders = sorted(
-        imp for imp in imports
+        imp
+        for imp in imports
         if any(imp == root or imp.startswith(root + ".") for root in FORBIDDEN_IMPORT_ROOTS)
     )
     assert not offenders, (
-        f"{rel_path} unexpectedly imports {offenders}. "
-        f"Pass 2 must not pull in new logging dependencies."
+        f"{rel_path} unexpectedly imports {offenders}. Pass 2 must not pull in new logging dependencies."
     )
 
 

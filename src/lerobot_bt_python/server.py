@@ -22,6 +22,7 @@ import json
 import logging
 import threading
 import time
+from collections.abc import Mapping
 from dataclasses import asdict
 from pathlib import Path
 from pprint import pformat
@@ -44,25 +45,26 @@ from lerobot.utils.utils import init_logging, log_say
 from lerobot.utils.visualization_utils import init_rerun as init_rerun_viz
 
 from .bt_interface_paths import load_bt_services, load_query_object_pose_service
-from .camera_publisher import start_camera_publisher
 from .config import SkillCommandServerConfig
 from .executor import CommandResult, SkillRunner
-from .operator_console import print_vlm_request_banner, print_vlm_result_banner
+from .perception.camera_publisher import start_camera_publisher
+from .perception.spatial_prior_gate import ObservedPose, SpatialPriorGate, parse_object_pose_json
 from .processor_factory import build_robot_processor_pipeline
-from .spatial_prior_gate import ObservedPose, SpatialPriorGate, parse_object_pose_json
-from .verification import (
-    VLM_SUCCESS,
+from .vlm.operator_console import print_vlm_request_banner, print_vlm_result_banner
+from .vlm.protocol import vlm_message_from_payload, vlm_status_from_payload
+from .vlm.verification import (
     VLM_RUNNING,
+    VLM_SUCCESS,
     VLM_UNKNOWN,
     VLM_WAITING_STATUSES,
     SceneVerdictStore,
 )
-from .vlm_protocol import vlm_message_from_payload, vlm_status_from_payload
 
 DEFAULT_CONFIG_PATH = Path(__file__).resolve().parent / "make_sandwich_executor.yaml"
 """Default draccus YAML loaded when the entry point is started without flags."""
 
 if TYPE_CHECKING:
+    from lerobot.processor import RobotProcessorPipeline
     from lerobot.robots.custom_manipulator.custom_manipulator import CustomManipulator
 
 VLM_GATE_KIND = "vlm_gate_pending"
@@ -73,12 +75,12 @@ _legacy_vlm_service_warned = False
 
 def _start_camera_publisher(
     *,
-    robot: "CustomManipulator",
+    robot: CustomManipulator,
     topic_map: dict[str, str],
     depth_topic_map: dict[str, str] | None = None,
     camera_info_topic_map: dict[str, str] | None = None,
     frame_id_map: dict[str, str] | None = None,
-    static_tf_map: dict[str, dict] | None = None,
+    static_tf_map: Mapping[str, Mapping[str, Any]] | None = None,
     fps: float,
     jpeg_quality: int,
     node: Node,
@@ -97,9 +99,6 @@ def _start_camera_publisher(
     )
 
 
-
-
-
 class SkillCommandServer(Node):
     """@brief ROS2 node that executes BT commands and stores VLM check state.
 
@@ -114,7 +113,7 @@ class SkillCommandServer(Node):
     def __init__(
         self,
         cfg: SkillCommandServerConfig,
-        robot: "CustomManipulator",
+        robot: CustomManipulator,
         skill_runner: SkillRunner,
         robot_action_processor: RobotProcessorPipeline,
         robot_observation_processor: RobotProcessorPipeline,
@@ -203,8 +202,9 @@ class SkillCommandServer(Node):
                     callback_group=self._vlm_callback_group,
                 )
                 self.get_logger().info(
-                    "spatial_prior_gate: mode=%s, querying object poses on '%s'."
-                    % (cfg.spatial_prior_gate.mode, cfg.spatial_prior_gate.query_pose_service)
+                    "spatial_prior_gate: mode="
+                    f"{cfg.spatial_prior_gate.mode}, querying object poses on "
+                    f"'{cfg.spatial_prior_gate.query_pose_service}'."
                 )
             except Exception as exc:  # noqa: BLE001
                 # A missing perception service must not crash the BT server: the
@@ -248,7 +248,6 @@ class SkillCommandServer(Node):
             return ObservedPose(error=reason)
         return parse_object_pose_json(str(getattr(response, "pose_json", "")))
 
-
     def _handle_request(self, request, response):
         """@brief Handle one `RunNamedCommand` service request.
 
@@ -268,9 +267,7 @@ class SkillCommandServer(Node):
                 # Deterministic spatial-prior gate runs first. In SHADOW mode it
                 # only logs; in ENFORCE mode a FAIL (object out-of-distribution)
                 # blocks the skill before any motion. ABSTAIN never blocks.
-                gate_verdict = self._spatial_prior_gate.evaluate(
-                    request.name, self._query_object_pose
-                )
+                gate_verdict = self._spatial_prior_gate.evaluate(request.name, self._query_object_pose)
                 if self._spatial_prior_gate.should_block(gate_verdict):
                     response.success = False
                     response.status = "FAILURE"
@@ -334,8 +331,7 @@ class SkillCommandServer(Node):
             response.status = "ERROR"
             response.elapsed_s = 0.0
             response.message = (
-                f"Unsupported command kind '{request.kind}'. "
-                f"Expected one of ('skill', '{VLM_GATE_KIND}')."
+                f"Unsupported command kind '{request.kind}'. Expected one of ('skill', '{VLM_GATE_KIND}')."
             )
             self.get_logger().error(response.message)
             return response
@@ -480,8 +476,7 @@ class SkillCommandServer(Node):
             response.accepted = True
             response.applied_attempt_id = 0
             response.message = (
-                f"Accepted VLM status {request.status} as live stop for active skill "
-                f"'{request.skill_name}'."
+                f"Accepted VLM status {request.status} as live stop for active skill '{request.skill_name}'."
             )
             return response
 
@@ -628,8 +623,7 @@ class SkillCommandServer(Node):
             )
         except (TypeError, ValueError) as exc:
             self.get_logger().error(
-                f"event=vlm_result_received status=rejected "
-                f"topic={self.cfg.vlm_result_topic!r} error={exc}"
+                f"event=vlm_result_received status=rejected topic={self.cfg.vlm_result_topic!r} error={exc}"
             )
             return
 
@@ -703,6 +697,7 @@ def run(cfg: SkillCommandServerConfig) -> None:
 
     logging.info("Constructing CustomManipulator.")
     from lerobot.robots.custom_manipulator.custom_manipulator import CustomManipulator
+
     robot = CustomManipulator(cfg.robot)
     logging.info("CustomManipulator constructed.")
 

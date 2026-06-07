@@ -85,7 +85,7 @@ human_steps:
     instruction: "Please pour or place the ingredient for the sandwich."
     timeout_s: 120.0
     max_attempts: -1
-    verify_after: null
+    verify_after: ingredient_poured
 
   - name: breakfast_table.tablecloth_ready
     kind: human_step

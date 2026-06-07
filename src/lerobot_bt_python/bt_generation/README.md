@@ -12,6 +12,13 @@ launch or through `generate_and_run.py`.
 `cli_utils.py`; registry and plan validation share runtime-bound checks in
 `registry.py`; `renderer.py` is the only module that emits BT XML/YAML text.
 
+Robot-skill `verify_after` gates can remain in the validated Linear IR as task
+postconditions. By default, `renderer.py` does not emit them as extra
+`AwaitScene` leaves immediately after a `DoSkill`, because the C++ `DoSkill`
+node already waits for `GetSkillVerification`. Pass
+`--explicit-postcondition-gates` for manual experiments that need those leaves
+rendered explicitly.
+
 For the runtime-vs-support/offline split, use
 [../../../docs/robot_runtime_code_map.md](../../../docs/robot_runtime_code_map.md)
 as the source of truth. In short: generation/validation/rendering modules are on

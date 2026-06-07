@@ -48,7 +48,7 @@ import numpy as np
 
 # Verdict status constants. Kept as plain strings so they serialize cleanly into
 # logs and JSON without importing an enum across the ROS2 boundary.
-PASS = "PASS"
+PASS = "PASS"  # nosec B105 - verifier status token, not a password.
 FAIL = "FAIL"
 ABSTAIN = "ABSTAIN"
 
@@ -255,13 +255,12 @@ class SpatialPrior:
         }
 
     @classmethod
-    def from_dict(cls, data: dict[str, Any]) -> "SpatialPrior":
+    def from_dict(cls, data: dict[str, Any]) -> SpatialPrior:
         """@brief Build a `SpatialPrior` from a parsed JSON dict."""
         version = int(data.get("schema_version", 0))
         if version != PRIOR_SCHEMA_VERSION:
             raise ValueError(
-                f"Unsupported spatial prior schema_version={version}. "
-                f"Expected {PRIOR_SCHEMA_VERSION}."
+                f"Unsupported spatial prior schema_version={version}. Expected {PRIOR_SCHEMA_VERSION}."
             )
         required = ("skill", "frame_id", "mu", "sigma", "n_demos", "mahalanobis_threshold")
         missing = [key for key in required if key not in data]
@@ -291,7 +290,7 @@ class SpatialPrior:
         path.write_text(json.dumps(self.to_dict(), indent=2, sort_keys=True), encoding="utf-8")
 
     @classmethod
-    def load(cls, path: str | Path) -> "SpatialPrior":
+    def load(cls, path: str | Path) -> SpatialPrior:
         """@brief Load a prior from a JSON file produced by the fitter."""
         path = Path(path)
         data = json.loads(path.read_text(encoding="utf-8"))
@@ -320,11 +319,11 @@ def chi_square_threshold(confidence_level: float, dof: int = 3) -> float:
         from scipy.stats import chi2  # type: ignore
 
         return float(np.sqrt(chi2.ppf(confidence_level, dof)))
-    except Exception:  # noqa: BLE001 - SciPy optional; fall back to a table.
+    except Exception as exc:  # noqa: BLE001 - SciPy optional; fall back to a table.
         if dof != 3:
             raise ValueError(
                 "chi_square_threshold fallback table only supports dof=3 without SciPy."
-            )
+            ) from exc
         # sqrt(chi2.ppf(level, df=3)) for common levels.
         table = {
             0.90: 2.5003,
@@ -338,5 +337,5 @@ def chi_square_threshold(confidence_level: float, dof: int = 3) -> float:
             raise ValueError(
                 "Without SciPy, confidence_level must be one of "
                 f"{sorted(table)} for dof=3; got {confidence_level}."
-            )
+            ) from exc
         return table[confidence_level]

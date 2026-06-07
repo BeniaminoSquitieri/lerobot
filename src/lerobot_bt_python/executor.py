@@ -33,7 +33,7 @@ from lerobot.utils.visualization_utils import log_rerun_data
 from .conditions import evaluate_all, evaluate_any
 from .config import SkillCommandServerConfig
 from .skill_runtime_loader import LiveRobotDatasetMetadata, SkillRuntime, build_skill_runtime
-from .verification import VLM_FAILURE, VLM_SUCCESS
+from .vlm.verification import VLM_FAILURE, VLM_SUCCESS
 
 if TYPE_CHECKING:
     from lerobot.robots.custom_manipulator.custom_manipulator import CustomManipulator
@@ -153,9 +153,6 @@ class _ActiveSkillTracker:
             return True
 
 
-
-
-
 class SkillRunner:
     """@brief Serialized executor for real learned skills.
 
@@ -248,8 +245,7 @@ class SkillRunner:
     ) -> CommandResult:
         """@brief Convert a live VLM/manual stop into a BT command result."""
         message = (
-            f"Skill '{skill_name}' stopped after {elapsed_s:.2f}s by external VLM status "
-            f"{vlm_result.status}."
+            f"Skill '{skill_name}' stopped after {elapsed_s:.2f}s by external VLM status {vlm_result.status}."
         )
         if vlm_result.message:
             message = f"{message} {vlm_result.message}"
@@ -358,7 +354,9 @@ class SkillRunner:
                 timeout_s = (
                     None
                     if skill.cfg.transition.mode == "until_success"
-                    else timeout_override_s if timeout_override_s > 0 else skill.cfg.transition.max_duration_s
+                    else timeout_override_s
+                    if timeout_override_s > 0
+                    else skill.cfg.transition.max_duration_s
                 )
 
                 step_idx = 0
@@ -436,6 +434,7 @@ class SkillRunner:
             return "FAILURE"
 
         if transition.mode == "timeout":
+            assert timeout_s is not None
             return "SUCCESS" if elapsed_s >= timeout_s else "RUNNING"
 
         if elapsed_s >= transition.min_duration_s and evaluate_all(

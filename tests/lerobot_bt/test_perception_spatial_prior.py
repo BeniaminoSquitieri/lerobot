@@ -1,4 +1,4 @@
-"""@file test_spatial_prior.py
+"""@file test_perception_spatial_prior.py
 @brief Unit tests for the spatial-prior OOD gate (checker, fitter, orchestrator).
 
 These tests use only numpy and the standard library so they run without ROS2,
@@ -14,39 +14,39 @@ import numpy as np
 import pytest
 
 from lerobot_bt_python.config import SpatialPriorGateConfig
-from lerobot_bt_python.fit_spatial_prior import (
+from lerobot_bt_python.perception.fit_spatial_prior import (
     extract_grasp_positions,
     fit_gaussian,
     leave_one_out_pass_rate,
 )
-from lerobot_bt_python.spatial_prior import (
+from lerobot_bt_python.perception.spatial_prior import (
     ABSTAIN,
     FAIL,
     PASS,
     SpatialPrior,
     chi_square_threshold,
 )
-from lerobot_bt_python.spatial_prior_gate import (
+from lerobot_bt_python.perception.spatial_prior_gate import (
     ObservedPose,
     SpatialPriorGate,
     parse_object_pose_json,
 )
 
-PACKAGE_DIR = Path(__file__).resolve().parent
-BUNDLED_PRIOR = PACKAGE_DIR / "spatial_priors" / "put_coffee.json"
+PACKAGE_DIR = Path(__file__).resolve().parents[2] / "src" / "lerobot_bt_python"
+BUNDLED_PRIOR = PACKAGE_DIR / "perception" / "spatial_priors" / "put_coffee.json"
 
 
 def _make_prior(**overrides) -> SpatialPrior:
     """@brief Build a small, well-conditioned prior for tests."""
-    params = dict(
-        skill="pick",
-        object_name="cup",
-        frame_id="base_link",
-        mu=[0.5, 0.0, 0.2],
-        sigma=np.diag([0.0009, 0.0009, 0.0001]),
-        n_demos=40,
-        mahalanobis_threshold=chi_square_threshold(0.99, dof=3),
-    )
+    params = {
+        "skill": "pick",
+        "object_name": "cup",
+        "frame_id": "base_link",
+        "mu": [0.5, 0.0, 0.2],
+        "sigma": np.diag([0.0009, 0.0009, 0.0001]),
+        "n_demos": 40,
+        "mahalanobis_threshold": chi_square_threshold(0.99, dof=3),
+    }
     params.update(overrides)
     return SpatialPrior(**params)
 
@@ -94,9 +94,7 @@ def test_abstain_on_missing_pose():
 
 def test_abstain_on_low_confidence():
     prior = _make_prior(min_pose_confidence=0.5)
-    verdict = prior.evaluate(
-        observed_translation=[0.5, 0.0, 0.2], frame_id="base_link", pose_confidence=0.1
-    )
+    verdict = prior.evaluate(observed_translation=[0.5, 0.0, 0.2], frame_id="base_link", pose_confidence=0.1)
     assert verdict.status == ABSTAIN
     assert "low_pose_confidence" in verdict.reason
 
@@ -142,9 +140,17 @@ def test_roundtrip_save_load(tmp_path):
 
 def test_from_dict_rejects_wrong_schema_version():
     with pytest.raises(ValueError):
-        SpatialPrior.from_dict({"schema_version": 999, "skill": "x", "frame_id": "b",
-                                "mu": [0, 0, 0], "sigma": np.eye(3).tolist(),
-                                "n_demos": 2, "mahalanobis_threshold": 1.0})
+        SpatialPrior.from_dict(
+            {
+                "schema_version": 999,
+                "skill": "x",
+                "frame_id": "b",
+                "mu": [0, 0, 0],
+                "sigma": np.eye(3).tolist(),
+                "n_demos": 2,
+                "mahalanobis_threshold": 1.0,
+            }
+        )
 
 
 def test_chi_square_threshold_known_value():
@@ -180,18 +186,30 @@ def _fake_dataframe(positions_by_episode):
     for episode_index, (approach, grasp_xyz) in enumerate(positions_by_episode):
         # Two open frames, then a closing frame at the grasp position. The state
         # vector mirrors the real schema: [x, y, z, ox, oy, oz, gripper].
-        rows.append({"observation.state": np.array(approach + [0.0, 0.0, 0.0, 0.085]),
-                     "episode_index": episode_index, "frame_index": 0})
-        rows.append({"observation.state": np.array(grasp_xyz + [0.0, 0.0, 0.0, 0.01]),
-                     "episode_index": episode_index, "frame_index": 1})
+        rows.append(
+            {
+                "observation.state": np.array(approach + [0.0, 0.0, 0.0, 0.085]),
+                "episode_index": episode_index,
+                "frame_index": 0,
+            }
+        )
+        rows.append(
+            {
+                "observation.state": np.array(grasp_xyz + [0.0, 0.0, 0.0, 0.01]),
+                "episode_index": episode_index,
+                "frame_index": 1,
+            }
+        )
     return pd.DataFrame(rows)
 
 
 def test_extract_grasp_positions_picks_closing_frame():
-    df = _fake_dataframe([
-        ([0.0, 0.0, 0.5], [0.5, -0.2, 0.1]),
-        ([0.0, 0.0, 0.5], [0.52, -0.18, 0.11]),
-    ])
+    df = _fake_dataframe(
+        [
+            ([0.0, 0.0, 0.5], [0.5, -0.2, 0.1]),
+            ([0.0, 0.0, 0.5], [0.52, -0.18, 0.11]),
+        ]
+    )
     positions, episodes = extract_grasp_positions(df)
     assert episodes == [0, 1]
     assert np.allclose(positions[0], [0.5, -0.2, 0.1])
@@ -214,7 +232,9 @@ def test_fit_gaussian_requires_two_samples():
 def test_leave_one_out_pass_rate_high_for_tight_cluster():
     rng = np.random.default_rng(1)
     samples = rng.normal(loc=[0.5, -0.2, 0.1], scale=[0.02, 0.02, 0.005], size=(50, 3))
-    rate = leave_one_out_pass_rate(samples, threshold=chi_square_threshold(0.99), sigma_regularization_m2=1e-6)
+    rate = leave_one_out_pass_rate(
+        samples, threshold=chi_square_threshold(0.99), sigma_regularization_m2=1e-6
+    )
     assert rate > 0.9
 
 
@@ -224,13 +244,15 @@ def test_leave_one_out_pass_rate_high_for_tight_cluster():
 
 
 def test_parse_object_pose_json_extracts_fields():
-    payload = json.dumps({
-        "name": "cup",
-        "present": True,
-        "frame_id": "base_link",
-        "pose": {"translation": [0.5, -0.2, 0.1], "quaternion_xyzw": [0, 0, 0, 1]},
-        "pose_confidence": 0.8,
-    })
+    payload = json.dumps(
+        {
+            "name": "cup",
+            "present": True,
+            "frame_id": "base_link",
+            "pose": {"translation": [0.5, -0.2, 0.1], "quaternion_xyzw": [0, 0, 0, 1]},
+            "pose_confidence": 0.8,
+        }
+    )
     observed = parse_object_pose_json(payload)
     assert observed.error is None
     assert observed.frame_id == "base_link"
@@ -255,16 +277,18 @@ def test_parse_object_pose_json_accepts_dict_translation():
     QueryObjectPose payload format produced by
     bt_planning.scene_facts.build_object_pose_fact.
     """
-    payload = json.dumps({
-        "name": "coffee_capsule",
-        "present": True,
-        "frame_id": "base_link",
-        "pose": {
-            "translation": {"x": 0.684, "y": -0.260, "z": 0.150},
-            "quaternion_xyzw": {"x": 0.0, "y": 0.0, "z": 0.0, "w": 1.0},
-        },
-        "pose_confidence": 0.62,
-    })
+    payload = json.dumps(
+        {
+            "name": "coffee_capsule",
+            "present": True,
+            "frame_id": "base_link",
+            "pose": {
+                "translation": {"x": 0.684, "y": -0.260, "z": 0.150},
+                "quaternion_xyzw": {"x": 0.0, "y": 0.0, "z": 0.0, "w": 1.0},
+            },
+            "pose_confidence": 0.62,
+        }
+    )
     observed = parse_object_pose_json(payload)
     assert observed.error is None
     assert observed.frame_id == "base_link"
@@ -277,16 +301,18 @@ def test_gate_passes_on_real_perception_payload_in_base_link():
     gate = _gate("enforce")
 
     def perception_pose(_name):
-        payload = json.dumps({
-            "name": "coffee_capsule",
-            "present": True,
-            "frame_id": "base_link",
-            "pose": {
-                "translation": {"x": 0.684, "y": -0.260, "z": 0.150},
-                "quaternion_xyzw": {"x": 0.0, "y": 0.0, "z": 0.0, "w": 1.0},
-            },
-            "pose_confidence": 0.9,
-        })
+        payload = json.dumps(
+            {
+                "name": "coffee_capsule",
+                "present": True,
+                "frame_id": "base_link",
+                "pose": {
+                    "translation": {"x": 0.684, "y": -0.260, "z": 0.150},
+                    "quaternion_xyzw": {"x": 0.0, "y": 0.0, "z": 0.0, "w": 1.0},
+                },
+                "pose_confidence": 0.9,
+            }
+        )
         return parse_object_pose_json(payload)
 
     verdict = gate.evaluate("pick_and_insert_capsule", perception_pose)
@@ -299,16 +325,18 @@ def test_gate_abstains_on_camera_frame_perception_payload():
     gate = _gate("enforce")
 
     def camera_pose(_name):
-        payload = json.dumps({
-            "name": "coffee_capsule",
-            "present": True,
-            "frame_id": "panda_front_camera",
-            "pose": {
-                "translation": {"x": 0.02, "y": -0.01, "z": 0.70},
-                "quaternion_xyzw": {"x": 0.0, "y": 0.0, "z": 0.0, "w": 1.0},
-            },
-            "pose_confidence": 0.9,
-        })
+        payload = json.dumps(
+            {
+                "name": "coffee_capsule",
+                "present": True,
+                "frame_id": "panda_front_camera",
+                "pose": {
+                    "translation": {"x": 0.02, "y": -0.01, "z": 0.70},
+                    "quaternion_xyzw": {"x": 0.0, "y": 0.0, "z": 0.0, "w": 1.0},
+                },
+                "pose_confidence": 0.9,
+            }
+        )
         return parse_object_pose_json(payload)
 
     verdict = gate.evaluate("pick_and_insert_capsule", camera_pose)

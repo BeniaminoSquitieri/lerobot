@@ -9,13 +9,12 @@ from types import SimpleNamespace
 
 import pytest
 
-from lerobot_bt_python.verification import (
+from lerobot_bt_python.vlm.verification import (
     VLM_FAILURE,
     VLM_RUNNING,
     VLM_SUCCESS,
     SceneVerdictStore,
 )
-
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 COMMENT_STRIP_PATTERN = re.compile(r"^\s*# Comment:.*$")
@@ -38,9 +37,12 @@ def _find_dict_assignment(function_node: ast.FunctionDef, variable_name: str) ->
     for node in ast.walk(function_node):
         if isinstance(node, ast.Assign):
             for target in node.targets:
-                if isinstance(target, ast.Name) and target.id == variable_name:
-                    if isinstance(node.value, ast.Dict):
-                        return node.value
+                if (
+                    isinstance(target, ast.Name)
+                    and target.id == variable_name
+                    and isinstance(node.value, ast.Dict)
+                ):
+                    return node.value
     raise AssertionError(f"Dictionary assignment for {variable_name} not found")
 
 
@@ -57,11 +59,15 @@ def _skill_server_config_default(field_name: str) -> str:
     for node in module.body:
         if isinstance(node, ast.ClassDef) and node.name == "SkillCommandServerConfig":
             for child in node.body:
-                if isinstance(child, ast.AnnAssign) and isinstance(child.target, ast.Name):
-                    if child.target.id == field_name and isinstance(child.value, ast.Constant):
-                        value = child.value.value
-                        if isinstance(value, str):
-                            return value
+                if (
+                    isinstance(child, ast.AnnAssign)
+                    and isinstance(child.target, ast.Name)
+                    and child.target.id == field_name
+                    and isinstance(child.value, ast.Constant)
+                ):
+                    value = child.value.value
+                    if isinstance(value, str):
+                        return value
     raise AssertionError(f"Default for {field_name} not found")
 
 
@@ -134,7 +140,9 @@ def test_removed_vlm_statuses_are_rejected():
 
 
 def test_legacy_service_name_default():
-    config_module = pytest.importorskip("lerobot_bt_python.config", reason="lerobot_bt_python.config import unavailable")
+    config_module = pytest.importorskip(
+        "lerobot_bt_python.config", reason="lerobot_bt_python.config import unavailable"
+    )
 
     primitive_skill = config_module.PrimitiveSkillConfig(
         name="dummy_skill",

@@ -80,6 +80,12 @@ camera_frame_id_map:
 camera_publish_fps: 10.0
 camera_publish_jpeg_quality: 80
 
+vlm_gate_tasks:
+  prepare_picnic_bag.scene_0_ready: "Check that the picnic bag is visible and reachable, with bread, drink, pear, and mustard available on the table."
+  prepare_picnic_bag.human_open_bag: "Ask the human to open the picnic bag and keep it stable for robot insertions."
+  prepare_picnic_bag.human_insert_monster: "Ask the human to place the drink inside the open picnic bag."
+  prepare_picnic_bag.human_insert_mustard: "Ask the human to place the mustard inside the open picnic bag."
+
 skills:
   - name: bag_bread
     dataset_repo_id: "scene-transition/bag_bread"

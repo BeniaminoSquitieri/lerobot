@@ -1,9 +1,9 @@
-"""@file vlm_protocol.py
+"""@file protocol.py
 @brief Parsing helpers for the VLM/operator topic protocol.
 
 Centralizes the translation between the loosely-typed JSON payloads accepted
 on the VLM result topic (and the legacy gate tokens) and the VLM status
-vocabulary defined in `verification.py`. Keeping these helpers in their own
+vocabulary defined in `vlm/verification.py`. Keeping these helpers in their own
 module lets them be unit-tested without importing `rclpy`.
 """
 

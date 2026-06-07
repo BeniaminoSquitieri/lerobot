@@ -275,6 +275,7 @@ lerobot-bt-groot2="lerobot_bt_python.groot2_monitor:main"
 # ---------------- Tool Configurations ----------------
 [tool.setuptools.package-data]
 lerobot = ["envs/*.json"]
+lerobot_bt_python = ["perception/spatial_priors/*.json"]
 
 [tool.setuptools.packages.find]
 where = ["src"]
@@ -353,6 +354,28 @@ default.extend-ignore-identifiers-re = [
     "ROBOTIS",
     "OT_VALUE"
 ]
+
+[tool.typos.default.extend-words]
+automatico = "automatico"
+classe = "classe"
+comando = "comando"
+comune = "comune"
+compatibile = "compatibile"
+configurato = "configurato"
+converte = "converte"
+dedicato = "dedicato"
+importante = "importante"
+indicato = "indicato"
+infine = "infine"
+interfacce = "interfacce"
+macchine = "macchine"
+modificato = "modificato"
+momento = "momento"
+occupato = "occupato"
+tre = "tre"
+valide = "valide"
+verificato = "verificato"
+visibile = "visibile"
 
 # TODO: Uncomment when ready to use
 # [tool.interrogate]

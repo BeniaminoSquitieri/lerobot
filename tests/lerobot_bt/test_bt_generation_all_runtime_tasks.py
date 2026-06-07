@@ -7,8 +7,8 @@ from __future__ import annotations
 import os
 import subprocess
 import sys
-from pathlib import Path
 import xml.etree.ElementTree as ET
+from pathlib import Path
 
 import pytest
 import yaml
@@ -17,7 +17,6 @@ from lerobot_bt_python.bt_generation.planner import build_linear_plan
 from lerobot_bt_python.bt_generation.registry import HUMAN_STEP, ROBOT_SKILL, VLM_GATE, load_registry
 from lerobot_bt_python.bt_generation.renderer import param_key, render_bt_params_yaml, render_xml
 from lerobot_bt_python.bt_generation.static_checks import validate_xml_yaml_blackboard_keys
-
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 REGISTRY_PATH = REPO_ROOT / "src/lerobot_bt_python/bt_generation/skills_registry.yaml"
@@ -113,14 +112,19 @@ def test_step_kinds_render_to_expected_leaf_types(task_name: str) -> None:
     do_skill_keys = {node.attrib.get("skill_name") for node in root.findall(".//DoSkill")}
     await_scene_keys = {node.attrib.get("scene_name") for node in root.findall(".//AwaitScene")}
 
+    previous_step = None
     for step in plan["steps"]:
         key = param_key(step["name"])
         if step["kind"] == ROBOT_SKILL:
             assert f"{{{key}_skill}}" in do_skill_keys
             assert f"{{{key}_gate}}" not in await_scene_keys
         elif step["kind"] in {HUMAN_STEP, VLM_GATE}:
-            assert f"{{{key}_gate}}" in await_scene_keys
+            if _is_robot_postcondition_gate(step, previous_step, registry):
+                assert f"{{{key}_gate}}" not in await_scene_keys
+            else:
+                assert f"{{{key}_gate}}" in await_scene_keys
             assert f"{{{key}_skill}}" not in do_skill_keys
+        previous_step = step
 
 
 @pytest.mark.parametrize("task_name", EXPECTED_STEPS)
@@ -157,3 +161,15 @@ def _run_cli(task_name: str, out_tree: Path, out_config: Path) -> subprocess.Com
         capture_output=True,
         check=False,
     )
+
+
+def _is_robot_postcondition_gate(
+    step: dict[str, str],
+    previous_step: dict[str, str] | None,
+    registry,
+) -> bool:
+    if step["kind"] != VLM_GATE or previous_step is None:
+        return False
+    if previous_step["kind"] != ROBOT_SKILL:
+        return False
+    return registry.robot_skills[previous_step["name"]].verify_after == step["name"]
